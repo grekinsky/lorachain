@@ -1,0 +1,29 @@
+{
+  "name": "@lorachain/node",
+  "version": "0.1.0",
+  "description": "Full node implementation for Lorachain synchronized nodes",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest",
+    "test:watch": "vitest --watch",
+    "lint": "eslint src/**/*.ts",
+    "lint:fix": "eslint src/**/*.ts --fix",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@lorachain/core": "workspace:*",
+    "@lorachain/shared": "workspace:*",
+    "@lorachain/mesh-protocol": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "vitest": "^1.0.0"
+  },
+  "files": [
+    "dist"
+  ]
+}

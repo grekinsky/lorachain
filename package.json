@@ -1,0 +1,42 @@
+{
+  "name": "lorachain",
+  "version": "0.1.0",
+  "description": "A lightweight blockchain network for cryptocurrency transactions in communities with limited internet connectivity using LoRa mesh networking",
+  "private": true,
+  "scripts": {
+    "build": "pnpm --recursive build",
+    "dev": "pnpm --recursive dev",
+    "test": "pnpm --recursive test",
+    "lint": "pnpm --recursive lint",
+    "lint:fix": "pnpm --recursive lint:fix",
+    "format": "prettier --write \"**/*.{js,ts,tsx,json,md}\"",
+    "typecheck": "pnpm --recursive typecheck",
+    "clean": "pnpm --recursive clean"
+  },
+  "keywords": [
+    "blockchain",
+    "cryptocurrency",
+    "lora",
+    "meshtastic",
+    "mesh-network",
+    "p2p",
+    "typescript"
+  ],
+  "author": "Lorachain Team",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.0.0",
+    "eslint-config-prettier": "^9.0.0",
+    "eslint-plugin-prettier": "^5.0.0",
+    "prettier": "^3.0.0",
+    "typescript": "^5.0.0",
+    "vitest": "^1.0.0"
+  }
+}

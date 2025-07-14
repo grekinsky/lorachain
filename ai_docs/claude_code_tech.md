@@ -3,34 +3,29 @@
 ## Quick Techniques Guide
 
 1. **Context Engineering**: Instead of just prompt engineering, focus on the entire context for the AI model:
-
    - Create and refine CLAUDE.md files to provide consistent guidelines
    - Use thinking commands (`think`, `think hard`, `think harder`, `ultrathink`) to trigger deeper analysis
    - Mention specific files and use tab-completion for accurate file references
    - Use images and URLs alongside your prompts for richer context
 
 2. **Workflow Patterns**:
-
    - **Explore → Plan → Code → Commit**: Make Claude read and understand before implementing
    - **Tests → Commit → Code → Iterate → Commit**: Test-driven development with AI
    - **Code → Screenshot → Iterate**: Visual feedback loops for UI development
    - **Safe YOLO Mode**: For trusted operations in safe environments
 
 3. **Multi-Claude Approaches**:
-
    - Writer/Reviewer Pattern: One Claude writes, another reviews
    - Parallel Processing: Multiple Claude instances working on different parts of a project
    - Git Worktrees: Different instances on different branches
 
 4. **Headless Automation**:
-
    - Issue triage
    - Custom linting
    - Large-scale migrations via fan-out pattern
    - Data pipeline integration
 
 5. **Tool Extension**:
-
    - Customize allowlists for operations like editing and git commands
    - Install and document custom CLI tools
    - Connect MCP servers for specialized capabilities
