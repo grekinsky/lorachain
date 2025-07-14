@@ -40,29 +40,26 @@ export function deepClone<T>(obj: T): T {
   return JSON.parse(JSON.stringify(obj));
 }
 
-export function retryAsync<T>(
+export async function retryAsync<T>(
   fn: () => Promise<T>,
   maxRetries: number = 3,
   delayMs: number = 1000
 ): Promise<T> {
-  return new Promise(async (resolve, reject) => {
-    let lastError: Error | null = null;
+  let lastError: Error | null = null;
 
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        const result = await fn();
-        resolve(result);
-        return;
-      } catch (error) {
-        lastError = error as Error;
-        if (attempt < maxRetries) {
-          await sleep(delayMs);
-        }
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const result = await fn();
+      return result;
+    } catch (error) {
+      lastError = error as Error;
+      if (attempt < maxRetries) {
+        await sleep(delayMs);
       }
     }
+  }
 
-    reject(lastError || new Error('Unknown error occurred'));
-  });
+  throw lastError || new Error('Unknown error occurred');
 }
 
 export function bytesToHex(bytes: Uint8Array): string {
@@ -74,7 +71,7 @@ export function bytesToHex(bytes: Uint8Array): string {
 export function hexToBytes(hex: string): Uint8Array {
   const bytes = new Uint8Array(hex.length / 2);
   for (let i = 0; i < hex.length; i += 2) {
-    bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
+    bytes[i / 2] = parseInt(hex.substring(i, i + 2), 16);
   }
   return bytes;
 }

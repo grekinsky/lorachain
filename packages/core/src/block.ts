@@ -81,7 +81,7 @@ export class BlockManager {
 
   static mineBlock(block: Block, difficulty: number): Block {
     const target = Array(difficulty + 1).join('0');
-    let minedBlock = { ...block };
+    const minedBlock = { ...block };
 
     while (minedBlock.hash.substring(0, difficulty) !== target) {
       minedBlock.nonce++;

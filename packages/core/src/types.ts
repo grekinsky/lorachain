@@ -56,7 +56,7 @@ export interface ConsensusAlgorithm {
 
 export interface MeshMessage {
   type: 'transaction' | 'block' | 'sync' | 'discovery';
-  payload: any;
+  payload: unknown;
   timestamp: number;
   from: string;
   to?: string;
