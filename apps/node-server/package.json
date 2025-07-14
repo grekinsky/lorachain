@@ -2,10 +2,11 @@
   "name": "node-server",
   "version": "0.1.0",
   "description": "Full node server for Lorachain network",
+  "type": "module",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
-    "dev": "tsc --watch && node dist/index.js",
+    "dev": "tsc --watch",
     "start": "node dist/index.js",
     "test": "vitest",
     "test:watch": "vitest --watch",

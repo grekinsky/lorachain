@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "description": "A lightweight blockchain network for cryptocurrency transactions in communities with limited internet connectivity using LoRa mesh networking",
   "private": true,
+  "type": "module",
   "scripts": {
     "build": "pnpm --recursive build",
     "dev": "pnpm --recursive dev",

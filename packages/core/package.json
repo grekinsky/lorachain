@@ -2,6 +2,7 @@
   "name": "@lorachain/core",
   "version": "0.1.0",
   "description": "Core blockchain logic for Lorachain network",
+  "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
@@ -14,7 +15,10 @@
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@types/node": "^20.19.7",
+    "@types/ws": "^8.18.1"
+  },
   "devDependencies": {
     "typescript": "^5.0.0",
     "vitest": "^1.0.0"

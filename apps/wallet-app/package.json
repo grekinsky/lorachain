@@ -2,10 +2,11 @@
   "name": "wallet-app",
   "version": "0.1.0",
   "description": "Mobile wallet application for Lorachain",
+  "type": "module",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
-    "dev": "tsc --watch && node dist/index.js",
+    "dev": "tsc --watch",
     "start": "node dist/index.js",
     "test": "vitest",
     "test:watch": "vitest --watch",

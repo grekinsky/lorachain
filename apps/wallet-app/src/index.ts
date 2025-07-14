@@ -112,6 +112,5 @@ async function main(): Promise<void> {
   }, 30000);
 }
 
-if (require.main === module) {
-  main().catch(console.error);
-}
+// For ES modules, we can just call main() directly since there's no require.main
+main().catch(console.error);
