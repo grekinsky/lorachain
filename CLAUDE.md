@@ -16,8 +16,12 @@ Lorachain is a lightweight blockchain network designed for cryptocurrency transa
 
 ### Testing
 
-- `pnpm test` - Run tests for all packages
-- `pnpm test:watch` - Run tests in watch mode (package-specific: `cd packages/core && pnpm test:watch`)
+- `pnpm test` - Run tests for all packages (uses vitest)
+- `pnpm test:watch` - Run tests in watch mode for all packages
+- Package-specific testing:
+  - `cd packages/core && pnpm test` - Run tests for specific package
+  - `cd packages/core && pnpm test:watch` - Watch mode for specific package
+  - `cd packages/core && pnpm test:run` - Run tests once (no watch mode)
 
 ### Code Quality
 
@@ -74,4 +78,12 @@ cd packages/core && pnpm test    # Test specific package
 
 ### Testing Strategy
 
-Each package includes unit tests using Vitest. Run package-specific tests with `cd packages/<name> && pnpm test` or use watch mode for development.
+Each package includes comprehensive unit tests using Vitest:
+
+- **Core package**: Tests for blockchain, transaction, and block functionality
+- **Shared package**: Tests for logger and utility functions
+- **Mobile wallet**: Tests for wallet operations
+- **Node package**: Tests for full node functionality
+- **Mesh protocol**: Tests for LoRa communication protocol
+
+Run package-specific tests with `cd packages/<name> && pnpm test` or use watch mode for development with `pnpm test:watch`.

@@ -73,7 +73,7 @@ pnpm build
 
 - `pnpm build` - Build all packages
 - `pnpm dev` - Start development mode for all packages
-- `pnpm test` - Run tests for all packages
+- `pnpm test` - Run tests for all packages (uses vitest)
 - `pnpm lint` - Run ESLint for all packages
 - `pnpm lint:fix` - Run ESLint with auto-fix for all packages
 - `pnpm format` - Format code with Prettier
@@ -87,7 +87,9 @@ Navigate to any package directory and run commands specific to that package:
 ```bash
 cd packages/core
 pnpm dev          # Watch mode for core package
+pnpm test         # Run tests for specific package
 pnpm test:watch   # Watch mode for tests
+pnpm test:run     # Run tests once (no watch mode)
 ```
 
 ## Packages
@@ -186,16 +188,28 @@ Features:
 
 ## Testing
 
+The project includes comprehensive unit tests for all packages using Vitest.
+
 Run the test suite:
 
 ```bash
 pnpm test
 ```
 
-Run tests in watch mode:
+Run tests in watch mode for development:
 
 ```bash
+# For all packages
 pnpm test:watch
+
+# For specific package
+cd packages/core && pnpm test:watch
+```
+
+Run tests once (no watch mode):
+
+```bash
+pnpm test:run
 ```
 
 ## Code Quality
@@ -247,4 +261,12 @@ For support and questions:
 
 ---
 
-**Note**: This project is in active development. The current implementation provides a foundation for the Lorachain network with basic blockchain functionality and mesh networking capabilities. Additional features and optimizations will be added in future releases.
+**Note**: This project is in active development. The current implementation provides a foundation for the Lorachain network with basic blockchain functionality, comprehensive unit tests, and mesh networking capabilities. The codebase includes:
+
+- Complete monorepo structure with all core packages
+- TypeScript configuration with strict type checking
+- Vitest-based testing framework with comprehensive test coverage
+- ESLint and Prettier for code quality
+- Basic implementations of blockchain, wallet, and mesh protocol components
+
+Additional features and optimizations will be added in future releases.
