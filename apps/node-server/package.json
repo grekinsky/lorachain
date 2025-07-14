@@ -1,0 +1,30 @@
+{
+  "name": "node-server",
+  "version": "0.1.0",
+  "description": "Full node server for Lorachain network",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node dist/index.js",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:watch": "vitest --watch",
+    "lint": "eslint src/**/*.ts",
+    "lint:fix": "eslint src/**/*.ts --fix",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@lorachain/core": "workspace:*",
+    "@lorachain/shared": "workspace:*",
+    "@lorachain/node": "workspace:*",
+    "@lorachain/mesh-protocol": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "vitest": "^1.0.0",
+    "@types/node": "^20.0.0"
+  }
+}

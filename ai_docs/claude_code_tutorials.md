@@ -297,7 +297,6 @@ claude
 **When to use:** You need to work with images in your codebase or get Claude's help analyzing image content.
 
 1. Add an image to the conversation using one of these methods:
-
    - Drag and drop an image into the Claude Code window
    - Copy an image and paste it into the CLI with cmd+v (on Mac)
    - Provide an image path: `claude "Analyze this image: /path/to/your/image.png"`

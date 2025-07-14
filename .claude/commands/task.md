@@ -9,8 +9,8 @@ Sigue los siguientes pasos:
 1. Entiende el problema descrito en el plan.
 2. Realiza preguntas si necesitas clarificar algún detalle.
 3. Entiende el contexto y la historia detrás de este requerimiento.
-    - Busca PRs y Commits para ver si puedes encontrar algo de historia acerca de este requerimiento.
-    - Busca archivos relevantes en el codebase.
+   - Busca PRs y Commits para ver si puedes encontrar algo de historia acerca de este requerimiento.
+   - Busca archivos relevantes en el codebase.
 4. Think harder - Cómo dividir los requerimientos en una serie de tareas pequeñas y más fáciles de manejar.
 
 # CREA EL CODIGO

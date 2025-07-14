@@ -19,6 +19,6 @@ MEMORY ** IMPORTANTE ** El archivo debe ser redactado en inglés.
 
 1. Ayúdame a completar el archivo de especificaciones
 
-  - No debe de contener código de implementación técnica a menos que sean ideas muy concretas o que necesitamos que el código sea específicamente de esa forma.
+- No debe de contener código de implementación técnica a menos que sean ideas muy concretas o que necesitamos que el código sea específicamente de esa forma.
 
 2. Al final del documento deben de estar los puntos más importantes del desarrollo y especificar que se utilizó como base para desarrollar el documento.
