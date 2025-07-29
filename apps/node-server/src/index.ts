@@ -1,4 +1,4 @@
-import { NodeServer } from './NodeServer';
+import { NodeServer } from './NodeServer.js';
 
 async function main(): Promise<void> {
   const server = new NodeServer();
