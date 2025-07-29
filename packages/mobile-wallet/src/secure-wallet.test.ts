@@ -169,10 +169,10 @@ describe('SecureMobileWallet', () => {
         'secp256k1'
       );
 
-      expect(wallet.createTransaction(to, 0)).rejects.toThrow(
+      expect(() => wallet.createTransaction(to, 0)).toThrow(
         'Amount must be greater than 0'
       );
-      expect(wallet.createTransaction(to, -10)).rejects.toThrow(
+      expect(() => wallet.createTransaction(to, -10)).toThrow(
         'Amount must be greater than 0'
       );
     });
@@ -184,7 +184,7 @@ describe('SecureMobileWallet', () => {
         'secp256k1'
       );
 
-      expect(wallet.createTransaction(to, 150)).rejects.toThrow(
+      expect(() => wallet.createTransaction(to, 150)).toThrow(
         'Insufficient balance'
       );
     });

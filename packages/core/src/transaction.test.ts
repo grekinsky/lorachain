@@ -87,7 +87,7 @@ describe('TransactionManager', () => {
       );
 
       expect(signature1).toBe(signature2);
-      expect(signature1).toHaveLength(64);
+      expect(signature1).toHaveLength(128);
     });
   });
 
