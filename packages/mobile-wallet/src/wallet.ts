@@ -3,11 +3,15 @@ import type { Transaction, Wallet } from '@lorachain/core';
 import { TransactionManager } from '@lorachain/core';
 import { Logger } from '@lorachain/shared';
 
+// Legacy mobile wallet for backward compatibility
 export class MobileWallet {
   private wallet: Wallet;
   private logger = Logger.getInstance();
 
   constructor(privateKey?: string) {
+    console.warn(
+      'MobileWallet is deprecated. Use SecureMobileWallet for cryptographic security.'
+    );
     if (privateKey) {
       this.wallet = this.loadWallet(privateKey);
     } else {
@@ -85,6 +89,9 @@ export class MobileWallet {
   }
 
   signMessage(message: string): string {
+    console.warn(
+      'MobileWallet.signMessage is deprecated. Use SecureMobileWallet for cryptographic signing.'
+    );
     const hash = createHash('sha256')
       .update(message + this.wallet.privateKey)
       .digest('hex');

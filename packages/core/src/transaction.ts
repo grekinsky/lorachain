@@ -1,6 +1,14 @@
 import { createHash, randomBytes } from 'crypto';
 import type { Transaction, ValidationResult } from './types.js';
+import {
+  CryptographicService,
+  SecureTransactionManager,
+  type KeyPair,
+  type SignatureAlgorithm,
+} from './cryptographic.js';
+import { bytesToHex, hexToBytes } from '@noble/hashes/utils';
 
+// Legacy transaction manager for backward compatibility
 export class TransactionManager {
   static generateId(): string {
     return randomBytes(32).toString('hex');
@@ -43,6 +51,10 @@ export class TransactionManager {
     transaction: Omit<Transaction, 'signature'>,
     privateKey: string
   ): string {
+    // Legacy signing method - deprecated, use SecureTransactionManager instead
+    console.warn(
+      'TransactionManager.signTransaction is deprecated. Use SecureTransactionManager for cryptographic signing.'
+    );
     const transactionString = JSON.stringify(transaction);
     const hash = createHash('sha256')
       .update(transactionString + privateKey)
@@ -88,21 +100,44 @@ export class TransactionManager {
   }
 
   static verifySignature(transaction: Transaction, publicKey: string): boolean {
-    const transactionWithoutSignature: Omit<Transaction, 'signature'> = {
-      id: transaction.id,
-      from: transaction.from,
-      to: transaction.to,
-      amount: transaction.amount,
-      fee: transaction.fee,
-      timestamp: transaction.timestamp,
-      nonce: transaction.nonce,
-    };
+    // Check if this is a legacy signature (64 hex chars from sha256)
+    if (transaction.signature.length === 64 && /^[0-9a-f]{64}$/i.test(transaction.signature)) {
+      // Legacy verification
+      console.warn(
+        'Legacy signature detected. Consider migrating to SecureTransactionManager.'
+      );
+      const transactionWithoutSignature: Omit<Transaction, 'signature'> = {
+        id: transaction.id,
+        from: transaction.from,
+        to: transaction.to,
+        amount: transaction.amount,
+        fee: transaction.fee,
+        timestamp: transaction.timestamp,
+        nonce: transaction.nonce,
+      };
 
-    const transactionString = JSON.stringify(transactionWithoutSignature);
-    const expectedHash = createHash('sha256')
-      .update(transactionString + publicKey)
-      .digest('hex');
+      const transactionString = JSON.stringify(transactionWithoutSignature);
+      const expectedHash = createHash('sha256')
+        .update(transactionString + publicKey)
+        .digest('hex');
 
-    return expectedHash === transaction.signature;
+      return expectedHash === transaction.signature;
+    }
+
+    // For new signatures, delegate to SecureTransactionManager
+    try {
+      const publicKeyBytes = hexToBytes(publicKey);
+      return SecureTransactionManager.verifyTransaction(
+        transaction,
+        publicKeyBytes
+      ).then(result => result).catch(() => false);
+    } catch {
+      return false;
+    }
+  }
+
+  // Helper method to detect signature type
+  static isLegacySignature(signature: string): boolean {
+    return signature.length === 64 && /^[0-9a-f]{64}$/i.test(signature);
   }
 }

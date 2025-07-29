@@ -150,6 +150,15 @@ importers:
       '@lorachain/shared':
         specifier: workspace:*
         version: link:../shared
+      '@noble/ed25519':
+        specifier: ^2.3.0
+        version: 2.3.0
+      '@noble/hashes':
+        specifier: ^1.8.0
+        version: 1.8.0
+      '@noble/secp256k1':
+        specifier: ^2.3.0
+        version: 2.3.0
     devDependencies:
       typescript:
         specifier: ^5.0.0
