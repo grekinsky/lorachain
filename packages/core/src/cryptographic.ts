@@ -288,7 +288,10 @@ export class SecureTransactionManager {
         // If not valid hex, hash the string to create a valid private key
         privateKeyBytes = CryptographicService.hashMessage(keyPairOrPrivateKey);
       }
-      keyPair = CryptographicService.generateKeyPairFromSeed(privateKeyBytes, 'secp256k1');
+      keyPair = CryptographicService.generateKeyPairFromSeed(
+        privateKeyBytes,
+        'secp256k1'
+      );
     } else {
       keyPair = keyPairOrPrivateKey;
     }
@@ -310,7 +313,10 @@ export class SecureTransactionManager {
     return Math.max(0.001, amount * 0.001);
   }
 
-  static validateTransaction(transaction: Transaction): { isValid: boolean; errors: string[] } {
+  static validateTransaction(transaction: Transaction): {
+    isValid: boolean;
+    errors: string[];
+  } {
     const errors: string[] = [];
 
     if (!transaction.id) {
@@ -360,19 +366,25 @@ export class SecureTransactionManager {
       // If not valid hex, hash the string to create a valid private key
       privateKeyBytes = CryptographicService.hashMessage(privateKey);
     }
-    const keyPair = CryptographicService.generateKeyPairFromSeed(privateKeyBytes, 'secp256k1');
-    
+    const keyPair = CryptographicService.generateKeyPairFromSeed(
+      privateKeyBytes,
+      'secp256k1'
+    );
+
     const messageHash = CryptographicService.hashTransaction(transaction);
     const signature = CryptographicService.sign(
       messageHash,
       keyPair.privateKey,
       keyPair.algorithm
     );
-    
+
     return bytesToHex(signature.signature);
   }
 
-  static verifySignature(transaction: Transaction, privateKeyOrPublicKey: string): boolean {
+  static verifySignature(
+    transaction: Transaction,
+    privateKeyOrPublicKey: string
+  ): boolean {
     // Convert string to public key bytes (derive from private key if needed for test compatibility)
     let publicKeyBytes: Uint8Array;
     try {
@@ -388,12 +400,17 @@ export class SecureTransactionManager {
       try {
         privateKeyBytes = hexToBytes(privateKeyOrPublicKey.padStart(64, '0'));
       } catch {
-        privateKeyBytes = CryptographicService.hashMessage(privateKeyOrPublicKey);
+        privateKeyBytes = CryptographicService.hashMessage(
+          privateKeyOrPublicKey
+        );
       }
-      const keyPair = CryptographicService.generateKeyPairFromSeed(privateKeyBytes, 'secp256k1');
+      const keyPair = CryptographicService.generateKeyPairFromSeed(
+        privateKeyBytes,
+        'secp256k1'
+      );
       publicKeyBytes = keyPair.publicKey;
     }
-    
+
     return this.verifyTransaction(transaction, publicKeyBytes, 'secp256k1');
   }
 
@@ -406,11 +423,14 @@ export class SecureTransactionManager {
     const messageHash = CryptographicService.hashTransaction(
       transactionWithoutSig
     );
-    
+
     const signatureBytes = hexToBytes(signature);
-    
+
     // Handle both Uint8Array and string public keys
-    const publicKeyBytes = typeof publicKey === 'string' ? hexToBytes(publicKey.padStart(66, '0')) : publicKey;
+    const publicKeyBytes =
+      typeof publicKey === 'string'
+        ? hexToBytes(publicKey.padStart(66, '0'))
+        : publicKey;
 
     return CryptographicService.verify(
       { signature: signatureBytes, algorithm },

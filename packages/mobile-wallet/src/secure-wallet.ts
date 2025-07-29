@@ -21,11 +21,24 @@ export class SecureMobileWallet {
   private logger = Logger.getInstance();
 
   constructor(
-    privateKey?: Uint8Array,
+    privateKey?: Uint8Array | string,
     algorithm: SignatureAlgorithm = 'secp256k1'
   ) {
     if (privateKey) {
-      this.keyPair = this.loadKeyPair(privateKey, algorithm);
+      // Handle both Uint8Array and string private keys
+      let privateKeyBytes: Uint8Array;
+      if (typeof privateKey === 'string') {
+        try {
+          // Try to parse as hex first
+          privateKeyBytes = hexToBytes(privateKey.padStart(64, '0'));
+        } catch {
+          // If not valid hex, hash the string to create a valid private key
+          privateKeyBytes = CryptographicService.hashMessage(privateKey);
+        }
+      } else {
+        privateKeyBytes = privateKey;
+      }
+      this.keyPair = this.loadKeyPair(privateKeyBytes, algorithm);
     } else {
       this.keyPair = CryptographicService.generateKeyPair(algorithm);
     }
@@ -101,7 +114,7 @@ export class SecureMobileWallet {
     return bytesToHex(signature.signature);
   }
 
-  createTransaction(to: string, amount: number): Transaction {
+  createTransaction(to: string, amount: number, nonce?: number): Transaction {
     if (amount <= 0) {
       throw new Error('Amount must be greater than 0');
     }
@@ -110,11 +123,13 @@ export class SecureMobileWallet {
       throw new Error('Insufficient balance');
     }
 
+    const transactionNonce = nonce ?? this.wallet.nonce;
+
     this.logger.info('Creating secure transaction', {
       from: this.wallet.address,
       to,
       amount,
-      nonce: this.wallet.nonce,
+      nonce: transactionNonce,
     });
 
     const transaction = SecureTransactionManager.createTransaction(
@@ -122,11 +137,13 @@ export class SecureMobileWallet {
       to,
       amount,
       this.keyPair,
-      this.wallet.nonce
+      transactionNonce
     );
 
-    // Increment nonce after successful transaction creation
-    this.wallet.nonce++;
+    // Increment nonce after successful transaction creation (only if using wallet's nonce)
+    if (nonce === undefined) {
+      this.wallet.nonce++;
+    }
 
     return transaction;
   }
