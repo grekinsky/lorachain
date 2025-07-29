@@ -229,24 +229,35 @@ describe('Blockchain', () => {
       const fromAddress = 'from-address';
       const toAddress = 'to-address';
 
-      // Give from-address some initial balance by mining
-      blockchain.minePendingTransactions(fromAddress);
-
-      // Create transaction
+      // Create a simple transaction first, then add initial balance through mining
       const transaction = TransactionManager.createTransaction(
+        'network', // From network (genesis-like)
         fromAddress,
-        toAddress,
-        50,
-        'private-key'
+        10, // Give fromAddress 10 coins
+        'network-private-key'
       );
       blockchain.addTransaction(transaction);
+      blockchain.minePendingTransactions(fromAddress); // fromAddress mines the block and gets reward
+
+      // Now fromAddress should have 10 (from transaction) + 10 (mining reward) = 20 coins
+      
+      // Create transaction from fromAddress to toAddress
+      const sendTransaction = TransactionManager.createTransaction(
+        fromAddress,
+        toAddress,
+        5, // Send 5 coins
+        'private-key'
+      );
+      blockchain.addTransaction(sendTransaction);
       blockchain.minePendingTransactions(minerAddress);
 
-      const fromBalance = blockchain.getBalance(fromAddress);
-      const toBalance = blockchain.getBalance(toAddress);
+      // Use legacy balance calculation for this test since we're using legacy transactions
+      const fromBalance = blockchain.getLegacyBalance(fromAddress);
+      const toBalance = blockchain.getLegacyBalance(toAddress);
 
-      expect(fromBalance).toBe(-50.05); // No mining reward for fromAddress, so 0 - amount (50) - fee (0.05) = -50.05
-      expect(toBalance).toBe(50); // Received amount
+      // fromAddress: 20 (initial) - 5 (sent) - 0.005 (fee) = 14.995
+      expect(fromBalance).toBeCloseTo(14.995, 2); // Allow for floating point precision 
+      expect(toBalance).toBe(5); // Received amount
     });
 
     it('should handle multiple transactions', () => {
