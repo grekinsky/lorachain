@@ -1,9 +1,18 @@
 import * as secp256k1 from '@noble/secp256k1';
 import * as ed25519 from '@noble/ed25519';
 import { sha256 } from '@noble/hashes/sha256';
+import { sha512 } from '@noble/hashes/sha512';
 import { ripemd160 } from '@noble/hashes/ripemd160';
+import { hmac } from '@noble/hashes/hmac';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils';
 import type { Transaction } from './types.js';
+
+// Initialize hash functions for secp256k1
+secp256k1.etc.hmacSha256Sync = (k: Uint8Array, ...m: Uint8Array[]) => 
+  hmac(sha256, k, secp256k1.etc.concatBytes(...m));
+
+// Initialize hash functions for ed25519
+ed25519.etc.sha512Sync = (...m: Uint8Array[]) => sha512(ed25519.etc.concatBytes(...m));
 
 export type SignatureAlgorithm = 'secp256k1' | 'ed25519';
 
@@ -100,20 +109,20 @@ export class CryptographicService {
     }
   }
 
-  static async sign(
+  static sign(
     message: Uint8Array,
     privateKey: Uint8Array,
     algorithm: SignatureAlgorithm
-  ): Promise<Signature> {
+  ): Signature {
     if (algorithm === 'secp256k1') {
-      const signature = await secp256k1.sign(message, privateKey);
+      const signature = secp256k1.sign(message, privateKey);
       return {
         signature: signature.toCompactHex ? hexToBytes(signature.toCompactHex()) : new Uint8Array(signature),
         recovery: signature.recovery,
         algorithm,
       };
     } else {
-      const signature = await ed25519.sign(message, privateKey);
+      const signature = ed25519.sign(message, privateKey);
       return {
         signature,
         algorithm,
@@ -121,16 +130,16 @@ export class CryptographicService {
     }
   }
 
-  static async verify(
+  static verify(
     signature: Signature,
     message: Uint8Array,
     publicKey: Uint8Array
-  ): Promise<boolean> {
+  ): boolean {
     try {
       if (signature.algorithm === 'secp256k1') {
         return secp256k1.verify(signature.signature, message, publicKey);
       } else {
-        return await ed25519.verify(signature.signature, message, publicKey);
+        return ed25519.verify(signature.signature, message, publicKey);
       }
     } catch {
       return false;
@@ -235,13 +244,13 @@ export class SecureTransactionManager {
     return bytesToHex(random);
   }
 
-  static async createTransaction(
+  static createTransaction(
     from: string,
     to: string,
     amount: number,
     keyPair: KeyPair,
     nonce: number = 0
-  ): Promise<Transaction> {
+  ): Transaction {
     const transaction: Omit<Transaction, 'signature'> = {
       id: this.generateId(),
       from,
@@ -253,7 +262,7 @@ export class SecureTransactionManager {
     };
 
     const messageHash = CryptographicService.hashTransaction(transaction);
-    const signature = await CryptographicService.sign(
+    const signature = CryptographicService.sign(
       messageHash,
       keyPair.privateKey,
       keyPair.algorithm
@@ -269,11 +278,11 @@ export class SecureTransactionManager {
     return Math.max(0.001, amount * 0.001);
   }
 
-  static async verifyTransaction(
+  static verifyTransaction(
     transaction: Transaction,
     publicKey: Uint8Array,
     algorithm: SignatureAlgorithm = 'secp256k1'
-  ): Promise<boolean> {
+  ): boolean {
     const { signature, ...transactionWithoutSig } = transaction;
     const messageHash = CryptographicService.hashTransaction(transactionWithoutSig);
     const signatureBytes = hexToBytes(signature);

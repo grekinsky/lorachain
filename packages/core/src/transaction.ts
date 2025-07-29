@@ -130,7 +130,7 @@ export class TransactionManager {
       return SecureTransactionManager.verifyTransaction(
         transaction,
         publicKeyBytes
-      ).then(result => result).catch(() => false);
+      );
     } catch {
       return false;
     }

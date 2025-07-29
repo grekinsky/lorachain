@@ -85,9 +85,9 @@ export class SecureMobileWallet {
     this.wallet.nonce = nonce;
   }
 
-  async signMessage(message: string): Promise<string> {
+  signMessage(message: string): string {
     const messageHash = CryptographicService.hashMessage(message);
-    const signature = await CryptographicService.sign(
+    const signature = CryptographicService.sign(
       messageHash,
       this.keyPair.privateKey,
       this.keyPair.algorithm
@@ -95,10 +95,10 @@ export class SecureMobileWallet {
     return bytesToHex(signature.signature);
   }
 
-  async createTransaction(
+  createTransaction(
     to: string,
     amount: number
-  ): Promise<Transaction> {
+  ): Transaction {
     if (amount <= 0) {
       throw new Error('Amount must be greater than 0');
     }
@@ -114,7 +114,7 @@ export class SecureMobileWallet {
       nonce: this.wallet.nonce,
     });
 
-    const transaction = await SecureTransactionManager.createTransaction(
+    const transaction = SecureTransactionManager.createTransaction(
       this.wallet.address,
       to,
       amount,
