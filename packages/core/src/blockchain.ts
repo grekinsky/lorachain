@@ -7,20 +7,19 @@ import type {
   ValidationResult,
 } from './types.js';
 import { BlockManager } from './block.js';
-import { TransactionManager } from './transaction.js';
 import { UTXOManager } from './utxo.js';
 import { UTXOTransactionManager } from './utxo-transaction.js';
 
 // Simple logger for development
 class SimpleLogger {
   constructor(private context: string) {}
-  debug(message: string) {
+  debug(message: string): void {
     console.log(`[DEBUG] ${this.context}: ${message}`);
   }
-  warn(message: string) {
+  warn(message: string): void {
     console.warn(`[WARN] ${this.context}: ${message}`);
   }
-  error(message: string) {
+  error(message: string): void {
     console.error(`[ERROR] ${this.context}: ${message}`);
   }
 }
@@ -98,27 +97,27 @@ export class Blockchain {
   }
 
   minePendingTransactions(minerAddress: string): Block | null {
-    if (this.pendingUTXOTransactions.length === 0) {
-      return null;
-    }
+    // Always create a mining reward transaction, even if no pending transactions
 
     // Create mining reward as UTXO transaction
     const availableUTXOs = this.utxoManager.getUTXOsForAddress('network');
     let rewardTransaction: UTXOTransaction;
-    
+
     if (availableUTXOs.length === 0) {
       // Genesis-style reward transaction
       rewardTransaction = {
         id: `reward-${Date.now()}-${Math.random()}`,
         inputs: [],
-        outputs: [{
-          value: this.miningReward,
-          lockingScript: minerAddress,
-          outputIndex: 0
-        }],
+        outputs: [
+          {
+            value: this.miningReward,
+            lockingScript: minerAddress,
+            outputIndex: 0,
+          },
+        ],
         lockTime: 0,
         timestamp: Date.now(),
-        fee: 0
+        fee: 0,
       };
     } else {
       rewardTransaction = this.utxoTransactionManager.createTransaction(
@@ -130,7 +129,13 @@ export class Blockchain {
       );
     }
 
-    const blockTransactions = [...this.pendingUTXOTransactions, rewardTransaction];
+    const blockTransactions = [
+      ...this.pendingUTXOTransactions,
+      rewardTransaction,
+    ];
+
+    // Save the UTXO transactions for processing (before legacy conversion)
+    const originalUTXOTransactions = [...blockTransactions];
 
     // Convert UTXOTransactions to legacy Transaction format for block creation
     const legacyTransactions = blockTransactions.map(utxoTx => ({
@@ -141,7 +146,7 @@ export class Blockchain {
       fee: utxoTx.fee,
       timestamp: utxoTx.timestamp,
       signature: 'utxo-signed',
-      nonce: 0
+      nonce: 0,
     }));
 
     const newBlock = BlockManager.createBlock(
@@ -153,11 +158,15 @@ export class Blockchain {
 
     const minedBlock = BlockManager.mineBlock(newBlock, this.difficulty);
     this.blocks.push(minedBlock);
-    
-    // Process UTXO updates
-    this.processBlockUTXOs(minedBlock);
-    
-    // Clear pending transactions
+
+    this.logger.debug(
+      `Mining block ${minedBlock.index} with ${minedBlock.transactions.length} transactions`
+    );
+
+    // Process UTXO updates with the original UTXO transactions
+    this.processBlockUTXOs(minedBlock, originalUTXOTransactions);
+
+    // Clear pending transactions after processing
     this.pendingUTXOTransactions = [];
 
     return minedBlock;
@@ -177,7 +186,7 @@ export class Blockchain {
 
     this.blocks.push(block);
 
-    // Process UTXO transactions  
+    // Process UTXO transactions
     block.transactions.forEach(tx => {
       const index = this.pendingUTXOTransactions.findIndex(
         pending => pending.id === tx.id
@@ -196,29 +205,59 @@ export class Blockchain {
     return { isValid: true, errors: [] };
   }
 
-  private processBlockUTXOs(block: Block): void {
+  private processBlockUTXOs(
+    block: Block,
+    originalUTXOTransactions?: UTXOTransaction[]
+  ): void {
     const utxosToAdd: UTXO[] = [];
     const utxosToRemove: Array<{ txId: string; outputIndex: number }> = [];
 
-    // Process regular transactions as UTXO operations
+    // Process UTXO transactions properly by reconstructing original UTXO structure
     for (const tx of block.transactions) {
-      // For regular transactions, we need to:
-      // 1. Remove UTXOs that were spent (if this is not a genesis/reward transaction)
-      // 2. Add new UTXOs for the outputs
+      // Try to find the original UTXO transaction from the provided list or pending
+      const originalUTXOTx =
+        originalUTXOTransactions?.find(utxoTx => utxoTx.id === tx.id) ||
+        this.pendingUTXOTransactions.find(utxoTx => utxoTx.id === tx.id);
 
-      // Add new UTXO for the transaction output
-      const newUTXO: UTXO = {
-        txId: tx.id,
-        outputIndex: 0,
-        value: tx.amount,
-        lockingScript: tx.to,
-        blockHeight: block.index,
-        isSpent: false,
-      };
-      utxosToAdd.push(newUTXO);
+      if (originalUTXOTx) {
+        // Process each output from the original UTXO transaction
+        for (const output of originalUTXOTx.outputs) {
+          const newUTXO: UTXO = {
+            txId: tx.id,
+            outputIndex: output.outputIndex,
+            value: output.value,
+            lockingScript: output.lockingScript,
+            blockHeight: block.index,
+            isSpent: false,
+          };
+          this.logger.debug(
+            `Creating UTXO for tx ${tx.id}[${output.outputIndex}]: value=${output.value}, lockingScript=${output.lockingScript}`
+          );
+          utxosToAdd.push(newUTXO);
+        }
 
-      // Note: In a full implementation, we would also process inputs to remove spent UTXOs
-      // For now, we're focusing on the basic UTXO creation
+        // Remove spent UTXOs for inputs
+        for (const input of originalUTXOTx.inputs) {
+          utxosToRemove.push({
+            txId: input.previousTxId,
+            outputIndex: input.outputIndex,
+          });
+        }
+      } else {
+        // Fallback for genesis/reward transactions - create single UTXO
+        const newUTXO: UTXO = {
+          txId: tx.id,
+          outputIndex: 0,
+          value: tx.amount,
+          lockingScript: tx.to,
+          blockHeight: block.index,
+          isSpent: false,
+        };
+        this.logger.debug(
+          `Creating genesis UTXO for tx ${tx.id}: value=${tx.amount}, lockingScript=${tx.to}`
+        );
+        utxosToAdd.push(newUTXO);
+      }
     }
 
     // Process any UTXO transactions that might be in the block

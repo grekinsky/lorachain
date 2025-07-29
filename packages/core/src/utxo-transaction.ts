@@ -14,13 +14,13 @@ import { bytesToHex, hexToBytes } from '@noble/hashes/utils';
 // Simple logger for development
 class SimpleLogger {
   constructor(private context: string) {}
-  debug(message: string) {
+  debug(message: string): void {
     console.log(`[DEBUG] ${this.context}: ${message}`);
   }
-  warn(message: string) {
+  warn(message: string): void {
     console.warn(`[WARN] ${this.context}: ${message}`);
   }
-  error(message: string) {
+  error(message: string): void {
     console.error(`[ERROR] ${this.context}: ${message}`);
   }
 }
@@ -127,10 +127,6 @@ export class UTXOTransactionManager implements IUTXOTransactionManager {
       errors.push('Transaction ID is required');
     }
 
-    if (!transaction.inputs || transaction.inputs.length === 0) {
-      errors.push('Transaction must have at least one input');
-    }
-
     if (!transaction.outputs || transaction.outputs.length === 0) {
       errors.push('Transaction must have at least one output');
     }
@@ -139,28 +135,34 @@ export class UTXOTransactionManager implements IUTXOTransactionManager {
       errors.push('Invalid timestamp');
     }
 
-    // Validate inputs
+    // Allow genesis/coinbase transactions with no inputs
+    const isGenesisTransaction =
+      !transaction.inputs || transaction.inputs.length === 0;
+
+    // Validate inputs (skip for genesis transactions)
     let inputValue = 0;
-    for (const input of transaction.inputs) {
-      // Check if UTXO exists and is unspent
-      if (
-        !utxoManager.validateUTXOExists(input.previousTxId, input.outputIndex)
-      ) {
-        errors.push(
-          `UTXO ${input.previousTxId}:${input.outputIndex} does not exist or is already spent`
-        );
-        continue;
-      }
-
-      const utxo = utxoManager.getUTXO(input.previousTxId, input.outputIndex);
-      if (utxo) {
-        inputValue += utxo.value;
-
-        // Validate signature (simplified - in real implementation, would verify cryptographic signature)
-        if (!input.unlockingScript || input.unlockingScript.length === 0) {
+    if (!isGenesisTransaction) {
+      for (const input of transaction.inputs) {
+        // Check if UTXO exists and is unspent
+        if (
+          !utxoManager.validateUTXOExists(input.previousTxId, input.outputIndex)
+        ) {
           errors.push(
-            `Input ${input.previousTxId}:${input.outputIndex} missing unlocking script`
+            `UTXO ${input.previousTxId}:${input.outputIndex} does not exist or is already spent`
           );
+          continue;
+        }
+
+        const utxo = utxoManager.getUTXO(input.previousTxId, input.outputIndex);
+        if (utxo) {
+          inputValue += utxo.value;
+
+          // Validate signature (simplified - in real implementation, would verify cryptographic signature)
+          if (!input.unlockingScript || input.unlockingScript.length === 0) {
+            errors.push(
+              `Input ${input.previousTxId}:${input.outputIndex} missing unlocking script`
+            );
+          }
         }
       }
     }
@@ -187,23 +189,31 @@ export class UTXOTransactionManager implements IUTXOTransactionManager {
       outputValue += output.value;
     }
 
-    // Validate fee
-    const expectedFee = inputValue - outputValue;
-    if (Math.abs(expectedFee - transaction.fee) > 0.001) {
-      errors.push(
-        `Fee mismatch: expected ${expectedFee}, got ${transaction.fee}`
-      );
-    }
+    // Skip fee and balance validation for genesis transactions
+    if (!isGenesisTransaction) {
+      // Validate fee
+      const expectedFee = inputValue - outputValue;
+      if (Math.abs(expectedFee - transaction.fee) > 0.001) {
+        errors.push(
+          `Fee mismatch: expected ${expectedFee}, got ${transaction.fee}`
+        );
+      }
 
-    if (transaction.fee < 0) {
-      errors.push('Transaction fee cannot be negative');
-    }
+      if (transaction.fee < 0) {
+        errors.push('Transaction fee cannot be negative');
+      }
 
-    // Validate balance
-    if (inputValue < outputValue) {
-      errors.push(
-        `Insufficient input value: inputs=${inputValue}, outputs=${outputValue}`
-      );
+      // Validate balance
+      if (inputValue < outputValue) {
+        errors.push(
+          `Insufficient input value: inputs=${inputValue}, outputs=${outputValue}`
+        );
+      }
+    } else {
+      // For genesis transactions, fee should be 0
+      if (transaction.fee !== 0) {
+        errors.push('Genesis transaction fee must be 0');
+      }
     }
 
     return {

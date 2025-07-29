@@ -1,8 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { Blockchain } from './blockchain.js';
-import { TransactionManager } from './transaction.js';
 import { BlockManager } from './block.js';
-import type { Transaction, Block, UTXOTransaction, UTXO } from './types.js';
+import type { Transaction, Block, UTXOTransaction } from './types.js';
 
 describe('Blockchain', () => {
   let blockchain: Blockchain;
@@ -11,21 +10,23 @@ describe('Blockchain', () => {
 
   beforeEach(() => {
     blockchain = new Blockchain();
-    
-    // Create a mock UTXO transaction
+
+    // Create a mock UTXO transaction (genesis-style with no inputs)
     mockUTXOTransaction = {
       id: `tx-${Date.now()}-${Math.random()}`,
       inputs: [],
-      outputs: [{
-        value: 100,
-        lockingScript: 'to-address',
-        outputIndex: 0
-      }],
+      outputs: [
+        {
+          value: 100,
+          lockingScript: 'to-address',
+          outputIndex: 0,
+        },
+      ],
       lockTime: 0,
       timestamp: Date.now(),
-      fee: 0.005
+      fee: 0, // Genesis transactions have no fee
     };
-    
+
     minerAddress = 'miner-address';
   });
 
@@ -79,13 +80,16 @@ describe('Blockchain', () => {
     });
 
     it('should reject invalid UTXO transaction', () => {
-      const invalidTransaction = { 
-        ...mockUTXOTransaction, 
-        outputs: [{
-          value: -100,
-          lockingScript: 'to-address',
-          outputIndex: 0
-        }]
+      const invalidTransaction = {
+        ...mockUTXOTransaction,
+        outputs: [
+          {
+            value: -100,
+            lockingScript: 'to-address',
+            outputIndex: 0,
+          },
+        ],
+        fee: 0, // Keep fee as 0 for genesis transaction
       };
       const result = blockchain.addTransaction(invalidTransaction);
 
@@ -111,9 +115,11 @@ describe('Blockchain', () => {
   });
 
   describe('minePendingTransactions', () => {
-    it('should return null when no pending transactions', () => {
+    it('should create mining reward block even when no pending transactions', () => {
       const result = blockchain.minePendingTransactions(minerAddress);
-      expect(result).toBeNull();
+      expect(result).not.toBeNull();
+      expect(result!.index).toBe(1);
+      expect(result!.transactions).toHaveLength(1); // Only mining reward
     });
 
     it('should mine block with pending UTXO transactions', () => {
@@ -146,14 +152,16 @@ describe('Blockchain', () => {
         const largeUTXOTransaction: UTXOTransaction = {
           id: `tx-${i}-${Date.now()}`,
           inputs: [],
-          outputs: [{
-            value: 100,
-            lockingScript: `to-${i}`,
-            outputIndex: 0
-          }],
+          outputs: [
+            {
+              value: 100,
+              lockingScript: `to-${i}`,
+              outputIndex: 0,
+            },
+          ],
           lockTime: 0,
           timestamp: Date.now(),
-          fee: 0.005
+          fee: 0, // Genesis transactions have no fee
         };
         blockchain.addTransaction(largeUTXOTransaction);
       }
@@ -179,14 +187,16 @@ describe('Blockchain', () => {
       mockUTXOTransaction = {
         id: `tx-${Date.now()}-${Math.random()}`,
         inputs: [],
-        outputs: [{
-          value: 100,
-          lockingScript: 'to-address',
-          outputIndex: 0
-        }],
+        outputs: [
+          {
+            value: 100,
+            lockingScript: 'to-address',
+            outputIndex: 0,
+          },
+        ],
         lockTime: 0,
         timestamp: Date.now(),
-        fee: 0.005
+        fee: 0, // Genesis transactions have no fee
       };
 
       // Convert UTXO transaction to legacy format for block creation
@@ -198,7 +208,7 @@ describe('Blockchain', () => {
         fee: mockUTXOTransaction.fee,
         timestamp: mockUTXOTransaction.timestamp,
         signature: 'test-signature',
-        nonce: 0
+        nonce: 0,
       };
 
       // Create a valid block manually using BlockManager
@@ -270,9 +280,13 @@ describe('Blockchain', () => {
       const toAddress = 'to-address';
 
       // Mine a block to create initial UTXOs for fromAddress
-      blockchain.minePendingTransactions(fromAddress); // fromAddress gets mining reward
-      
-      // Create UTXO transaction from fromAddress to toAddress  
+      blockchain.minePendingTransactions(fromAddress); // fromAddress gets mining reward (10 coins)
+
+      // Check that fromAddress has the mining reward
+      const initialBalance = blockchain.getBalance(fromAddress);
+      expect(initialBalance).toBe(10);
+
+      // Create UTXO transaction from fromAddress to toAddress
       const sendTransaction = blockchain.createUTXOTransaction(
         fromAddress,
         toAddress,
@@ -287,20 +301,19 @@ describe('Blockchain', () => {
       const toBalance = blockchain.getBalance(toAddress);
 
       // fromAddress: 10 (mining reward) - 5 (sent) - fee = remaining
-      expect(fromBalance).toBeGreaterThanOrEqual(0); // Should have some remaining balance
+      expect(fromBalance).toBeGreaterThanOrEqual(0); // Should have some remaining balance after fee
       expect(toBalance).toBe(5); // Received amount
     });
 
-    it('should handle multiple transactions', () => {
+    it('should handle multiple mining rewards', () => {
       const address = 'test-address';
 
-      // Mine multiple blocks to give address balance
-      // First block will have no pending transactions, so no mining reward
+      // Mine multiple blocks to give address mining rewards
       blockchain.minePendingTransactions(address);
       blockchain.minePendingTransactions(address);
 
       const balance = blockchain.getBalance(address);
-      expect(balance).toBe(0); // No mining rewards since no transactions to mine
+      expect(balance).toBe(20); // Two mining rewards of 10 each
     });
   });
 
@@ -358,14 +371,16 @@ describe('Blockchain', () => {
       const transaction2: UTXOTransaction = {
         id: `tx2-${Date.now()}-${Math.random()}`,
         inputs: [],
-        outputs: [{
-          value: 200,
-          lockingScript: address,
-          outputIndex: 0
-        }],
+        outputs: [
+          {
+            value: 200,
+            lockingScript: address,
+            outputIndex: 0,
+          },
+        ],
         lockTime: 0,
         timestamp: Date.now() + 1000,
-        fee: 0.005
+        fee: 0, // Genesis transactions have no fee
       };
       blockchain.addTransaction(transaction2);
       blockchain.minePendingTransactions(minerAddress);

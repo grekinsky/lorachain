@@ -17,16 +17,16 @@ import { bytesToHex, hexToBytes } from '@noble/hashes/utils';
 // Simple logger for development
 class SimpleLogger {
   constructor(private context: string) {}
-  info(message: string, data?: any) {
+  info(message: string, data?: unknown): void {
     console.log(`[INFO] ${this.context}: ${message}`, data || '');
   }
-  warn(message: string, data?: any) {
+  warn(message: string, data?: unknown): void {
     console.warn(`[WARN] ${this.context}: ${message}`, data || '');
   }
-  error(message: string, data?: any) {
+  error(message: string, data?: unknown): void {
     console.error(`[ERROR] ${this.context}: ${message}`, data || '');
   }
-  static getInstance() {
+  static getInstance(): SimpleLogger {
     return new SimpleLogger('SecureMobileWallet');
   }
 }

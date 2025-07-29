@@ -183,8 +183,8 @@ describe('UTXOTransactionManager', () => {
       expect(validation.errors).toContain('Transaction ID is required');
     });
 
-    it('should reject transaction with no inputs', () => {
-      const invalidTransaction = { ...validTransaction, inputs: [] };
+    it('should reject transaction with no inputs and non-zero fee', () => {
+      const invalidTransaction = { ...validTransaction, inputs: [], fee: 0.5 };
 
       const validation = utxoTransactionManager.validateTransaction(
         invalidTransaction,
@@ -192,9 +192,7 @@ describe('UTXOTransactionManager', () => {
       );
 
       expect(validation.isValid).toBe(false);
-      expect(validation.errors).toContain(
-        'Transaction must have at least one input'
-      );
+      expect(validation.errors).toContain('Genesis transaction fee must be 0');
     });
 
     it('should reject transaction with no outputs', () => {
