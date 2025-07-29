@@ -10,10 +10,17 @@ import type {
 } from './types.js';
 import { CryptographicService, type KeyPair } from './cryptographic.js';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils';
-import { Logger } from '@lorachain/shared';
+
+// Simple logger for development
+class SimpleLogger {
+  constructor(private context: string) {}
+  debug(message: string) { console.log(`[DEBUG] ${this.context}: ${message}`); }
+  warn(message: string) { console.warn(`[WARN] ${this.context}: ${message}`); }
+  error(message: string) { console.error(`[ERROR] ${this.context}: ${message}`); }
+}
 
 export class UTXOTransactionManager implements IUTXOTransactionManager {
-  private logger = new Logger('UTXOTransactionManager');
+  private logger = new SimpleLogger('UTXOTransactionManager');
 
   createTransaction(
     fromAddress: string,

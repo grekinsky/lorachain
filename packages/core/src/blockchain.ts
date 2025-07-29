@@ -10,7 +10,14 @@ import { BlockManager } from './block.js';
 import { TransactionManager } from './transaction.js';
 import { UTXOManager } from './utxo.js';
 import { UTXOTransactionManager } from './utxo-transaction.js';
-import { Logger } from '@lorachain/shared';
+
+// Simple logger for development
+class SimpleLogger {
+  constructor(private context: string) {}
+  debug(message: string) { console.log(`[DEBUG] ${this.context}: ${message}`); }
+  warn(message: string) { console.warn(`[WARN] ${this.context}: ${message}`); }
+  error(message: string) { console.error(`[ERROR] ${this.context}: ${message}`); }
+}
 
 export class Blockchain {
   private blocks: Block[] = [];
@@ -21,7 +28,7 @@ export class Blockchain {
   private difficulty: number = 2;
   private miningReward: number = 10;
   private maxBlockSize: number = 1024 * 1024; // 1MB in bytes
-  private logger = new Logger('Blockchain');
+  private logger = new SimpleLogger('Blockchain');
 
   constructor() {
     this.utxoManager = new UTXOManager();

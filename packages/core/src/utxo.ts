@@ -1,11 +1,18 @@
 import type { UTXO, IUTXOManager, UTXOSelectionResult } from './types.js';
 import { CryptographicService } from './cryptographic.js';
-import { Logger } from '@lorachain/shared';
+
+// Simple logger for development
+class SimpleLogger {
+  constructor(private context: string) {}
+  debug(message: string) { console.log(`[DEBUG] ${this.context}: ${message}`); }
+  warn(message: string) { console.warn(`[WARN] ${this.context}: ${message}`); }
+  error(message: string) { console.error(`[ERROR] ${this.context}: ${message}`); }
+}
 
 export class UTXOManager implements IUTXOManager {
   private utxoSet: Map<string, UTXO> = new Map();
   private addressIndex: Map<string, Set<string>> = new Map();
-  private logger = new Logger('UTXOManager');
+  private logger = new SimpleLogger('UTXOManager');
 
   // UTXO Management
   addUTXO(utxo: UTXO): void {
