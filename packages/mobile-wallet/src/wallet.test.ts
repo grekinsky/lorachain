@@ -37,8 +37,12 @@ describe('MobileWallet', () => {
       expect(wallet.getAddress()).toBeDefined();
       expect(wallet.getPublicKey()).toBeDefined();
       expect(wallet.getBalance()).toBe(0);
-      expect(wallet.getAddress()).toHaveLength(64);
-      expect(wallet.getPublicKey()).toHaveLength(64);
+      // Bitcoin-style addresses are ~34 characters
+      expect(wallet.getAddress().length).toBeGreaterThan(25);
+      expect(wallet.getAddress().length).toBeLessThan(40);
+      // Compressed secp256k1 public keys are 33 bytes (66 hex characters)
+      expect(wallet.getPublicKey()).toHaveLength(33);
+      expect(wallet.getPublicKeyHex()).toHaveLength(66);
     });
 
     it('should load wallet from private key', () => {
@@ -47,7 +51,9 @@ describe('MobileWallet', () => {
 
       expect(wallet.getAddress()).toBeDefined();
       expect(wallet.getPublicKey()).toBeDefined();
-      expect(wallet.exportPrivateKey()).toBe(privateKey);
+      // Private key is derived from the input string and exported as hex
+      expect(wallet.exportPrivateKey()).toHaveLength(64);
+      expect(wallet.exportPrivateKey()).toMatch(/^[0-9a-f]{64}$/i);
     });
 
     it('should generate consistent address from same private key', () => {
@@ -56,7 +62,7 @@ describe('MobileWallet', () => {
       const wallet2 = new MobileWallet(privateKey);
 
       expect(wallet1.getAddress()).toBe(wallet2.getAddress());
-      expect(wallet1.getPublicKey()).toBe(wallet2.getPublicKey());
+      expect(wallet1.getPublicKeyHex()).toBe(wallet2.getPublicKeyHex());
     });
 
     it('should generate different addresses for different private keys', () => {
@@ -64,7 +70,7 @@ describe('MobileWallet', () => {
       const wallet2 = new MobileWallet('private-key-2');
 
       expect(wallet1.getAddress()).not.toBe(wallet2.getAddress());
-      expect(wallet1.getPublicKey()).not.toBe(wallet2.getPublicKey());
+      expect(wallet1.getPublicKeyHex()).not.toBe(wallet2.getPublicKeyHex());
     });
   });
 
@@ -292,7 +298,7 @@ describe('MobileWallet', () => {
       const wallet2 = new MobileWallet();
 
       expect(wallet1.getAddress()).not.toBe(wallet2.getAddress());
-      expect(wallet1.getPublicKey()).not.toBe(wallet2.getPublicKey());
+      expect(wallet1.getPublicKeyHex()).not.toBe(wallet2.getPublicKeyHex());
       expect(wallet1.exportPrivateKey()).not.toBe(wallet2.exportPrivateKey());
     });
 
@@ -301,7 +307,7 @@ describe('MobileWallet', () => {
       const wallet1 = new MobileWallet(privateKey);
       const wallet2 = new MobileWallet(privateKey);
 
-      expect(wallet1.getPublicKey()).toBe(wallet2.getPublicKey());
+      expect(wallet1.getPublicKeyHex()).toBe(wallet2.getPublicKeyHex());
     });
 
     it('should derive address from public key consistently', () => {
