@@ -27,7 +27,6 @@ class SimpleLogger {
 
 export class Blockchain {
   private blocks: Block[] = [];
-  private pendingTransactions: Transaction[] = [];
   private utxoManager: UTXOManager;
   private utxoTransactionManager: UTXOTransactionManager;
   private pendingUTXOTransactions: UTXOTransaction[] = [];
@@ -68,24 +67,8 @@ export class Blockchain {
     return this.blocks[this.blocks.length - 1];
   }
 
-  addTransaction(transaction: Transaction): ValidationResult {
-    const validation = TransactionManager.validateTransaction(transaction);
-    if (!validation.isValid) {
-      return validation;
-    }
-
-    const existingTransaction = this.pendingTransactions.find(
-      tx => tx.id === transaction.id
-    );
-    if (existingTransaction) {
-      return {
-        isValid: false,
-        errors: ['Transaction already exists in pending pool'],
-      };
-    }
-
-    this.pendingTransactions.push(transaction);
-    return { isValid: true, errors: [] };
+  addTransaction(transaction: UTXOTransaction): ValidationResult {
+    return this.addUTXOTransaction(transaction);
   }
 
   addUTXOTransaction(transaction: UTXOTransaction): ValidationResult {
@@ -115,53 +98,67 @@ export class Blockchain {
   }
 
   minePendingTransactions(minerAddress: string): Block | null {
-    if (this.pendingTransactions.length === 0) {
+    if (this.pendingUTXOTransactions.length === 0) {
       return null;
     }
 
-    const rewardTransaction = TransactionManager.createTransaction(
-      'network',
-      minerAddress,
-      this.miningReward,
-      'network-private-key'
-    );
+    // Create mining reward as UTXO transaction
+    const availableUTXOs = this.utxoManager.getUTXOsForAddress('network');
+    let rewardTransaction: UTXOTransaction;
+    
+    if (availableUTXOs.length === 0) {
+      // Genesis-style reward transaction
+      rewardTransaction = {
+        id: `reward-${Date.now()}-${Math.random()}`,
+        inputs: [],
+        outputs: [{
+          value: this.miningReward,
+          lockingScript: minerAddress,
+          outputIndex: 0
+        }],
+        lockTime: 0,
+        timestamp: Date.now(),
+        fee: 0
+      };
+    } else {
+      rewardTransaction = this.utxoTransactionManager.createTransaction(
+        'network',
+        minerAddress,
+        this.miningReward,
+        'network-private-key',
+        availableUTXOs
+      );
+    }
 
-    const blockTransactions = [...this.pendingTransactions, rewardTransaction];
+    const blockTransactions = [...this.pendingUTXOTransactions, rewardTransaction];
+
+    // Convert UTXOTransactions to legacy Transaction format for block creation
+    const legacyTransactions = blockTransactions.map(utxoTx => ({
+      id: utxoTx.id,
+      from: utxoTx.inputs.length > 0 ? 'utxo-based' : 'network',
+      to: utxoTx.outputs[0]?.lockingScript || 'unknown',
+      amount: utxoTx.outputs.reduce((sum, output) => sum + output.value, 0),
+      fee: utxoTx.fee,
+      timestamp: utxoTx.timestamp,
+      signature: 'utxo-signed',
+      nonce: 0
+    }));
 
     const newBlock = BlockManager.createBlock(
       this.getLatestBlock().index + 1,
-      blockTransactions,
+      legacyTransactions,
       this.getLatestBlock().hash,
       minerAddress
     );
 
-    const estimatedSize = BlockManager.getBlockSize(newBlock);
-    if (estimatedSize > this.maxBlockSize) {
-      const maxTransactions = Math.floor(
-        (this.maxBlockSize * blockTransactions.length) / estimatedSize
-      );
-      const limitedTransactions = blockTransactions.slice(0, maxTransactions);
-
-      const limitedBlock = BlockManager.createBlock(
-        this.getLatestBlock().index + 1,
-        limitedTransactions,
-        this.getLatestBlock().hash,
-        minerAddress
-      );
-
-      const minedBlock = BlockManager.mineBlock(limitedBlock, this.difficulty);
-      this.blocks.push(minedBlock);
-
-      this.pendingTransactions = this.pendingTransactions.slice(
-        maxTransactions - 1
-      );
-
-      return minedBlock;
-    }
-
     const minedBlock = BlockManager.mineBlock(newBlock, this.difficulty);
     this.blocks.push(minedBlock);
-    this.pendingTransactions = [];
+    
+    // Process UTXO updates
+    this.processBlockUTXOs(minedBlock);
+    
+    // Clear pending transactions
+    this.pendingUTXOTransactions = [];
 
     return minedBlock;
   }
@@ -180,13 +177,13 @@ export class Blockchain {
 
     this.blocks.push(block);
 
-    // Process regular transactions
+    // Process UTXO transactions  
     block.transactions.forEach(tx => {
-      const index = this.pendingTransactions.findIndex(
+      const index = this.pendingUTXOTransactions.findIndex(
         pending => pending.id === tx.id
       );
       if (index > -1) {
-        this.pendingTransactions.splice(index, 1);
+        this.pendingUTXOTransactions.splice(index, 1);
       }
     });
 
@@ -237,26 +234,7 @@ export class Blockchain {
   }
 
   getBalance(address: string): number {
-    // Use UTXO-based balance calculation
     return this.utxoManager.calculateBalance(address);
-  }
-
-  // Legacy balance calculation for backward compatibility
-  getLegacyBalance(address: string): number {
-    let balance = 0;
-
-    for (const block of this.blocks) {
-      for (const transaction of block.transactions) {
-        if (transaction.from === address) {
-          balance -= transaction.amount + transaction.fee;
-        }
-        if (transaction.to === address) {
-          balance += transaction.amount;
-        }
-      }
-    }
-
-    return balance;
   }
 
   validateChain(): ValidationResult {
@@ -299,8 +277,8 @@ export class Blockchain {
     return transactions.sort((a, b) => b.timestamp - a.timestamp);
   }
 
-  getPendingTransactions(): Transaction[] {
-    return [...this.pendingTransactions];
+  getPendingTransactions(): UTXOTransaction[] {
+    return [...this.pendingUTXOTransactions];
   }
 
   getPendingUTXOTransactions(): UTXOTransaction[] {
@@ -338,7 +316,7 @@ export class Blockchain {
   getState(): BlockchainState {
     return {
       blocks: this.getBlocks(),
-      pendingTransactions: this.getPendingTransactions(),
+      pendingTransactions: [], // Legacy field - now empty
       difficulty: this.difficulty,
       miningReward: this.miningReward,
       networkNodes: [],

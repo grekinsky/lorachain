@@ -1,3 +1,4 @@
+// Legacy Transaction interface - kept for Block compatibility only
 export interface Transaction {
   id: string;
   from: string;
