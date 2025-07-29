@@ -31,7 +31,10 @@ export class SecureMobileWallet {
     }
 
     this.wallet = {
-      address: CryptographicService.generateAddress(this.keyPair.publicKey, algorithm),
+      address: CryptographicService.generateAddress(
+        this.keyPair.publicKey,
+        algorithm
+      ),
       publicKey: this.keyPair.publicKey,
       privateKey: this.keyPair.privateKey,
       algorithm,
@@ -49,7 +52,10 @@ export class SecureMobileWallet {
     privateKey: Uint8Array,
     algorithm: SignatureAlgorithm
   ): KeyPair {
-    const keyPair = CryptographicService.generateKeyPairFromSeed(privateKey, algorithm);
+    const keyPair = CryptographicService.generateKeyPairFromSeed(
+      privateKey,
+      algorithm
+    );
     return keyPair;
   }
 
@@ -95,10 +101,7 @@ export class SecureMobileWallet {
     return bytesToHex(signature.signature);
   }
 
-  createTransaction(
-    to: string,
-    amount: number
-  ): Transaction {
+  createTransaction(to: string, amount: number): Transaction {
     if (amount <= 0) {
       throw new Error('Amount must be greater than 0');
     }

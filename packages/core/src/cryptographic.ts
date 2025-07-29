@@ -8,11 +8,14 @@ import { bytesToHex, hexToBytes } from '@noble/hashes/utils';
 import type { Transaction } from './types.js';
 
 // Initialize hash functions for secp256k1
-secp256k1.etc.hmacSha256Sync = (k: Uint8Array, ...m: Uint8Array[]) => 
-  hmac(sha256, k, secp256k1.etc.concatBytes(...m));
+secp256k1.etc.hmacSha256Sync = (
+  k: Uint8Array,
+  ...m: Uint8Array[]
+): Uint8Array => hmac(sha256, k, secp256k1.etc.concatBytes(...m));
 
 // Initialize hash functions for ed25519
-ed25519.etc.sha512Sync = (...m: Uint8Array[]) => sha512(ed25519.etc.concatBytes(...m));
+ed25519.etc.sha512Sync = (...m: Uint8Array[]): Uint8Array =>
+  sha512(ed25519.etc.concatBytes(...m));
 
 export type SignatureAlgorithm = 'secp256k1' | 'ed25519';
 
@@ -98,11 +101,11 @@ export class CryptographicService {
     try {
       const decoded = this.base58Decode(address);
       if (decoded.length !== 25) return false;
-      
+
       const payload = decoded.slice(0, -4);
       const checksum = decoded.slice(-4);
       const expectedChecksum = sha256(sha256(payload)).slice(0, 4);
-      
+
       return this.uint8ArrayEquals(checksum, expectedChecksum);
     } catch {
       return false;
@@ -117,7 +120,7 @@ export class CryptographicService {
     if (algorithm === 'secp256k1') {
       const signature = secp256k1.sign(message, privateKey);
       return {
-        signature: signature.toCompactHex ? hexToBytes(signature.toCompactHex()) : new Uint8Array(signature),
+        signature: hexToBytes(signature.toCompactHex()),
         recovery: signature.recovery,
         algorithm,
       };
@@ -153,7 +156,9 @@ export class CryptographicService {
     return sha256(data);
   }
 
-  static hashTransaction(transaction: Omit<Transaction, 'signature'>): Uint8Array {
+  static hashTransaction(
+    transaction: Omit<Transaction, 'signature'>
+  ): Uint8Array {
     const transactionData = JSON.stringify({
       id: transaction.id,
       from: transaction.from,
@@ -167,13 +172,21 @@ export class CryptographicService {
   }
 
   private static generateSecureRandom(length: number): Uint8Array {
-    if (typeof globalThis.crypto !== 'undefined' && globalThis.crypto.getRandomValues) {
+    if (
+      typeof globalThis.crypto !== 'undefined' &&
+      globalThis.crypto.getRandomValues
+    ) {
       return globalThis.crypto.getRandomValues(new Uint8Array(length));
-    } else if (typeof require !== 'undefined') {
-      const { randomBytes } = require('crypto');
-      return new Uint8Array(randomBytes(length));
+    } else {
+      // Node.js environment
+      try {
+        // Dynamic import for Node.js crypto module
+        const crypto = eval('require')('crypto');
+        return new Uint8Array(crypto.randomBytes(length));
+      } catch {
+        throw new Error('No secure random number generator available');
+      }
     }
-    throw new Error('No secure random number generator available');
   }
 
   private static uint8ArrayEquals(a: Uint8Array, b: Uint8Array): boolean {
@@ -185,7 +198,8 @@ export class CryptographicService {
   }
 
   private static base58Encode(data: Uint8Array): string {
-    const alphabet = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+    const alphabet =
+      '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
     const base = BigInt(58);
     let num = BigInt('0x' + bytesToHex(data));
     let encoded = '';
@@ -209,7 +223,8 @@ export class CryptographicService {
   }
 
   private static base58Decode(encoded: string): Uint8Array {
-    const alphabet = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+    const alphabet =
+      '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
     const base = BigInt(58);
     let num = 0n;
 
@@ -284,7 +299,9 @@ export class SecureTransactionManager {
     algorithm: SignatureAlgorithm = 'secp256k1'
   ): boolean {
     const { signature, ...transactionWithoutSig } = transaction;
-    const messageHash = CryptographicService.hashTransaction(transactionWithoutSig);
+    const messageHash = CryptographicService.hashTransaction(
+      transactionWithoutSig
+    );
     const signatureBytes = hexToBytes(signature);
 
     return CryptographicService.verify(

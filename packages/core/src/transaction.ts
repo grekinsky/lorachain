@@ -1,12 +1,7 @@
 import { createHash, randomBytes } from 'crypto';
 import type { Transaction, ValidationResult } from './types.js';
-import {
-  CryptographicService,
-  SecureTransactionManager,
-  type KeyPair,
-  type SignatureAlgorithm,
-} from './cryptographic.js';
-import { bytesToHex, hexToBytes } from '@noble/hashes/utils';
+import { SecureTransactionManager } from './cryptographic.js';
+import { hexToBytes } from '@noble/hashes/utils';
 
 // Legacy transaction manager for backward compatibility
 export class TransactionManager {
@@ -101,7 +96,10 @@ export class TransactionManager {
 
   static verifySignature(transaction: Transaction, publicKey: string): boolean {
     // Check if this is a legacy signature (64 hex chars from sha256)
-    if (transaction.signature.length === 64 && /^[0-9a-f]{64}$/i.test(transaction.signature)) {
+    if (
+      transaction.signature.length === 64 &&
+      /^[0-9a-f]{64}$/i.test(transaction.signature)
+    ) {
       // Legacy verification
       console.warn(
         'Legacy signature detected. Consider migrating to SecureTransactionManager.'
