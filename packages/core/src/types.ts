@@ -101,19 +101,22 @@ export interface IUTXOManager {
   addUTXO(utxo: UTXO): void;
   removeUTXO(txId: string, outputIndex: number): boolean;
   getUTXO(txId: string, outputIndex: number): UTXO | null;
-  
+
   // Address Queries
   getUTXOsForAddress(address: string): UTXO[];
   calculateBalance(address: string): number;
   getSpendableUTXOs(address: string, amount: number): UTXO[];
-  
+
   // Validation
   validateUTXOExists(txId: string, outputIndex: number): boolean;
   validateUTXOOwnership(utxo: UTXO, publicKey: string): boolean;
-  
+
   // Batch Operations
-  applyUTXOUpdates(additions: UTXO[], removals: Array<{txId: string, outputIndex: number}>): void;
-  
+  applyUTXOUpdates(
+    additions: UTXO[],
+    removals: Array<{ txId: string; outputIndex: number }>
+  ): void;
+
   // Statistics
   getUTXOSetSize(): number;
   getTotalValue(): number;
@@ -133,10 +136,19 @@ export interface IUTXOTransactionManager {
     privateKey: string,
     availableUTXOs: UTXO[]
   ): UTXOTransaction;
-  
-  validateTransaction(transaction: UTXOTransaction, utxoManager: IUTXOManager): ValidationResult;
-  
-  calculateTransactionFee(inputs: TransactionInput[], outputs: TransactionOutput[]): number;
-  
-  selectUTXOs(availableUTXOs: UTXO[], targetAmount: number): UTXOSelectionResult;
+
+  validateTransaction(
+    transaction: UTXOTransaction,
+    utxoManager: IUTXOManager
+  ): ValidationResult;
+
+  calculateTransactionFee(
+    inputs: TransactionInput[],
+    outputs: TransactionOutput[]
+  ): number;
+
+  selectUTXOs(
+    availableUTXOs: UTXO[],
+    targetAmount: number
+  ): UTXOSelectionResult;
 }

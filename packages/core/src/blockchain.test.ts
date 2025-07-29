@@ -240,7 +240,7 @@ describe('Blockchain', () => {
       blockchain.minePendingTransactions(fromAddress); // fromAddress mines the block and gets reward
 
       // Now fromAddress should have 10 (from transaction) + 10 (mining reward) = 20 coins
-      
+
       // Create transaction from fromAddress to toAddress
       const sendTransaction = TransactionManager.createTransaction(
         fromAddress,
@@ -256,7 +256,7 @@ describe('Blockchain', () => {
       const toBalance = blockchain.getLegacyBalance(toAddress);
 
       // fromAddress: 20 (initial) - 5 (sent) - 0.005 (fee) = 14.995
-      expect(fromBalance).toBeCloseTo(14.995, 2); // Allow for floating point precision 
+      expect(fromBalance).toBeCloseTo(14.995, 2); // Allow for floating point precision
       expect(toBalance).toBe(5); // Received amount
     });
 

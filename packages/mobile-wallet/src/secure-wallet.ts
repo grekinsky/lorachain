@@ -1,4 +1,9 @@
-import type { Transaction, UTXO, UTXOTransaction, IUTXOManager } from '@lorachain/core';
+import type {
+  Transaction,
+  UTXO,
+  UTXOTransaction,
+  IUTXOManager,
+} from '@lorachain/core';
 import {
   CryptographicService,
   SecureTransactionManager,
@@ -12,10 +17,18 @@ import { bytesToHex, hexToBytes } from '@noble/hashes/utils';
 // Simple logger for development
 class SimpleLogger {
   constructor(private context: string) {}
-  info(message: string, data?: any) { console.log(`[INFO] ${this.context}: ${message}`, data || ''); }
-  warn(message: string, data?: any) { console.warn(`[WARN] ${this.context}: ${message}`, data || ''); }
-  error(message: string, data?: any) { console.error(`[ERROR] ${this.context}: ${message}`, data || ''); }
-  static getInstance() { return new SimpleLogger('SecureMobileWallet'); }
+  info(message: string, data?: any) {
+    console.log(`[INFO] ${this.context}: ${message}`, data || '');
+  }
+  warn(message: string, data?: any) {
+    console.warn(`[WARN] ${this.context}: ${message}`, data || '');
+  }
+  error(message: string, data?: any) {
+    console.error(`[ERROR] ${this.context}: ${message}`, data || '');
+  }
+  static getInstance() {
+    return new SimpleLogger('SecureMobileWallet');
+  }
 }
 
 export interface WalletExport {
@@ -171,8 +184,8 @@ export class SecureMobileWallet {
   }
 
   createUTXOTransaction(
-    to: string, 
-    amount: number, 
+    to: string,
+    amount: number,
     utxoManager: IUTXOManager
   ): UTXOTransaction {
     if (amount <= 0) {
@@ -183,7 +196,9 @@ export class SecureMobileWallet {
     const currentBalance = this.getUTXOBalance(utxoManager);
 
     if (amount > currentBalance) {
-      throw new Error(`Insufficient UTXO balance: need ${amount}, have ${currentBalance}`);
+      throw new Error(
+        `Insufficient UTXO balance: need ${amount}, have ${currentBalance}`
+      );
     }
 
     this.logger.info('Creating UTXO transaction', {
@@ -213,19 +228,34 @@ export class SecureMobileWallet {
 
   canAffordUTXOTransaction(amount: number, utxoManager: IUTXOManager): boolean {
     const availableUTXOs = this.getOwnedUTXOs(utxoManager);
-    const selection = this.utxoTransactionManager.selectUTXOs(availableUTXOs, amount);
+    const selection = this.utxoTransactionManager.selectUTXOs(
+      availableUTXOs,
+      amount
+    );
     return selection.totalValue >= amount;
   }
 
-  getUTXOTransactionHistory(transactions: UTXOTransaction[], utxoManager: IUTXOManager): UTXOTransaction[] {
-    return transactions.filter(tx => {
-      // Check if this wallet is involved in the transaction
-      const inputAddresses = this.utxoTransactionManager.getTransactionInputAddresses(tx, utxoManager);
-      const outputAddresses = this.utxoTransactionManager.getTransactionOutputAddresses(tx);
-      
-      return inputAddresses.includes(this.wallet.address) || 
-             outputAddresses.includes(this.wallet.address);
-    }).sort((a, b) => b.timestamp - a.timestamp);
+  getUTXOTransactionHistory(
+    transactions: UTXOTransaction[],
+    utxoManager: IUTXOManager
+  ): UTXOTransaction[] {
+    return transactions
+      .filter(tx => {
+        // Check if this wallet is involved in the transaction
+        const inputAddresses =
+          this.utxoTransactionManager.getTransactionInputAddresses(
+            tx,
+            utxoManager
+          );
+        const outputAddresses =
+          this.utxoTransactionManager.getTransactionOutputAddresses(tx);
+
+        return (
+          inputAddresses.includes(this.wallet.address) ||
+          outputAddresses.includes(this.wallet.address)
+        );
+      })
+      .sort((a, b) => b.timestamp - a.timestamp);
   }
 
   export(): WalletExport {

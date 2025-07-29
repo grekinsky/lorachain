@@ -1,7 +1,12 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { UTXOTransactionManager } from './utxo-transaction.js';
 import { UTXOManager } from './utxo.js';
-import type { UTXO, UTXOTransaction, TransactionInput, TransactionOutput } from './types.js';
+import type {
+  UTXO,
+  UTXOTransaction,
+  TransactionInput,
+  TransactionOutput,
+} from './types.js';
 
 describe('UTXOTransactionManager', () => {
   let utxoTransactionManager: UTXOTransactionManager;
@@ -11,7 +16,7 @@ describe('UTXOTransactionManager', () => {
   beforeEach(() => {
     utxoTransactionManager = new UTXOTransactionManager();
     utxoManager = new UTXOManager();
-    
+
     sampleUTXOs = [
       {
         txId: 'tx1',
@@ -19,7 +24,7 @@ describe('UTXOTransactionManager', () => {
         value: 100,
         lockingScript: '1FromAddress',
         blockHeight: 1,
-        isSpent: false
+        isSpent: false,
       },
       {
         txId: 'tx2',
@@ -27,7 +32,7 @@ describe('UTXOTransactionManager', () => {
         value: 50,
         lockingScript: '1FromAddress',
         blockHeight: 1,
-        isSpent: false
+        isSpent: false,
       },
       {
         txId: 'tx3',
@@ -35,8 +40,8 @@ describe('UTXOTransactionManager', () => {
         value: 25,
         lockingScript: '1FromAddress',
         blockHeight: 1,
-        isSpent: false
-      }
+        isSpent: false,
+      },
     ];
 
     // Add UTXOs to manager
@@ -58,16 +63,20 @@ describe('UTXOTransactionManager', () => {
       expect(transaction.outputs).toHaveLength(2); // One for recipient, one for change
       expect(transaction.timestamp).toBeDefined();
       expect(transaction.fee).toBeGreaterThan(0);
-      
+
       // Check that the largest UTXO was selected
       expect(transaction.inputs[0].previousTxId).toBe('tx1');
       expect(transaction.inputs[0].outputIndex).toBe(0);
       expect(transaction.inputs[0].unlockingScript).toBeDefined();
 
       // Check outputs
-      const recipientOutput = transaction.outputs.find(o => o.lockingScript === '1ToAddress');
-      const changeOutput = transaction.outputs.find(o => o.lockingScript === '1FromAddress');
-      
+      const recipientOutput = transaction.outputs.find(
+        o => o.lockingScript === '1ToAddress'
+      );
+      const changeOutput = transaction.outputs.find(
+        o => o.lockingScript === '1FromAddress'
+      );
+
       expect(recipientOutput?.value).toBe(75);
       expect(changeOutput?.value).toBeGreaterThan(0); // Should have change
     });
@@ -80,7 +89,7 @@ describe('UTXOTransactionManager', () => {
         value: 50.01, // 50 + generous fee allowance
         lockingScript: '1FromAddress',
         blockHeight: 1,
-        isSpent: false
+        isSpent: false,
       };
 
       const transaction = utxoTransactionManager.createTransaction(
@@ -92,15 +101,19 @@ describe('UTXOTransactionManager', () => {
       );
 
       // Should have recipient output
-      const recipientOutput = transaction.outputs.find(o => o.lockingScript === '1ToAddress');
+      const recipientOutput = transaction.outputs.find(
+        o => o.lockingScript === '1ToAddress'
+      );
       expect(recipientOutput?.value).toBe(50);
-      
+
       // Change output might be present but small, or removed if dust
-      const changeOutput = transaction.outputs.find(o => o.lockingScript === '1FromAddress');
+      const changeOutput = transaction.outputs.find(
+        o => o.lockingScript === '1FromAddress'
+      );
       if (changeOutput) {
         expect(changeOutput.value).toBeGreaterThan(0);
       }
-      
+
       // Transaction should be valid
       expect(transaction.outputs.length).toBeGreaterThanOrEqual(1);
       expect(transaction.fee).toBeGreaterThan(0);
@@ -128,7 +141,7 @@ describe('UTXOTransactionManager', () => {
       );
 
       expect(transaction.inputs.length).toBeGreaterThan(1);
-      
+
       // Verify inputs reference correct UTXOs
       const inputTxIds = transaction.inputs.map(i => i.previousTxId);
       expect(inputTxIds).toContain('tx1'); // 100 value UTXO should be included
@@ -149,37 +162,53 @@ describe('UTXOTransactionManager', () => {
     });
 
     it('should validate a correct transaction', () => {
-      const validation = utxoTransactionManager.validateTransaction(validTransaction, utxoManager);
-      
+      const validation = utxoTransactionManager.validateTransaction(
+        validTransaction,
+        utxoManager
+      );
+
       expect(validation.isValid).toBe(true);
       expect(validation.errors).toHaveLength(0);
     });
 
     it('should reject transaction with missing ID', () => {
       const invalidTransaction = { ...validTransaction, id: '' };
-      
-      const validation = utxoTransactionManager.validateTransaction(invalidTransaction, utxoManager);
-      
+
+      const validation = utxoTransactionManager.validateTransaction(
+        invalidTransaction,
+        utxoManager
+      );
+
       expect(validation.isValid).toBe(false);
       expect(validation.errors).toContain('Transaction ID is required');
     });
 
     it('should reject transaction with no inputs', () => {
       const invalidTransaction = { ...validTransaction, inputs: [] };
-      
-      const validation = utxoTransactionManager.validateTransaction(invalidTransaction, utxoManager);
-      
+
+      const validation = utxoTransactionManager.validateTransaction(
+        invalidTransaction,
+        utxoManager
+      );
+
       expect(validation.isValid).toBe(false);
-      expect(validation.errors).toContain('Transaction must have at least one input');
+      expect(validation.errors).toContain(
+        'Transaction must have at least one input'
+      );
     });
 
     it('should reject transaction with no outputs', () => {
       const invalidTransaction = { ...validTransaction, outputs: [] };
-      
-      const validation = utxoTransactionManager.validateTransaction(invalidTransaction, utxoManager);
-      
+
+      const validation = utxoTransactionManager.validateTransaction(
+        invalidTransaction,
+        utxoManager
+      );
+
       expect(validation.isValid).toBe(false);
-      expect(validation.errors).toContain('Transaction must have at least one output');
+      expect(validation.errors).toContain(
+        'Transaction must have at least one output'
+      );
     });
 
     it('should reject transaction with non-existent UTXO', () => {
@@ -187,43 +216,54 @@ describe('UTXOTransactionManager', () => {
         previousTxId: 'non-existent-tx',
         outputIndex: 0,
         unlockingScript: 'some-script',
-        sequence: 0xffffffff
+        sequence: 0xffffffff,
       };
-      
+
       const invalidTransaction = {
         ...validTransaction,
-        inputs: [invalidInput]
+        inputs: [invalidInput],
       };
-      
-      const validation = utxoTransactionManager.validateTransaction(invalidTransaction, utxoManager);
-      
+
+      const validation = utxoTransactionManager.validateTransaction(
+        invalidTransaction,
+        utxoManager
+      );
+
       expect(validation.isValid).toBe(false);
-      expect(validation.errors).toContain('UTXO non-existent-tx:0 does not exist or is already spent');
+      expect(validation.errors).toContain(
+        'UTXO non-existent-tx:0 does not exist or is already spent'
+      );
     });
 
     it('should reject transaction with invalid output value', () => {
       const invalidOutput: TransactionOutput = {
         value: -10,
         lockingScript: '1ToAddress',
-        outputIndex: 0
+        outputIndex: 0,
       };
-      
+
       const invalidTransaction = {
         ...validTransaction,
-        outputs: [invalidOutput]
+        outputs: [invalidOutput],
       };
-      
-      const validation = utxoTransactionManager.validateTransaction(invalidTransaction, utxoManager);
-      
+
+      const validation = utxoTransactionManager.validateTransaction(
+        invalidTransaction,
+        utxoManager
+      );
+
       expect(validation.isValid).toBe(false);
       expect(validation.errors).toContain('Output 0 has invalid value: -10');
     });
 
     it('should reject transaction with negative fee', () => {
       const invalidTransaction = { ...validTransaction, fee: -1 };
-      
-      const validation = utxoTransactionManager.validateTransaction(invalidTransaction, utxoManager);
-      
+
+      const validation = utxoTransactionManager.validateTransaction(
+        invalidTransaction,
+        utxoManager
+      );
+
       expect(validation.isValid).toBe(false);
       expect(validation.errors).toContain('Transaction fee cannot be negative');
     });
@@ -236,41 +276,63 @@ describe('UTXOTransactionManager', () => {
           previousTxId: 'tx1',
           outputIndex: 0,
           unlockingScript: 'script1',
-          sequence: 0xffffffff
-        }
+          sequence: 0xffffffff,
+        },
       ];
-      
+
       const outputs: TransactionOutput[] = [
         {
           value: 50,
           lockingScript: '1ToAddress',
-          outputIndex: 0
-        }
+          outputIndex: 0,
+        },
       ];
-      
-      const fee = utxoTransactionManager.calculateTransactionFee(inputs, outputs);
-      
+
+      const fee = utxoTransactionManager.calculateTransactionFee(
+        inputs,
+        outputs
+      );
+
       expect(fee).toBeGreaterThan(0);
       expect(fee).toBeGreaterThanOrEqual(0.001); // Minimum fee
     });
 
     it('should increase fee with more inputs and outputs', () => {
-      const singleInputOutputFee = utxoTransactionManager.calculateTransactionFee(
-        [{ previousTxId: 'tx1', outputIndex: 0, unlockingScript: 'script', sequence: 0xffffffff }],
-        [{ value: 50, lockingScript: '1ToAddress', outputIndex: 0 }]
-      );
-      
-      const multipleInputOutputFee = utxoTransactionManager.calculateTransactionFee(
-        [
-          { previousTxId: 'tx1', outputIndex: 0, unlockingScript: 'script1', sequence: 0xffffffff },
-          { previousTxId: 'tx2', outputIndex: 0, unlockingScript: 'script2', sequence: 0xffffffff }
-        ],
-        [
-          { value: 25, lockingScript: '1ToAddress1', outputIndex: 0 },
-          { value: 25, lockingScript: '1ToAddress2', outputIndex: 1 }
-        ]
-      );
-      
+      const singleInputOutputFee =
+        utxoTransactionManager.calculateTransactionFee(
+          [
+            {
+              previousTxId: 'tx1',
+              outputIndex: 0,
+              unlockingScript: 'script',
+              sequence: 0xffffffff,
+            },
+          ],
+          [{ value: 50, lockingScript: '1ToAddress', outputIndex: 0 }]
+        );
+
+      const multipleInputOutputFee =
+        utxoTransactionManager.calculateTransactionFee(
+          [
+            {
+              previousTxId: 'tx1',
+              outputIndex: 0,
+              unlockingScript: 'script1',
+              sequence: 0xffffffff,
+            },
+            {
+              previousTxId: 'tx2',
+              outputIndex: 0,
+              unlockingScript: 'script2',
+              sequence: 0xffffffff,
+            },
+          ],
+          [
+            { value: 25, lockingScript: '1ToAddress1', outputIndex: 0 },
+            { value: 25, lockingScript: '1ToAddress2', outputIndex: 1 },
+          ]
+        );
+
       expect(multipleInputOutputFee).toBeGreaterThan(singleInputOutputFee);
     });
   });
@@ -278,7 +340,7 @@ describe('UTXOTransactionManager', () => {
   describe('UTXO Selection', () => {
     it('should select optimal UTXOs for target amount', () => {
       const selection = utxoTransactionManager.selectUTXOs(sampleUTXOs, 75);
-      
+
       expect(selection.selectedUTXOs).toHaveLength(1);
       expect(selection.selectedUTXOs[0].value).toBe(100); // Should select largest UTXO
       expect(selection.totalValue).toBe(100);
@@ -287,14 +349,14 @@ describe('UTXOTransactionManager', () => {
 
     it('should select multiple UTXOs when needed', () => {
       const selection = utxoTransactionManager.selectUTXOs(sampleUTXOs, 125);
-      
+
       expect(selection.selectedUTXOs.length).toBeGreaterThan(1);
       expect(selection.totalValue).toBeGreaterThanOrEqual(125);
     });
 
     it('should handle insufficient funds gracefully', () => {
       const selection = utxoTransactionManager.selectUTXOs(sampleUTXOs, 200);
-      
+
       expect(selection.totalValue).toBe(175); // Total of all UTXOs
       expect(selection.changeAmount).toBe(0);
     });
@@ -314,22 +376,30 @@ describe('UTXOTransactionManager', () => {
     });
 
     it('should calculate transaction value', () => {
-      const value = utxoTransactionManager.calculateTransactionValue(transaction);
-      
+      const value =
+        utxoTransactionManager.calculateTransactionValue(transaction);
+
       expect(value).toBeGreaterThan(0);
-      expect(value).toBe(transaction.outputs.reduce((sum, output) => sum + output.value, 0));
+      expect(value).toBe(
+        transaction.outputs.reduce((sum, output) => sum + output.value, 0)
+      );
     });
 
     it('should get transaction input addresses', () => {
-      const inputAddresses = utxoTransactionManager.getTransactionInputAddresses(transaction, utxoManager);
-      
+      const inputAddresses =
+        utxoTransactionManager.getTransactionInputAddresses(
+          transaction,
+          utxoManager
+        );
+
       expect(inputAddresses).toContain('1FromAddress');
       expect(inputAddresses.length).toBeGreaterThan(0);
     });
 
     it('should get transaction output addresses', () => {
-      const outputAddresses = utxoTransactionManager.getTransactionOutputAddresses(transaction);
-      
+      const outputAddresses =
+        utxoTransactionManager.getTransactionOutputAddresses(transaction);
+
       expect(outputAddresses).toContain('1ToAddress');
       if (transaction.outputs.length > 1) {
         expect(outputAddresses).toContain('1FromAddress'); // Change address
@@ -356,7 +426,8 @@ describe('UTXOTransactionManager', () => {
     });
 
     it('should handle different private key formats', () => {
-      const hexPrivateKey = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+      const hexPrivateKey =
+        '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
       const stringPrivateKey = 'test-string-key';
 
       const transaction1 = utxoTransactionManager.createTransaction(
@@ -377,7 +448,9 @@ describe('UTXOTransactionManager', () => {
 
       expect(transaction1.inputs[0].unlockingScript).toBeDefined();
       expect(transaction2.inputs[0].unlockingScript).toBeDefined();
-      expect(transaction1.inputs[0].unlockingScript).not.toBe(transaction2.inputs[0].unlockingScript);
+      expect(transaction1.inputs[0].unlockingScript).not.toBe(
+        transaction2.inputs[0].unlockingScript
+      );
     });
   });
 
@@ -401,7 +474,7 @@ describe('UTXOTransactionManager', () => {
         value: 0.0001,
         lockingScript: '1FromAddress',
         blockHeight: 1,
-        isSpent: false
+        isSpent: false,
       };
 
       expect(() => {
@@ -422,7 +495,7 @@ describe('UTXOTransactionManager', () => {
         value: 10,
         lockingScript: '1FromAddress',
         blockHeight: 1,
-        isSpent: false
+        isSpent: false,
       }));
 
       manyUTXOs.forEach(utxo => utxoManager.addUTXO(utxo));

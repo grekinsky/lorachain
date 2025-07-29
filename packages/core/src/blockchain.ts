@@ -14,9 +14,15 @@ import { UTXOTransactionManager } from './utxo-transaction.js';
 // Simple logger for development
 class SimpleLogger {
   constructor(private context: string) {}
-  debug(message: string) { console.log(`[DEBUG] ${this.context}: ${message}`); }
-  warn(message: string) { console.warn(`[WARN] ${this.context}: ${message}`); }
-  error(message: string) { console.error(`[ERROR] ${this.context}: ${message}`); }
+  debug(message: string) {
+    console.log(`[DEBUG] ${this.context}: ${message}`);
+  }
+  warn(message: string) {
+    console.warn(`[WARN] ${this.context}: ${message}`);
+  }
+  error(message: string) {
+    console.error(`[ERROR] ${this.context}: ${message}`);
+  }
 }
 
 export class Blockchain {
@@ -33,10 +39,10 @@ export class Blockchain {
   constructor() {
     this.utxoManager = new UTXOManager();
     this.utxoTransactionManager = new UTXOTransactionManager();
-    
+
     const genesisBlock = BlockManager.createGenesisBlock();
     this.blocks.push(genesisBlock);
-    
+
     // Initialize UTXO set with genesis block
     this.initializeUTXOFromGenesis(genesisBlock);
   }
@@ -51,7 +57,7 @@ export class Blockchain {
         value: transaction.amount,
         lockingScript: transaction.to,
         blockHeight: 0,
-        isSpent: false
+        isSpent: false,
       };
       this.utxoManager.addUTXO(utxo);
     }
@@ -83,7 +89,10 @@ export class Blockchain {
   }
 
   addUTXOTransaction(transaction: UTXOTransaction): ValidationResult {
-    const validation = this.utxoTransactionManager.validateTransaction(transaction, this.utxoManager);
+    const validation = this.utxoTransactionManager.validateTransaction(
+      transaction,
+      this.utxoManager
+    );
     if (!validation.isValid) {
       return validation;
     }
@@ -99,7 +108,9 @@ export class Blockchain {
     }
 
     this.pendingUTXOTransactions.push(transaction);
-    this.logger.debug(`Added UTXO transaction ${transaction.id} to pending pool`);
+    this.logger.debug(
+      `Added UTXO transaction ${transaction.id} to pending pool`
+    );
     return { isValid: true, errors: [] };
   }
 
@@ -182,13 +193,15 @@ export class Blockchain {
     // Process and update UTXO set for block transactions
     this.processBlockUTXOs(block);
 
-    this.logger.debug(`Added block ${block.index} with ${block.transactions.length} transactions`);
+    this.logger.debug(
+      `Added block ${block.index} with ${block.transactions.length} transactions`
+    );
     return { isValid: true, errors: [] };
   }
 
   private processBlockUTXOs(block: Block): void {
     const utxosToAdd: UTXO[] = [];
-    const utxosToRemove: Array<{txId: string, outputIndex: number}> = [];
+    const utxosToRemove: Array<{ txId: string; outputIndex: number }> = [];
 
     // Process regular transactions as UTXO operations
     for (const tx of block.transactions) {
@@ -203,7 +216,7 @@ export class Blockchain {
         value: tx.amount,
         lockingScript: tx.to,
         blockHeight: block.index,
-        isSpent: false
+        isSpent: false,
       };
       utxosToAdd.push(newUTXO);
 
@@ -217,7 +230,9 @@ export class Blockchain {
     // Apply all UTXO updates atomically
     if (utxosToAdd.length > 0 || utxosToRemove.length > 0) {
       this.utxoManager.applyUTXOUpdates(utxosToAdd, utxosToRemove);
-      this.logger.debug(`Processed ${utxosToAdd.length} UTXO additions and ${utxosToRemove.length} removals for block ${block.index}`);
+      this.logger.debug(
+        `Processed ${utxosToAdd.length} UTXO additions and ${utxosToRemove.length} removals for block ${block.index}`
+      );
     }
   }
 
