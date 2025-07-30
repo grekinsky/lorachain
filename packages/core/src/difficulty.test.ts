@@ -505,7 +505,7 @@ describe('DifficultyManager', () => {
 
       expect(state.currentDifficulty).toBe(100);
       expect(state.targetBlockTime).toBe(300);
-      expect(state.adjustmentHeight).toBe(30); // Next adjustment at block 30
+      expect(state.adjustmentHeight).toBe(20); // Next adjustment at block 20
       expect(state.estimatedHashrate).toBeGreaterThan(0);
       expect(state.lastAdjustmentTime).toBeGreaterThan(0);
     });

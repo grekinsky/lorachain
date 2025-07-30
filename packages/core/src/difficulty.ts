@@ -144,21 +144,22 @@ export class DifficultyManager {
     minDifficulty: number,
     maxDifficulty: number
   ): number {
+    // Apply absolute bounds first
+    if (newDifficulty < minDifficulty) {
+      newDifficulty = minDifficulty;
+    } else if (newDifficulty > maxDifficulty) {
+      newDifficulty = maxDifficulty;
+    }
+
     // Apply ratio bounds
     const maxIncrease = currentDifficulty * maxRatio;
     const maxDecrease = currentDifficulty / maxRatio;
 
     if (newDifficulty > maxIncrease) {
       newDifficulty = maxIncrease;
-    } else if (newDifficulty < maxDecrease) {
-      newDifficulty = maxDecrease;
-    }
-
-    // Apply absolute bounds
-    if (newDifficulty < minDifficulty) {
-      newDifficulty = minDifficulty;
-    } else if (newDifficulty > maxDifficulty) {
-      newDifficulty = maxDifficulty;
+    } else if (newDifficulty < maxDecrease && newDifficulty > minDifficulty) {
+      // Only apply decrease bound if it doesn't violate minimum difficulty
+      newDifficulty = Math.max(maxDecrease, minDifficulty);
     }
 
     return newDifficulty;

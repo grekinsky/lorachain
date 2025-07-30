@@ -77,44 +77,62 @@ export class Blockchain {
     this.maxDifficultyRatio = config.maxDifficultyRatio;
 
     // Only initialize genesis if no persistence or if we can't load state
-    this.initializeBlockchain();
+    // Note: initializeBlockchain is async, but we don't await it in constructor
+    // For synchronous construction, we initialize without persistence here
+    if (!this.persistence) {
+      // Initialize new blockchain with genesis block
+      const genesisBlock = BlockManager.createGenesisBlock(this.difficulty);
+      this.blocks.push(genesisBlock);
+      this.initializeUTXOFromGenesis(genesisBlock);
+    } else {
+      // For async persistence loading, call initializeBlockchain but don't await
+      this.initializeBlockchain().catch(error => {
+        this.logger.error(`Failed to initialize blockchain: ${error}`);
+        // Fallback to genesis initialization
+        const genesisBlock = BlockManager.createGenesisBlock(this.difficulty);
+        this.blocks.push(genesisBlock);
+        this.initializeUTXOFromGenesis(genesisBlock);
+      });
+    }
   }
 
   private async initializeBlockchain(): Promise<void> {
-    if (this.persistence) {
-      try {
-        const loadedState = await this.persistence.loadBlockchainState();
-        if (loadedState) {
-          this.blocks = loadedState.blocks;
-          this.difficulty = loadedState.difficulty;
-          this.miningReward = loadedState.miningReward;
-          this.pendingUTXOTransactions = loadedState.pendingUTXOTransactions;
-
-          // Rebuild UTXO manager from loaded state
-          this.utxoManager = new UTXOManager();
-          for (const [, utxo] of loadedState.utxoSet) {
-            this.utxoManager.addUTXO(utxo);
-          }
-
-          this.logger.debug(
-            `Loaded blockchain state with ${this.blocks.length} blocks`
-          );
-          return;
-        }
-      } catch (error) {
-        this.logger.warn(
-          `Failed to load blockchain state: ${error}, initializing new blockchain`
-        );
-      }
+    if (!this.persistence) {
+      return; // Already handled in constructor
     }
 
-    // Initialize new blockchain with genesis block
+    try {
+      const loadedState = await this.persistence.loadBlockchainState();
+      if (loadedState) {
+        this.blocks = loadedState.blocks;
+        this.difficulty = loadedState.difficulty;
+        this.miningReward = loadedState.miningReward;
+        this.pendingUTXOTransactions = loadedState.pendingUTXOTransactions;
+
+        // Rebuild UTXO manager from loaded state
+        this.utxoManager = new UTXOManager();
+        for (const [, utxo] of loadedState.utxoSet) {
+          this.utxoManager.addUTXO(utxo);
+        }
+
+        this.logger.debug(
+          `Loaded blockchain state with ${this.blocks.length} blocks`
+        );
+        return;
+      }
+    } catch (error) {
+      this.logger.warn(
+        `Failed to load blockchain state: ${error}, falling back to genesis`
+      );
+    }
+
+    // Fallback: Initialize new blockchain with genesis block
     const genesisBlock = BlockManager.createGenesisBlock(this.difficulty);
-    this.blocks.push(genesisBlock);
+    this.blocks = [genesisBlock]; // Replace any existing blocks
     this.initializeUTXOFromGenesis(genesisBlock);
 
     // Save initial state if persistence is enabled
-    if (this.persistence && this.autoSave) {
+    if (this.autoSave) {
       await this.save();
     }
   }
