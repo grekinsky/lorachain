@@ -145,8 +145,12 @@ export class BlockManager {
       }
     }
 
-    // Validate block meets its own difficulty requirement (only if difficulty is valid)
-    if (block.difficulty !== undefined && block.difficulty >= 1) {
+    // Validate block meets its own difficulty requirement (only if difficulty is valid and not genesis block)
+    if (
+      block.difficulty !== undefined &&
+      block.difficulty >= 1 &&
+      block.index > 0
+    ) {
       const target = Array(block.difficulty + 1).join('0');
       if (block.hash.substring(0, block.difficulty) !== target) {
         errors.push('Block does not meet its difficulty requirement');

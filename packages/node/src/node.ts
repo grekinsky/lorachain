@@ -1,4 +1,4 @@
-import { Blockchain, Transaction, Block } from '@lorachain/core';
+import { Blockchain, UTXOTransaction, Block } from '@lorachain/core';
 import { Logger } from '@lorachain/shared';
 import type { NetworkNode } from '@lorachain/core';
 
@@ -90,8 +90,8 @@ export class LorachainNode {
     setTimeout(mineBlock, 1000);
   }
 
-  addTransaction(transaction: Transaction): boolean {
-    const result = this.blockchain.addTransaction(transaction);
+  async addTransaction(transaction: UTXOTransaction): Promise<boolean> {
+    const result = await this.blockchain.addTransaction(transaction);
 
     if (result.isValid) {
       this.logger.info('Transaction added to pending pool', {
@@ -108,8 +108,8 @@ export class LorachainNode {
     }
   }
 
-  addBlock(block: Block): boolean {
-    const result = this.blockchain.addBlock(block);
+  async addBlock(block: Block): Promise<boolean> {
+    const result = await this.blockchain.addBlock(block);
 
     if (result.isValid) {
       this.logger.info('Block added to blockchain', {
@@ -125,7 +125,7 @@ export class LorachainNode {
     }
   }
 
-  private broadcastTransaction(transaction: Transaction): void {
+  private broadcastTransaction(transaction: UTXOTransaction): void {
     this.logger.debug('Broadcasting transaction to peers', {
       transactionId: transaction.id,
       peerCount: this.peers.length,
