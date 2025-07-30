@@ -51,10 +51,8 @@ export class GenesisConfigManager {
         }
       }
 
-      // If configPath specified, load from file system (not implemented yet)
-      // For now, return default config
-      this.logger.debug('Using default genesis configuration');
-      return GenesisConfigManager.getDefaultConfig();
+      // No configuration found - throw error (NO BACKWARDS COMPATIBILITY)
+      throw new Error('No genesis configuration found in database. Genesis configuration is required.');
     } catch (error) {
       this.logger.error(`Failed to load genesis config: ${error}`);
       throw error;
@@ -112,29 +110,6 @@ export class GenesisConfigManager {
     }
   }
 
-  /**
-   * Create genesis configuration from partial object
-   */
-  static fromObject(config: Partial<GenesisConfig>): GenesisConfig {
-    const defaultConfig = GenesisConfigManager.getDefaultConfig();
-
-    return {
-      chainId: config.chainId || defaultConfig.chainId,
-      networkName: config.networkName || defaultConfig.networkName,
-      version: config.version || defaultConfig.version,
-      initialAllocations:
-        config.initialAllocations || defaultConfig.initialAllocations,
-      totalSupply: config.totalSupply || defaultConfig.totalSupply,
-      networkParams: {
-        ...defaultConfig.networkParams,
-        ...config.networkParams,
-      },
-      metadata: {
-        ...defaultConfig.metadata,
-        ...config.metadata,
-      },
-    };
-  }
 
   /**
    * Validate genesis configuration
@@ -347,26 +322,16 @@ export class GenesisConfigManager {
       config.initialAllocations
     );
 
-    // Convert UTXO transactions to legacy Transaction format for block compatibility
-    const legacyTransactions = genesisTransactions.map(utxoTx => ({
-      id: utxoTx.id,
-      from: 'genesis',
-      to: utxoTx.outputs[0]?.lockingScript || 'unknown',
-      amount: utxoTx.outputs.reduce((sum, output) => sum + output.value, 0),
-      fee: 0,
-      timestamp: config.metadata.timestamp,
-      signature: 'genesis-signature',
-      nonce: 0,
-    }));
-
+    // Genesis block with empty transactions (UTXO allocations handled separately)
+    // NO BACKWARDS COMPATIBILITY - genesis allocations are stored as UTXOs, not legacy transactions
     const genesisBlock: Block = {
       index: 0,
       timestamp: config.metadata.timestamp,
-      transactions: legacyTransactions,
+      transactions: [], // Empty - UTXO allocations handled by UTXOManager
       previousHash: '0',
       hash: '',
       nonce: 0,
-      merkleRoot: this.calculateMerkleRoot(legacyTransactions),
+      merkleRoot: this.calculateMerkleRoot([]),
       difficulty: config.networkParams.initialDifficulty,
     };
 
@@ -438,44 +403,6 @@ export class GenesisConfigManager {
     }
   }
 
-  /**
-   * Get default genesis configuration
-   */
-  static getDefaultConfig(): GenesisConfig {
-    return {
-      chainId: 'lorachain-devnet-v1',
-      networkName: 'Lorachain Development Network',
-      version: '1.0.0',
-      initialAllocations: [
-        {
-          address: 'lora1dev000000000000000000000000000000000',
-          amount: 1000000,
-          description: 'Development allocation',
-        },
-        {
-          address: 'lora1test00000000000000000000000000000000',
-          amount: 500000,
-          description: 'Test allocation',
-        },
-      ],
-      totalSupply: 21000000,
-      networkParams: {
-        initialDifficulty: 2,
-        targetBlockTime: 300, // 5 minutes
-        adjustmentPeriod: 10,
-        maxDifficultyRatio: 4,
-        maxBlockSize: 1024 * 1024, // 1MB
-        miningReward: 10,
-        halvingInterval: 210000,
-      },
-      metadata: {
-        timestamp: Date.now(),
-        description: 'Lorachain Development Network Genesis Block',
-        creator: 'Lorachain Development Team',
-        networkType: 'devnet',
-      },
-    };
-  }
 
   /**
    * Convert network parameters to difficulty configuration

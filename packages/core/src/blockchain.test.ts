@@ -1,16 +1,86 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Blockchain } from './blockchain.js';
-import { BlockManager } from './block.js';
+import { UTXOManager } from './utxo.js';
+import { UTXOPersistenceManager } from './persistence.js';
+import { CryptographicService } from './cryptographic.js';
+import { DatabaseFactory } from './database.js';
 import { DifficultyManager, type DifficultyConfig } from './difficulty.js';
-import type { Transaction, Block, UTXOTransaction } from './types.js';
+import type { 
+  Transaction, 
+  Block, 
+  UTXOTransaction, 
+  GenesisConfig,
+  UTXOPersistenceConfig 
+} from './types.js';
 
-describe('Blockchain', () => {
+describe('Blockchain (NO BACKWARDS COMPATIBILITY)', () => {
   let blockchain: Blockchain;
+  let persistence: UTXOPersistenceManager;
+  let utxoManager: UTXOManager;
+  let cryptoService: CryptographicService;
   let mockUTXOTransaction: UTXOTransaction;
   let minerAddress: string;
 
-  beforeEach(() => {
-    blockchain = new Blockchain();
+  const testConfig: UTXOPersistenceConfig = {
+    enabled: true,
+    dbPath: ':memory:',
+    dbType: 'memory',
+    autoSave: true,
+    batchSize: 100,
+    compressionType: 'none',
+    utxoSetCacheSize: 1000,
+    cryptographicAlgorithm: 'secp256k1',
+    compactionStyle: 'size',
+  };
+
+  const testGenesisConfig: GenesisConfig = {
+    chainId: 'blockchain-test-v1',
+    networkName: 'Blockchain Test Network',
+    version: '1.0.0',
+    initialAllocations: [
+      {
+        address: 'lora1initial000000000000000000000000000000',
+        amount: 1000000,
+        description: 'Initial test allocation',
+      },
+    ],
+    totalSupply: 21000000,
+    networkParams: {
+      initialDifficulty: 2,
+      targetBlockTime: 180,
+      adjustmentPeriod: 10,
+      maxDifficultyRatio: 4,
+      maxBlockSize: 1024 * 1024,
+      miningReward: 10,
+      halvingInterval: 210000,
+    },
+    metadata: {
+      timestamp: Date.now(),
+      description: 'Blockchain Test Genesis Block',
+      creator: 'Test Suite',
+      networkType: 'testnet',
+    },
+  };
+
+  beforeEach(async () => {
+    const database = DatabaseFactory.create(testConfig);
+    cryptoService = new CryptographicService();
+    persistence = new UTXOPersistenceManager(database, {
+      compressionType: 'none',
+      cryptographicAlgorithm: 'secp256k1',
+    });
+    utxoManager = new UTXOManager();
+
+    // Create blockchain with required parameters
+    blockchain = new Blockchain(
+      persistence,
+      utxoManager,
+      { targetBlockTime: 180 },
+      testGenesisConfig
+    );
+
+    // Wait for initialization
+    await blockchain.waitForInitialization();
 
     // Create a mock UTXO transaction (genesis-style with no inputs)
     mockUTXOTransaction = {
@@ -29,6 +99,15 @@ describe('Blockchain', () => {
     };
 
     minerAddress = 'miner-address';
+  });
+
+  afterEach(async () => {
+    if (blockchain) {
+      await blockchain.close();
+    }
+    if (persistence) {
+      await persistence.close();
+    }
   });
 
   describe('constructor', () => {
@@ -568,7 +647,7 @@ describe('Blockchain', () => {
     });
 
     it('should reject blocks without difficulty field', () => {
-      const block = BlockManager.createGenesisBlock();
+      const block = BlockManager.createGenesisBlock(testGenesisConfig);
       // @ts-ignore - Simulating legacy block without difficulty
       delete block.difficulty;
 

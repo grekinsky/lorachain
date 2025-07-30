@@ -58,116 +58,62 @@ export class Blockchain {
   private initializationPromise?: Promise<void>;
 
   constructor(
-    persistence?: UTXOPersistenceManager,
-    utxoManager?: UTXOManager,
-    difficultyConfig?: Partial<DifficultyConfig>,
-    genesisConfig?: GenesisConfig | string // New parameter - config object or chain ID
+    persistence: UTXOPersistenceManager,
+    utxoManager: UTXOManager,
+    difficultyConfig: Partial<DifficultyConfig>,
+    genesisConfig: GenesisConfig | string // REQUIRED - config object or chain ID
   ) {
     this.persistence = persistence;
-    this.utxoManager = utxoManager || new UTXOManager();
+    this.utxoManager = utxoManager;
     this.utxoTransactionManager = new UTXOTransactionManager();
 
-    // Initialize GenesisConfigManager if persistence is available
-    if (this.persistence) {
-      this.genesisConfigManager = new GenesisConfigManager(this.persistence);
-    }
+    // Initialize GenesisConfigManager - now required
+    this.genesisConfigManager = new GenesisConfigManager(this.persistence);
 
-    // Initialize blockchain with genesis configuration
-    // Store the initialization promise so tests can wait for it
+    // Initialize blockchain with genesis configuration - NO FALLBACKS
     this.initializationPromise = this.initializeWithGenesisConfig(
       genesisConfig,
       difficultyConfig
-    ).catch(error => {
-      this.logger.error(
-        `Failed to initialize blockchain with genesis config: ${error}`
-      );
-      // Fallback to legacy initialization
-      this.initializeLegacyBlockchain(difficultyConfig);
-    });
+    );
   }
 
   private async initializeWithGenesisConfig(
-    genesisConfigParam?: GenesisConfig | string,
-    difficultyConfig?: Partial<DifficultyConfig>
+    genesisConfigParam: GenesisConfig | string,
+    difficultyConfig: Partial<DifficultyConfig>
   ): Promise<void> {
-    try {
-      // Load or create genesis configuration
-      let config: GenesisConfig;
+    // Load or create genesis configuration
+    let config: GenesisConfig;
 
-      if (typeof genesisConfigParam === 'string') {
-        // Load by chain ID
-        if (this.genesisConfigManager) {
-          const loadedConfig =
-            await this.genesisConfigManager.loadConfigFromDatabase(
-              genesisConfigParam
-            );
-          config = loadedConfig || GenesisConfigManager.getDefaultConfig();
-        } else {
-          config = GenesisConfigManager.getDefaultConfig();
-        }
-      } else if (genesisConfigParam) {
-        // Use provided config
-        config = genesisConfigParam;
-        // Save to database if persistence is available
-        if (this.genesisConfigManager) {
-          await this.genesisConfigManager.saveConfigToDatabase(config);
-        }
-      } else {
-        // Load from database or use default
-        if (this.genesisConfigManager) {
-          config = await this.genesisConfigManager.loadConfig();
-        } else {
-          config = GenesisConfigManager.getDefaultConfig();
-        }
-      }
-
-      this.genesisConfig = config;
-      this.chainId = config.chainId;
-
-      // Apply network parameters from genesis config
-      this.applyNetworkParameters(config.networkParams, difficultyConfig);
-
-      // Initialize blockchain state
-      if (this.persistence) {
-        await this.initializeBlockchainWithPersistence(config);
-      } else {
-        this.initializeBlockchainWithoutPersistence(config);
-      }
-
-      this.logger.debug(
-        `Blockchain initialized with genesis config for chain: ${config.chainId}`
+    if (typeof genesisConfigParam === 'string') {
+      // Load by chain ID - throw error if not found
+      const loadedConfig = await this.genesisConfigManager!.loadConfigFromDatabase(
+        genesisConfigParam
       );
-    } catch (error) {
-      this.logger.error(`Genesis config initialization failed: ${error}`);
-      throw error;
+      if (!loadedConfig) {
+        throw new Error(`Genesis configuration not found for chain ID: ${genesisConfigParam}`);
+      }
+      config = loadedConfig;
+    } else {
+      // Use provided config
+      config = genesisConfigParam;
+      // Save to database
+      await this.genesisConfigManager!.saveConfigToDatabase(config);
     }
+
+    this.genesisConfig = config;
+    this.chainId = config.chainId;
+
+    // Apply network parameters from genesis config
+    this.applyNetworkParameters(config.networkParams, difficultyConfig);
+
+    // Initialize blockchain state with persistence (required)
+    await this.initializeBlockchainWithPersistence(config);
+
+    this.logger.debug(
+      `Blockchain initialized with genesis config for chain: ${config.chainId}`
+    );
   }
 
-  private initializeLegacyBlockchain(
-    difficultyConfig?: Partial<DifficultyConfig>
-  ): void {
-    // Legacy initialization for backward compatibility
-    const config: DifficultyConfig = {
-      targetBlockTime:
-        difficultyConfig?.targetBlockTime || this.targetBlockTime,
-      adjustmentPeriod:
-        difficultyConfig?.adjustmentPeriod || this.adjustmentPeriod,
-      maxDifficultyRatio:
-        difficultyConfig?.maxDifficultyRatio || this.maxDifficultyRatio,
-      minDifficulty: difficultyConfig?.minDifficulty || 1,
-      maxDifficulty: difficultyConfig?.maxDifficulty || 4,
-    };
-
-    this.difficultyManager = new DifficultyManager(config);
-    this.targetBlockTime = config.targetBlockTime;
-    this.adjustmentPeriod = config.adjustmentPeriod;
-    this.maxDifficultyRatio = config.maxDifficultyRatio;
-
-    // Create legacy genesis block
-    const genesisBlock = BlockManager.createGenesisBlock(this.difficulty);
-    this.blocks.push(genesisBlock);
-    this.initializeUTXOFromGenesis(genesisBlock);
-  }
 
   private applyNetworkParameters(
     networkParams: NetworkParameters,
@@ -265,74 +211,12 @@ export class Blockchain {
     }
   }
 
-  private async initializeBlockchain(): Promise<void> {
-    if (!this.persistence) {
-      return; // Already handled in constructor
-    }
 
-    try {
-      const loadedState = await this.persistence.loadBlockchainState();
-      if (loadedState) {
-        this.blocks = loadedState.blocks;
-        this.difficulty = loadedState.difficulty;
-        this.miningReward = loadedState.miningReward;
-        this.pendingUTXOTransactions = loadedState.pendingUTXOTransactions;
-
-        // Rebuild UTXO manager from loaded state
-        this.utxoManager = new UTXOManager();
-        for (const [, utxo] of loadedState.utxoSet) {
-          this.utxoManager.addUTXO(utxo);
-        }
-
-        this.logger.debug(
-          `Loaded blockchain state with ${this.blocks.length} blocks`
-        );
-        return;
-      }
-    } catch (error) {
-      this.logger.warn(
-        `Failed to load blockchain state: ${error}, falling back to genesis`
-      );
-    }
-
-    // Fallback: Initialize new blockchain with genesis block
-    const genesisBlock = BlockManager.createGenesisBlock(this.difficulty);
-    this.blocks = [genesisBlock]; // Replace any existing blocks
-    this.initializeUTXOFromGenesis(genesisBlock);
-
-    // Save initial state if persistence is enabled
-    if (this.autoSave) {
-      await this.save();
-    }
-  }
-
-  private initializeUTXOFromGenesis(genesisBlock: Block): void {
-    // Process genesis block to create initial UTXO set (legacy method)
-    for (const transaction of genesisBlock.transactions) {
-      // Create UTXO for genesis transaction outputs (simplified for initial implementation)
-      const utxo: UTXO = {
-        txId: transaction.id,
-        outputIndex: 0,
-        value: transaction.amount,
-        lockingScript: transaction.to,
-        blockHeight: 0,
-        isSpent: false,
-      };
-      this.utxoManager.addUTXO(utxo);
-    }
-    this.logger.debug('Initialized UTXO set from genesis block (legacy)');
-  }
 
   private initializeUTXOFromGenesisConfig(
     genesisBlock: Block,
-    config?: GenesisConfig
+    config: GenesisConfig
   ): void {
-    if (!config) {
-      // Fallback to legacy method
-      this.initializeUTXOFromGenesis(genesisBlock);
-      return;
-    }
-
     // Create UTXOs from genesis configuration allocations
     const genesisTransactions =
       GenesisConfigManager.createGenesisUTXOTransactions(

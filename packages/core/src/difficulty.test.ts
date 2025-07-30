@@ -17,11 +17,15 @@ describe('DifficultyManager', () => {
     timestamp: number,
     difficulty: number = 2
   ): Block => {
-    const block = BlockManager.createGenesisBlock(difficulty);
+    // Create minimal mock block for difficulty testing (NO BACKWARDS COMPATIBILITY)
     return {
-      ...block,
       index,
       timestamp,
+      transactions: [],
+      previousHash: index === 0 ? '0' : 'previous-hash',
+      hash: `mock-hash-${index}`,
+      nonce: 0,
+      merkleRoot: 'mock-merkle-root',
       difficulty,
     };
   };

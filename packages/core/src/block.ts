@@ -14,34 +14,12 @@ import { GenesisConfigManager } from './genesis/index.js';
 
 export class BlockManager {
   /**
-   * Create genesis block with optional configuration
-   * BREAKING CHANGE: Now supports GenesisConfig parameter
-   * @param difficultyOrConfig - Legacy difficulty number or GenesisConfig object
+   * Create genesis block from configuration
+   * BREAKING CHANGE: GenesisConfig is now required (NO BACKWARDS COMPATIBILITY)
+   * @param config - Genesis configuration object
    * @returns Genesis block
    */
-  static createGenesisBlock(
-    difficultyOrConfig: number | GenesisConfig = 1
-  ): Block {
-    // Handle legacy difficulty parameter for backward compatibility
-    if (typeof difficultyOrConfig === 'number') {
-      const difficulty = difficultyOrConfig;
-      const genesisBlock: Block = {
-        index: 0,
-        timestamp: Date.now(),
-        transactions: [],
-        previousHash: '0',
-        hash: '',
-        nonce: 0,
-        merkleRoot: this.calculateMerkleRoot([]),
-        difficulty,
-      };
-
-      genesisBlock.hash = this.calculateHash(genesisBlock);
-      return genesisBlock;
-    }
-
-    // Handle GenesisConfig parameter
-    const config = difficultyOrConfig as GenesisConfig;
+  static createGenesisBlock(config: GenesisConfig): Block {
     return GenesisConfigManager.createGenesisBlock(config);
   }
 

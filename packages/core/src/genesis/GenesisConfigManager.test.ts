@@ -7,6 +7,7 @@ import type {
   InitialAllocation,
   NetworkParameters,
   UTXOPersistenceConfig,
+  GenesisConfig,
 } from '../types.js';
 
 describe('GenesisConfigManager', () => {
@@ -24,6 +25,41 @@ describe('GenesisConfigManager', () => {
     utxoSetCacheSize: 1000,
     cryptographicAlgorithm: 'secp256k1',
     compactionStyle: 'size',
+  };
+
+  // Test genesis configuration - NO DEFAULT CONFIG
+  const testGenesisConfig: GenesisConfig = {
+    chainId: 'lorachain-test-v1',
+    networkName: 'Lorachain Test Network',
+    version: '1.0.0',
+    initialAllocations: [
+      {
+        address: 'lora1test000000000000000000000000000000000',
+        amount: 1000000,
+        description: 'Test allocation 1',
+      },
+      {
+        address: 'lora1test111111111111111111111111111111111',
+        amount: 500000,
+        description: 'Test allocation 2',
+      },
+    ],
+    totalSupply: 21000000,
+    networkParams: {
+      initialDifficulty: 2,
+      targetBlockTime: 180, // 3 minutes (must be between 60-1800)
+      adjustmentPeriod: 10,
+      maxDifficultyRatio: 4,
+      maxBlockSize: 1024 * 1024, // 1MB (valid range)
+      miningReward: 10,
+      halvingInterval: 210000,
+    },
+    metadata: {
+      timestamp: Date.now(),
+      description: 'Lorachain Test Network Genesis Block',
+      creator: 'Test Suite',
+      networkType: 'testnet',
+    },
   };
 
   beforeEach(async () => {
@@ -44,29 +80,15 @@ describe('GenesisConfigManager', () => {
   });
 
   describe('Configuration Creation and Validation', () => {
-    it('should create valid default configuration', () => {
-      const config = GenesisConfigManager.getDefaultConfig();
-
-      expect(config.chainId).toBe('lorachain-devnet-v1');
-      expect(config.networkName).toBe('Lorachain Development Network');
-      expect(config.version).toBe('1.0.0');
-      expect(config.initialAllocations).toHaveLength(2);
-      expect(config.totalSupply).toBe(21000000);
-      expect(config.networkParams.initialDifficulty).toBe(2);
-      expect(config.networkParams.targetBlockTime).toBe(300);
-      expect(config.metadata.networkType).toBe('devnet');
-    });
-
-    it('should validate valid configuration', () => {
-      const config = GenesisConfigManager.getDefaultConfig();
-      const validation = GenesisConfigManager.validateConfig(config);
+    it('should validate valid test configuration', () => {
+      const validation = GenesisConfigManager.validateConfig(testGenesisConfig);
 
       expect(validation.isValid).toBe(true);
       expect(validation.errors).toHaveLength(0);
     });
 
     it('should reject configuration with invalid chain ID', () => {
-      const config = GenesisConfigManager.getDefaultConfig();
+      const config = { ...testGenesisConfig };
       config.chainId = 'ab'; // Too short
 
       const validation = GenesisConfigManager.validateConfig(config);
@@ -78,7 +100,7 @@ describe('GenesisConfigManager', () => {
     });
 
     it('should reject configuration with invalid version', () => {
-      const config = GenesisConfigManager.getDefaultConfig();
+      const config = { ...testGenesisConfig };
       config.version = 'invalid-version';
 
       const validation = GenesisConfigManager.validateConfig(config);
@@ -90,7 +112,7 @@ describe('GenesisConfigManager', () => {
     });
 
     it('should reject configuration with total allocations exceeding supply', () => {
-      const config = GenesisConfigManager.getDefaultConfig();
+      const config = { ...testGenesisConfig };
       config.totalSupply = 100; // Less than total allocations
 
       const validation = GenesisConfigManager.validateConfig(config);
@@ -102,7 +124,7 @@ describe('GenesisConfigManager', () => {
     });
 
     it('should reject configuration with invalid network parameters', () => {
-      const config = GenesisConfigManager.getDefaultConfig();
+      const config = { ...testGenesisConfig };
       config.networkParams.initialDifficulty = 0; // Invalid
       config.networkParams.targetBlockTime = 30; // Too low
       config.networkParams.maxBlockSize = 100; // Too small
@@ -206,7 +228,7 @@ describe('GenesisConfigManager', () => {
 
   describe('Configuration Persistence', () => {
     it('should save and load configuration from database', async () => {
-      const config = GenesisConfigManager.getDefaultConfig();
+      const config = { ...testGenesisConfig };
       config.chainId = 'test-chain-persistence';
 
       await genesisConfigManager.saveConfigToDatabase(config);
@@ -230,10 +252,10 @@ describe('GenesisConfigManager', () => {
     });
 
     it('should get all stored configurations', async () => {
-      const config1 = GenesisConfigManager.getDefaultConfig();
+      const config1 = { ...testGenesisConfig };
       config1.chainId = 'test-chain-1';
 
-      const config2 = GenesisConfigManager.getDefaultConfig();
+      const config2 = { ...testGenesisConfig };
       config2.chainId = 'test-chain-2';
 
       await genesisConfigManager.saveConfigToDatabase(config1);
@@ -247,7 +269,7 @@ describe('GenesisConfigManager', () => {
     });
 
     it('should reject invalid configuration on save', async () => {
-      const config = GenesisConfigManager.getDefaultConfig();
+      const config = { ...testGenesisConfig };
       config.chainId = ''; // Invalid
 
       await expect(
@@ -258,7 +280,7 @@ describe('GenesisConfigManager', () => {
 
   describe('Genesis Block Creation', () => {
     it('should create genesis block from configuration', () => {
-      const config = GenesisConfigManager.getDefaultConfig();
+      const config = { ...testGenesisConfig };
       const genesisBlock = GenesisConfigManager.createGenesisBlock(config);
 
       expect(genesisBlock.index).toBe(0);
@@ -304,7 +326,7 @@ describe('GenesisConfigManager', () => {
     });
 
     it('should create and persist genesis block with UTXOs', async () => {
-      const config = GenesisConfigManager.getDefaultConfig();
+      const config = { ...testGenesisConfig };
       config.chainId = 'test-genesis-creation';
 
       const genesisBlock =
@@ -363,7 +385,7 @@ describe('GenesisConfigManager', () => {
     });
 
     it('should calculate configuration hash', async () => {
-      const config = GenesisConfigManager.getDefaultConfig();
+      const config = { ...testGenesisConfig };
       const hash1 = await genesisConfigManager.calculateConfigHash(config);
 
       expect(hash1).toHaveLength(64); // SHA-256 hex string
@@ -420,7 +442,7 @@ describe('GenesisConfigManager', () => {
     });
 
     it('should load stored config when available', async () => {
-      const customConfig = GenesisConfigManager.getDefaultConfig();
+      const customConfig = { ...testGenesisConfig };
       customConfig.chainId = 'stored-test-chain';
       customConfig.networkName = 'Stored Test Network';
 
