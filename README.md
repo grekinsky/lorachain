@@ -110,7 +110,9 @@ Core blockchain functionality including:
 - **Cryptographic services (ECDSA/Ed25519 key generation and signing)**
 - **Block creation and mining with persistent state management**
 - **Database corruption recovery and validation capabilities**
-- **Proof-of-Work consensus mechanism**
+- **Dynamic difficulty adjustment with Bitcoin-style algorithms optimized for LoRa networks**
+- **Network hashrate calculation and monitoring**
+- **Proof-of-Work consensus mechanism with adaptive difficulty**
 
 ### @lorachain/shared
 
@@ -191,8 +193,10 @@ Features:
 - **Cryptographic Storage**: Secure key pair persistence supporting secp256k1 and Ed25519 algorithms
 - **Merkle Tree System**: Merkle proof generation, verification, and compression for SPV support
 - **Light Client Support**: Simplified Payment Verification (SPV) for mobile wallets
-- **Consensus**: Proof-of-Work with adaptive difficulty
-- **Block Time**: Dynamic based on network conditions
+- **Consensus**: Proof-of-Work with adaptive difficulty adjustment
+- **Difficulty Adjustment**: Bitcoin-style algorithm with 10-block adjustment periods and 4x max change bounds
+- **Block Time**: 5-minute target optimized for LoRa network propagation delays
+- **Network Monitoring**: Real-time hashrate calculation and difficulty state tracking
 - **Transaction Fees**: Calculated based on transaction size and UTXO inputs/outputs
 - **Security**: SHA-256 hashing with ECDSA (secp256k1) or Ed25519 digital signatures
 - **UTXO Management**: Efficient UTXO set tracking, selection algorithms, and balance calculation
@@ -294,13 +298,17 @@ For support and questions:
 
 ### Recently Implemented Features
 
+- **Dynamic Difficulty Adjustment**: Bitcoin-style difficulty adjustment with 10-block periods and conservative bounds (4x max change)
+- **Network Hashrate Monitoring**: Real-time hashrate calculation and network performance tracking
+- **LoRa-Optimized Consensus**: 5-minute block times and adjustment algorithms optimized for mesh network constraints
+- **Enhanced Block Validation**: Comprehensive difficulty validation and timestamp manipulation protection
 - **Comprehensive Persistence Layer**: Production-ready blockchain state persistence with LevelDB integration
 - **Database Infrastructure**: Dual database support (LevelDB for production, Memory for testing) with sublevel organization
 - **UTXO Persistence**: Complete UTXO set storage with address-based queries, balance calculation, and efficient retrieval
 - **Cryptographic Key Storage**: Secure key pair persistence supporting both secp256k1 and Ed25519 algorithms
 - **Data Integrity**: Blockchain state validation, corruption detection, and automatic repair capabilities
 - **Atomic Operations**: Batch database operations ensuring data consistency and performance optimization
-- **Comprehensive Testing**: 78+ persistence tests covering database operations, state management, and error scenarios
+- **Comprehensive Testing**: 306+ tests covering difficulty adjustment, database operations, state management, and error scenarios
 - **UTXO Transaction Model**: Complete implementation replacing the account-based model
 - **Merkle Tree Verification**: Advanced merkle proof generation and SPV support for light clients
 - **Cryptographic Security**: Full ECDSA (secp256k1) and Ed25519 signature support
