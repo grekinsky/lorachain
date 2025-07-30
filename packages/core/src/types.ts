@@ -234,8 +234,10 @@ export interface IDatabase {
   put<T>(key: string, value: T, sublevel?: string): Promise<void>;
   del(key: string, sublevel?: string): Promise<void>;
   batch(operations: BatchOperation[]): Promise<void>;
-  iterator(options: IteratorOptions): AsyncIterator<KeyValue>;
-  multiGet(keys: Array<{key: string, sublevel?: string}>): Promise<Array<unknown | null>>;
+  iterator(options: IteratorOptions): AsyncIterable<KeyValue>;
+  multiGet(
+    keys: Array<{ key: string; sublevel?: string }>
+  ): Promise<Array<unknown | null>>;
   createSnapshot(): Promise<Snapshot>;
   releaseSnapshot(snapshot: Snapshot): Promise<void>;
   compact(sublevel?: string): Promise<void>;

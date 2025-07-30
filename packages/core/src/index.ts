@@ -30,11 +30,11 @@ export { MerkleTree, SPVManager } from './merkle/index.js';
 // Persistence exports
 export * from './database.js';
 export * from './persistence.js';
-export { 
-  LevelDatabase, 
-  MemoryDatabase, 
+export {
+  LevelDatabase,
+  MemoryDatabase,
   DatabaseFactory,
   SubLevels,
-  KeyPrefixes
+  KeyPrefixes,
 } from './database.js';
 export { UTXOPersistenceManager } from './persistence.js';

@@ -133,6 +133,7 @@ The merkle tree implementation is **UTXO-only** and follows the project's "NO BA
 - **`BlockManager.verifyTransactionInBlock()`**: Verify UTXO transactions in blocks
 
 **Key Constraints:**
+
 - LoRa 256-byte message limit requires proof compression and potential fragmentation
 - All merkle operations are UTXO-exclusive (no legacy Transaction type support)
 - SPV clients can verify transactions without downloading full blocks

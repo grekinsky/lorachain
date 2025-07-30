@@ -58,18 +58,22 @@ export class Blockchain {
           this.difficulty = loadedState.difficulty;
           this.miningReward = loadedState.miningReward;
           this.pendingUTXOTransactions = loadedState.pendingUTXOTransactions;
-          
+
           // Rebuild UTXO manager from loaded state
           this.utxoManager = new UTXOManager();
           for (const [, utxo] of loadedState.utxoSet) {
             this.utxoManager.addUTXO(utxo);
           }
-          
-          this.logger.debug(`Loaded blockchain state with ${this.blocks.length} blocks`);
+
+          this.logger.debug(
+            `Loaded blockchain state with ${this.blocks.length} blocks`
+          );
           return;
         }
       } catch (error) {
-        this.logger.warn(`Failed to load blockchain state: ${error}, initializing new blockchain`);
+        this.logger.warn(
+          `Failed to load blockchain state: ${error}, initializing new blockchain`
+        );
       }
     }
 
@@ -77,7 +81,7 @@ export class Blockchain {
     const genesisBlock = BlockManager.createGenesisBlock();
     this.blocks.push(genesisBlock);
     this.initializeUTXOFromGenesis(genesisBlock);
-    
+
     // Save initial state if persistence is enabled
     if (this.persistence && this.autoSave) {
       await this.save();
@@ -105,11 +109,15 @@ export class Blockchain {
     return this.blocks[this.blocks.length - 1];
   }
 
-  async addTransaction(transaction: UTXOTransaction): Promise<ValidationResult> {
+  async addTransaction(
+    transaction: UTXOTransaction
+  ): Promise<ValidationResult> {
     return await this.addUTXOTransaction(transaction);
   }
 
-  async addUTXOTransaction(transaction: UTXOTransaction): Promise<ValidationResult> {
+  async addUTXOTransaction(
+    transaction: UTXOTransaction
+  ): Promise<ValidationResult> {
     const validation = this.utxoTransactionManager.validateTransaction(
       transaction,
       this.utxoManager
@@ -129,12 +137,12 @@ export class Blockchain {
     }
 
     this.pendingUTXOTransactions.push(transaction);
-    
+
     // Save to persistence if enabled
     if (this.persistence && this.autoSave) {
       await this.persistence.saveUTXOTransaction(transaction);
     }
-    
+
     this.logger.debug(
       `Added UTXO transaction ${transaction.id} to pending pool`
     );
@@ -374,10 +382,6 @@ export class Blockchain {
     return [...this.pendingUTXOTransactions];
   }
 
-  getUTXOsForAddress(address: string): UTXO[] {
-    return this.utxoManager.getUTXOsForAddress(address);
-  }
-
   getUTXOManager(): UTXOManager {
     return this.utxoManager;
   }
@@ -508,7 +512,10 @@ export class Blockchain {
     return utxos.reduce((total, utxo) => total + utxo.value, 0);
   }
 
-  async getUTXOFromStorage(txId: string, outputIndex: number): Promise<UTXO | null> {
+  async getUTXOFromStorage(
+    txId: string,
+    outputIndex: number
+  ): Promise<UTXO | null> {
     if (this.persistence) {
       return await this.persistence.getUTXO(txId, outputIndex);
     }
@@ -531,7 +538,7 @@ export class Blockchain {
     }
 
     await this.persistence.rebuildUTXOSet();
-    
+
     // Reload the blockchain state to reflect the rebuilt UTXO set
     await this.load();
   }
@@ -543,7 +550,9 @@ export class Blockchain {
     }
 
     await this.persistence['db'].compact(sublevel);
-    this.logger.debug(`Database compaction completed for sublevel: ${sublevel || 'all'}`);
+    this.logger.debug(
+      `Database compaction completed for sublevel: ${sublevel || 'all'}`
+    );
   }
 
   async backup(path: string): Promise<void> {
@@ -552,7 +561,9 @@ export class Blockchain {
     }
 
     // For now, this is a placeholder - would need to implement actual backup functionality
-    this.logger.warn(`Backup functionality not yet implemented for path: ${path}`);
+    this.logger.warn(
+      `Backup functionality not yet implemented for path: ${path}`
+    );
   }
 
   async restore(path: string): Promise<void> {
@@ -561,7 +572,9 @@ export class Blockchain {
     }
 
     // For now, this is a placeholder - would need to implement actual restore functionality
-    this.logger.warn(`Restore functionality not yet implemented for path: ${path}`);
+    this.logger.warn(
+      `Restore functionality not yet implemented for path: ${path}`
+    );
   }
 
   // Utility methods

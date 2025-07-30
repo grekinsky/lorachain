@@ -1,5 +1,5 @@
 import { Level } from 'level';
-import * as msgpack from 'msgpack';
+import { encode, decode } from '@msgpack/msgpack';
 import * as zlib from 'zlib';
 import { promisify } from 'util';
 import type {
@@ -54,7 +54,7 @@ export const KeyPrefixes = {
 
 export class LevelDatabase implements IDatabase {
   private db: Level<string, Buffer>;
-  private sublevels: Map<string, Level<string, Buffer>> = new Map();
+  private sublevels: Map<string, any> = new Map();
   private snapshots: Map<string, Snapshot> = new Map();
   private config: UTXOPersistenceConfig;
   private logger = new SimpleLogger('LevelDatabase');
@@ -81,11 +81,11 @@ export class LevelDatabase implements IDatabase {
     this.logger.debug('Initialized sublevels for different data types');
   }
 
-  private getSublevel(sublevelName?: string): Level<string, Buffer> {
+  private getSublevel(sublevelName?: string): any {
     if (!sublevelName) {
       return this.db;
     }
-    
+
     const sublevel = this.sublevels.get(sublevelName);
     if (!sublevel) {
       throw new Error(`Sublevel ${sublevelName} not found`);
@@ -95,12 +95,12 @@ export class LevelDatabase implements IDatabase {
 
   private async serialize<T>(value: T): Promise<Buffer> {
     try {
-      const packed = msgpack.pack(value);
-      
+      const packed = encode(value);
+
       if (this.config.compressionType === 'gzip') {
-        return await gzip(packed);
+        return await gzip(Buffer.from(packed));
       }
-      
+
       return Buffer.from(packed);
     } catch (error) {
       this.logger.error(`Serialization error: ${error}`);
@@ -111,12 +111,12 @@ export class LevelDatabase implements IDatabase {
   private async deserialize<T>(buffer: Buffer): Promise<T> {
     try {
       let data = buffer;
-      
+
       if (this.config.compressionType === 'gzip') {
         data = await gunzip(buffer);
       }
-      
-      return msgpack.unpack(data) as T;
+
+      return decode(data) as T;
     } catch (error) {
       this.logger.error(`Deserialization error: ${error}`);
       throw new Error(`Failed to deserialize value: ${error}`);
@@ -142,7 +142,9 @@ export class LevelDatabase implements IDatabase {
       const db = this.getSublevel(sublevel);
       const serialized = await this.serialize(value);
       await db.put(key, serialized);
-      this.logger.debug(`Stored key: ${key} in sublevel: ${sublevel || 'default'}`);
+      this.logger.debug(
+        `Stored key: ${key} in sublevel: ${sublevel || 'default'}`
+      );
     } catch (error) {
       this.logger.error(`Put operation failed for key ${key}: ${error}`);
       throw error;
@@ -153,7 +155,9 @@ export class LevelDatabase implements IDatabase {
     try {
       const db = this.getSublevel(sublevel);
       await db.del(key);
-      this.logger.debug(`Deleted key: ${key} from sublevel: ${sublevel || 'default'}`);
+      this.logger.debug(
+        `Deleted key: ${key} from sublevel: ${sublevel || 'default'}`
+      );
     } catch (error: any) {
       if (error.code !== 'LEVEL_NOT_FOUND') {
         this.logger.error(`Delete operation failed for key ${key}: ${error}`);
@@ -165,10 +169,10 @@ export class LevelDatabase implements IDatabase {
   async batch(operations: BatchOperation[]): Promise<void> {
     try {
       const batch = this.db.batch();
-      
+
       for (const op of operations) {
         const db = this.getSublevel(op.sublevel);
-        
+
         if (op.type === 'put' && op.value !== undefined) {
           const serialized = await this.serialize(op.value);
           batch.put(op.key, serialized);
@@ -176,16 +180,18 @@ export class LevelDatabase implements IDatabase {
           batch.del(op.key);
         }
       }
-      
+
       await batch.write();
-      this.logger.debug(`Executed batch operation with ${operations.length} operations`);
+      this.logger.debug(
+        `Executed batch operation with ${operations.length} operations`
+      );
     } catch (error) {
       this.logger.error(`Batch operation failed: ${error}`);
       throw error;
     }
   }
 
-  async *iterator(options: IteratorOptions): AsyncIterator<KeyValue> {
+  async *iterator(options: IteratorOptions): AsyncIterable<KeyValue> {
     try {
       const db = this.getSublevel(options.sublevel);
       const iterator = db.iterator({
@@ -205,16 +211,20 @@ export class LevelDatabase implements IDatabase {
     }
   }
 
-  async multiGet(keys: Array<{key: string, sublevel?: string}>): Promise<Array<unknown | null>> {
+  async multiGet(
+    keys: Array<{ key: string; sublevel?: string }>
+  ): Promise<Array<unknown | null>> {
     const results: Array<unknown | null> = [];
-    
+
     try {
       for (const { key, sublevel } of keys) {
         const result = await this.get(key, sublevel);
         results.push(result);
       }
-      
-      this.logger.debug(`Multi-get operation completed for ${keys.length} keys`);
+
+      this.logger.debug(
+        `Multi-get operation completed for ${keys.length} keys`
+      );
       return results;
     } catch (error) {
       this.logger.error(`Multi-get operation failed: ${error}`);
@@ -227,7 +237,7 @@ export class LevelDatabase implements IDatabase {
       id: `snapshot_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       timestamp: Date.now(),
     };
-    
+
     this.snapshots.set(snapshot.id, snapshot);
     this.logger.debug(`Created snapshot: ${snapshot.id}`);
     return snapshot;
@@ -242,7 +252,9 @@ export class LevelDatabase implements IDatabase {
     try {
       // LevelDB doesn't have explicit compact method in newer versions
       // This is a placeholder for potential future implementation
-      this.logger.debug(`Compaction requested for sublevel: ${sublevel || 'all'}`);
+      this.logger.debug(
+        `Compaction requested for sublevel: ${sublevel || 'all'}`
+      );
     } catch (error) {
       this.logger.error(`Compaction failed: ${error}`);
       throw error;
@@ -256,7 +268,7 @@ export class LevelDatabase implements IDatabase {
         await sublevel.close();
         this.logger.debug(`Closed sublevel: ${name}`);
       }
-      
+
       // Close main database
       await this.db.close();
       this.logger.debug('Database closed successfully');
@@ -282,9 +294,13 @@ export class LevelDatabase implements IDatabase {
     try {
       const db = this.getSublevel(sublevel);
       const iterator = db.iterator({ limit: 1 });
-      const result = await iterator.next();
+      let isEmpty = true;
+      for await (const [,] of iterator) {
+        isEmpty = false;
+        break;
+      }
       await iterator.close();
-      return result.done === true;
+      return isEmpty;
     } catch (error) {
       this.logger.error(`isEmpty check failed: ${error}`);
       throw error;
@@ -297,11 +313,11 @@ export class LevelDatabase implements IDatabase {
       let count = 0;
       const db = this.getSublevel(sublevel);
       const iterator = db.iterator();
-      
-      for await (const [, ] of iterator) {
+
+      for await (const [,] of iterator) {
         count++;
       }
-      
+
       return count;
     } catch (error) {
       this.logger.error(`Size calculation failed: ${error}`);
@@ -340,13 +356,17 @@ export class MemoryDatabase implements IDatabase {
   async put<T>(key: string, value: T, sublevel?: string): Promise<void> {
     const storage = this.getSublevelStorage(sublevel);
     storage.set(key, value);
-    this.logger.debug(`Stored key: ${key} in memory sublevel: ${sublevel || 'default'}`);
+    this.logger.debug(
+      `Stored key: ${key} in memory sublevel: ${sublevel || 'default'}`
+    );
   }
 
   async del(key: string, sublevel?: string): Promise<void> {
     const storage = this.getSublevelStorage(sublevel);
     storage.delete(key);
-    this.logger.debug(`Deleted key: ${key} from memory sublevel: ${sublevel || 'default'}`);
+    this.logger.debug(
+      `Deleted key: ${key} from memory sublevel: ${sublevel || 'default'}`
+    );
   }
 
   async batch(operations: BatchOperation[]): Promise<void> {
@@ -357,16 +377,18 @@ export class MemoryDatabase implements IDatabase {
         await this.del(op.key, op.sublevel);
       }
     }
-    this.logger.debug(`Executed memory batch operation with ${operations.length} operations`);
+    this.logger.debug(
+      `Executed memory batch operation with ${operations.length} operations`
+    );
   }
 
-  async *iterator(options: IteratorOptions): AsyncIterator<KeyValue> {
+  async *iterator(options: IteratorOptions): AsyncIterable<KeyValue> {
     const storage = this.getSublevelStorage(options.sublevel);
     const entries = Array.from(storage.entries());
-    
+
     // Apply filtering and sorting
     let filtered = entries;
-    
+
     if (options.start || options.end) {
       filtered = entries.filter(([key]) => {
         if (options.start && key < options.start) return false;
@@ -374,21 +396,23 @@ export class MemoryDatabase implements IDatabase {
         return true;
       });
     }
-    
+
     if (options.reverse) {
       filtered.reverse();
     }
-    
+
     if (options.limit) {
       filtered = filtered.slice(0, options.limit);
     }
-    
+
     for (const [key, value] of filtered) {
       yield { key, value };
     }
   }
 
-  async multiGet(keys: Array<{key: string, sublevel?: string}>): Promise<Array<unknown | null>> {
+  async multiGet(
+    keys: Array<{ key: string; sublevel?: string }>
+  ): Promise<Array<unknown | null>> {
     const results: Array<unknown | null> = [];
     for (const { key, sublevel } of keys) {
       results.push(await this.get(key, sublevel));
@@ -401,7 +425,7 @@ export class MemoryDatabase implements IDatabase {
       id: `memory_snapshot_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       timestamp: Date.now(),
     };
-    
+
     this.snapshots.set(snapshot.id, snapshot);
     this.logger.debug(`Created memory snapshot: ${snapshot.id}`);
     return snapshot;
@@ -414,7 +438,9 @@ export class MemoryDatabase implements IDatabase {
 
   async compact(sublevel?: string): Promise<void> {
     // No-op for memory database
-    this.logger.debug(`Memory compaction (no-op) for sublevel: ${sublevel || 'all'}`);
+    this.logger.debug(
+      `Memory compaction (no-op) for sublevel: ${sublevel || 'all'}`
+    );
   }
 
   async close(): Promise<void> {
