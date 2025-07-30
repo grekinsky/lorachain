@@ -6,6 +6,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Lorachain is a lightweight blockchain network designed for cryptocurrency transactions in communities with limited internet connectivity using LoRa mesh networking technology. It operates on a hybrid architecture with light clients (mobile wallets) and synchronized nodes (full nodes).
 
+The blockchain uses a **UTXO (Unspent Transaction Output) model** for transaction management and supports **cryptographic signing** with both ECDSA (secp256k1) and Ed25519 algorithms.
+
+## Important Development Guidelines
+
+- **NO BACKWARDS COMPATIBILITY**: This project prioritizes clean, modern implementations. Do not maintain backwards compatibility with older versions or deprecated features. When making changes, feel free to break existing APIs and update all dependent code accordingly.
+- **UTXO-ONLY**: The blockchain exclusively uses the UTXO model. Account-based transactions are not supported.
+- **CRYPTOGRAPHIC SECURITY**: All transactions must be properly signed using the CryptographicService with either secp256k1 or ed25519 algorithms.
+
 ## Development Commands
 
 ### Build and Development
@@ -61,10 +69,13 @@ cd packages/core && pnpm test    # Test specific package
 
 ### Core Classes and Responsibilities
 
-- **`Blockchain`** (core) - Main blockchain state and operations
-- **`TransactionManager`** (core) - Transaction validation and creation
+- **`Blockchain`** (core) - Main blockchain state and UTXO-based operations
+- **`UTXOManager`** (core) - UTXO set management, balance calculation, and UTXO selection
+- **`UTXOTransactionManager`** (core) - UTXO transaction creation, validation, and fee calculation
+- **`CryptographicService`** (core) - Key generation, signing, and verification (ECDSA/Ed25519)
+- **`SecureTransactionManager`** (core) - Cryptographically secure transaction creation
 - **`BlockManager`** (core) - Block creation, mining, and validation
-- **`MobileWallet`** (mobile-wallet) - Lightweight wallet operations
+- **`SecureMobileWallet`** (mobile-wallet) - Cryptographically secure wallet with key pairs
 - **`LorachainNode`** (node) - Full node with mining and peer management
 - **`MeshProtocol`** (mesh-protocol) - LoRa mesh communication
 - **`Logger`** (shared) - Centralized logging with levels
@@ -80,10 +91,21 @@ cd packages/core && pnpm test    # Test specific package
 
 Each package includes comprehensive unit tests using Vitest:
 
-- **Core package**: Tests for blockchain, transaction, and block functionality
+- **Core package**: Tests for blockchain, UTXO management, cryptographic services, and block functionality
+  - UTXO transaction creation and validation
+  - Cryptographic key generation and signing (ECDSA/Ed25519)
+  - UTXO set management and balance calculation
 - **Shared package**: Tests for logger and utility functions
-- **Mobile wallet**: Tests for wallet operations
+- **Mobile wallet**: Tests for secure wallet operations with cryptographic key pairs
 - **Node package**: Tests for full node functionality
 - **Mesh protocol**: Tests for LoRa communication protocol
 
 Run package-specific tests with `cd packages/<name> && pnpm test` or use watch mode for development with `pnpm test:watch`.
+
+### Key Implementation Details
+
+- **UTXO Model**: All transactions use inputs/outputs instead of account balances
+- **Cryptographic Signatures**: Transactions are signed with either secp256k1 or ed25519
+- **Transaction Structure**: UTXOTransaction with inputs (referencing previous outputs) and outputs
+- **Balance Calculation**: Derived from unspent transaction outputs (UTXOs) for each address
+- **Transaction Validation**: Checks UTXO existence, ownership, and signature validity

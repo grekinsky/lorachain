@@ -17,8 +17,9 @@ The Lorachain network operates on a hybrid architecture with two distinct client
 
 ### Key Features
 
+- **UTXO Model**: Full Unspent Transaction Output (UTXO) model for enhanced security and transaction verification
+- **Cryptographic Security**: ECDSA (secp256k1) and Ed25519 signature algorithms for transaction signing
 - **Low Resource Consumption**: Optimized for battery-powered devices and minimal data transfer
-- **High Security**: Cryptographic transaction validation and decentralized consensus mechanisms
 - **Mesh Network Resilience**: Multi-hop communication through LoRa mesh with automatic route discovery
 - **Hybrid Connectivity**: Combines offline resilience with online synchronization capabilities
 
@@ -98,10 +99,11 @@ pnpm test:run     # Run tests once (no watch mode)
 
 Core blockchain functionality including:
 
-- Transaction management and validation
+- UTXO-based transaction management and validation
+- Cryptographic services (ECDSA/Ed25519 key generation and signing)
 - Block creation and mining
-- Blockchain state management
-- Consensus mechanisms
+- Blockchain state management with UTXO set
+- Proof-of-Work consensus mechanism
 
 ### @lorachain/shared
 
@@ -115,9 +117,10 @@ Shared utilities and types used across the project:
 
 Mobile wallet implementation for light clients:
 
-- Wallet creation and management
-- Transaction creation and signing
-- Balance tracking
+- Secure wallet creation with cryptographic key pairs
+- UTXO-based transaction creation and signing
+- Balance tracking via UTXO set
+- Support for both ECDSA and Ed25519 signatures
 
 ### @lorachain/node
 
@@ -174,10 +177,12 @@ Features:
 
 ### Blockchain Features
 
+- **Transaction Model**: UTXO (Unspent Transaction Output) for enhanced security and verification
 - **Consensus**: Proof-of-Work with adaptive difficulty
 - **Block Time**: Dynamic based on network conditions
-- **Transaction Fees**: Minimal fees optimized for micro-transactions
-- **Security**: SHA-256 hashing and digital signatures
+- **Transaction Fees**: Calculated based on transaction size and UTXO inputs/outputs
+- **Security**: SHA-256 hashing with ECDSA (secp256k1) or Ed25519 digital signatures
+- **UTXO Management**: Efficient UTXO set tracking and balance calculation
 
 ### LoRa Network Constraints
 
@@ -261,12 +266,22 @@ For support and questions:
 
 ---
 
-**Note**: This project is in active development. The current implementation provides a foundation for the Lorachain network with basic blockchain functionality, comprehensive unit tests, and mesh networking capabilities. The codebase includes:
+**Note**: This project is in active development. The current implementation provides a foundation for the Lorachain network with:
+
+### Recently Implemented Features
+
+- **UTXO Transaction Model**: Complete implementation replacing the account-based model
+- **Cryptographic Security**: Full ECDSA (secp256k1) and Ed25519 signature support
+- **Secure Wallets**: Cryptographically secure wallet implementation with key pair generation
+- **UTXO Management**: Efficient UTXO set tracking, selection algorithms, and balance calculation
+- **Enhanced Security**: All transactions now use proper cryptographic signatures
+
+### Foundation Features
 
 - Complete monorepo structure with all core packages
 - TypeScript configuration with strict type checking
 - Vitest-based testing framework with comprehensive test coverage
 - ESLint and Prettier for code quality
-- Basic implementations of blockchain, wallet, and mesh protocol components
+- Production-ready blockchain, wallet, and mesh protocol components
 
 Additional features and optimizations will be added in future releases.
