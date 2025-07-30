@@ -1,13 +1,35 @@
-import type { Transaction } from '@lorachain/core';
+import type {
+  Transaction,
+  UTXO,
+  UTXOTransaction,
+  IUTXOManager,
+} from '@lorachain/core';
 import {
   CryptographicService,
   SecureTransactionManager,
+  UTXOTransactionManager,
   type KeyPair,
   type CryptographicWallet,
   type SignatureAlgorithm,
 } from '@lorachain/core';
-import { Logger } from '@lorachain/shared';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils';
+
+// Simple logger for development
+class SimpleLogger {
+  constructor(private context: string) {}
+  info(message: string, data?: unknown): void {
+    console.log(`[INFO] ${this.context}: ${message}`, data || '');
+  }
+  warn(message: string, data?: unknown): void {
+    console.warn(`[WARN] ${this.context}: ${message}`, data || '');
+  }
+  error(message: string, data?: unknown): void {
+    console.error(`[ERROR] ${this.context}: ${message}`, data || '');
+  }
+  static getInstance(): SimpleLogger {
+    return new SimpleLogger('SecureMobileWallet');
+  }
+}
 
 export interface WalletExport {
   address: string;
@@ -18,7 +40,8 @@ export interface WalletExport {
 export class SecureMobileWallet {
   private keyPair: KeyPair;
   private wallet: CryptographicWallet;
-  private logger = Logger.getInstance();
+  private logger = SimpleLogger.getInstance();
+  private utxoTransactionManager: UTXOTransactionManager;
 
   constructor(
     privateKey?: Uint8Array | string,
@@ -54,6 +77,9 @@ export class SecureMobileWallet {
       balance: 0,
       nonce: 0,
     };
+
+    // Initialize UTXO transaction manager
+    this.utxoTransactionManager = new UTXOTransactionManager();
 
     this.logger.info('Secure wallet initialized', {
       address: this.wallet.address,
@@ -146,6 +172,90 @@ export class SecureMobileWallet {
     }
 
     return transaction;
+  }
+
+  // UTXO-based methods
+  getUTXOBalance(utxoManager: IUTXOManager): number {
+    return utxoManager.calculateBalance(this.wallet.address);
+  }
+
+  getOwnedUTXOs(utxoManager: IUTXOManager): UTXO[] {
+    return utxoManager.getUTXOsForAddress(this.wallet.address);
+  }
+
+  createUTXOTransaction(
+    to: string,
+    amount: number,
+    utxoManager: IUTXOManager
+  ): UTXOTransaction {
+    if (amount <= 0) {
+      throw new Error('Amount must be greater than 0');
+    }
+
+    const availableUTXOs = this.getOwnedUTXOs(utxoManager);
+    const currentBalance = this.getUTXOBalance(utxoManager);
+
+    if (amount > currentBalance) {
+      throw new Error(
+        `Insufficient UTXO balance: need ${amount}, have ${currentBalance}`
+      );
+    }
+
+    this.logger.info('Creating UTXO transaction', {
+      from: this.wallet.address,
+      to,
+      amount,
+      availableUTXOs: availableUTXOs.length,
+    });
+
+    const transaction = this.utxoTransactionManager.createTransaction(
+      this.wallet.address,
+      to,
+      amount,
+      bytesToHex(this.keyPair.privateKey),
+      availableUTXOs
+    );
+
+    this.logger.info('UTXO transaction created', {
+      txId: transaction.id,
+      inputs: transaction.inputs.length,
+      outputs: transaction.outputs.length,
+      fee: transaction.fee,
+    });
+
+    return transaction;
+  }
+
+  canAffordUTXOTransaction(amount: number, utxoManager: IUTXOManager): boolean {
+    const availableUTXOs = this.getOwnedUTXOs(utxoManager);
+    const selection = this.utxoTransactionManager.selectUTXOs(
+      availableUTXOs,
+      amount
+    );
+    return selection.totalValue >= amount;
+  }
+
+  getUTXOTransactionHistory(
+    transactions: UTXOTransaction[],
+    utxoManager: IUTXOManager
+  ): UTXOTransaction[] {
+    return transactions
+      .filter(tx => {
+        // Check if this wallet is involved in the transaction
+        const inputAddresses =
+          this.utxoTransactionManager.getTransactionInputAddresses(
+            tx,
+            utxoManager
+          );
+        const outputAddresses =
+          this.utxoTransactionManager.getTransactionOutputAddresses(tx);
+
+        return (
+          inputAddresses.includes(this.wallet.address) ||
+          outputAddresses.includes(this.wallet.address)
+        );
+      })
+      .sort((a, b) => b.timestamp - a.timestamp);
   }
 
   export(): WalletExport {

@@ -288,6 +288,11 @@ describe('BlockManager', () => {
         mockTransactions,
         previousBlock.hash
       );
+
+      // Force the hash to not meet difficulty requirement by setting a non-zero starting hash
+      unmined.hash = 'f' + unmined.hash.substring(1); // Ensure it doesn't start with '0'
+      unmined.nonce = 0; // Reset nonce
+
       const result = BlockManager.validateBlock(unmined, previousBlock, 1);
 
       expect(result.isValid).toBe(false);

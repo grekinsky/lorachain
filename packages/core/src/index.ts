@@ -16,3 +16,9 @@ export {
   type CryptographicWallet,
   type SignatureAlgorithm,
 } from './cryptographic.js';
+
+// UTXO Model exports
+export * from './utxo.js';
+export * from './utxo-transaction.js';
+export { UTXOManager } from './utxo.js';
+export { UTXOTransactionManager } from './utxo-transaction.js';
