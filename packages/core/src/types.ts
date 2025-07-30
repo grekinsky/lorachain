@@ -296,3 +296,44 @@ export interface ColumnFamilyStats {
   sizeBytes: number;
   compressionRatio: number;
 }
+
+// Genesis Block Configuration Types
+export interface GenesisConfig {
+  // Network identification
+  chainId: string;
+  networkName: string;
+  version: string;
+
+  // Initial coin distribution (UTXO-only)
+  initialAllocations: InitialAllocation[];
+  totalSupply: number;
+
+  // Network parameters (integrates with existing DifficultyManager)
+  networkParams: NetworkParameters;
+
+  // Genesis block metadata
+  metadata: GenesisMetadata;
+}
+
+export interface InitialAllocation {
+  address: string; // Will become UTXOTransaction output lockingScript
+  amount: number; // Will become UTXOTransaction output value
+  description?: string;
+}
+
+export interface NetworkParameters {
+  initialDifficulty: number;
+  targetBlockTime: number; // in seconds (integrates with existing DifficultyConfig)
+  adjustmentPeriod: number; // blocks (integrates with existing DifficultyConfig)
+  maxDifficultyRatio: number; // integrates with existing DifficultyConfig
+  maxBlockSize: number; // bytes (integrates with existing blockchain.maxBlockSize)
+  miningReward: number; // integrates with existing blockchain.miningReward
+  halvingInterval?: number; // blocks until reward halving
+}
+
+export interface GenesisMetadata {
+  timestamp: number;
+  description: string;
+  creator: string;
+  networkType: 'mainnet' | 'testnet' | 'devnet' | 'private';
+}

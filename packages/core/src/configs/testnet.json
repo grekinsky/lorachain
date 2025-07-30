@@ -1,0 +1,43 @@
+{
+  "chainId": "lorachain-testnet-v1",
+  "networkName": "Lorachain Testnet",
+  "version": "1.0.0",
+  "initialAllocations": [
+    {
+      "address": "lora1testfaucet000000000000000000000000000",
+      "amount": 10000000,
+      "description": "Testnet faucet allocation"
+    },
+    {
+      "address": "lora1testdev0000000000000000000000000000",
+      "amount": 5000000,
+      "description": "Development testing allocation"
+    },
+    {
+      "address": "lora1testusers000000000000000000000000000",
+      "amount": 3000000,
+      "description": "Test user allocations"
+    },
+    {
+      "address": "lora1testvalidator000000000000000000000000",
+      "amount": 2000000,
+      "description": "Test validator allocation"
+    }
+  ],
+  "totalSupply": 50000000,
+  "networkParams": {
+    "initialDifficulty": 2,
+    "targetBlockTime": 120,
+    "adjustmentPeriod": 5,
+    "maxDifficultyRatio": 4,
+    "maxBlockSize": 1048576,
+    "miningReward": 25,
+    "halvingInterval": 100000
+  },
+  "metadata": {
+    "timestamp": 1700000000000,
+    "description": "Lorachain Testnet Genesis Block - Testing network for development and validation",
+    "creator": "Lorachain Development Team",
+    "networkType": "testnet"
+  }
+}

@@ -50,6 +50,10 @@ export const KeyPrefixes = {
   CONFIG: 'config:',
   NODE: 'node:',
   KEYPAIR: 'keypair:',
+  // Genesis configuration prefixes
+  GENESIS_CONFIG: 'genesis:', // Genesis configuration by chain ID
+  GENESIS_METADATA: 'gen_meta:', // Genesis block metadata
+  GENESIS_UTXO: 'gen_utxo:', // Genesis UTXO allocations
 } as const;
 
 export class LevelDatabase implements IDatabase {

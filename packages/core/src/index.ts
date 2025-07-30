@@ -46,3 +46,13 @@ export {
   type DifficultyConfig,
   type DifficultyState,
 } from './difficulty.js';
+
+// Genesis Configuration exports
+export * from './genesis/index.js';
+export {
+  GenesisConfigManager,
+  type GenesisConfig,
+  type InitialAllocation,
+  type NetworkParameters,
+  type GenesisMetadata,
+} from './genesis/index.js';

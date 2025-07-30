@@ -6,25 +6,43 @@ import type {
   ValidationResult,
   MerkleProof,
   BlockHeader,
+  GenesisConfig,
 } from './types.js';
 import { TransactionManager } from './transaction.js';
 import { MerkleTree } from './merkle/index.js';
+import { GenesisConfigManager } from './genesis/index.js';
 
 export class BlockManager {
-  static createGenesisBlock(difficulty: number = 1): Block {
-    const genesisBlock: Block = {
-      index: 0,
-      timestamp: Date.now(),
-      transactions: [],
-      previousHash: '0',
-      hash: '',
-      nonce: 0,
-      merkleRoot: this.calculateMerkleRoot([]),
-      difficulty,
-    };
+  /**
+   * Create genesis block with optional configuration
+   * BREAKING CHANGE: Now supports GenesisConfig parameter
+   * @param difficultyOrConfig - Legacy difficulty number or GenesisConfig object
+   * @returns Genesis block
+   */
+  static createGenesisBlock(
+    difficultyOrConfig: number | GenesisConfig = 1
+  ): Block {
+    // Handle legacy difficulty parameter for backward compatibility
+    if (typeof difficultyOrConfig === 'number') {
+      const difficulty = difficultyOrConfig;
+      const genesisBlock: Block = {
+        index: 0,
+        timestamp: Date.now(),
+        transactions: [],
+        previousHash: '0',
+        hash: '',
+        nonce: 0,
+        merkleRoot: this.calculateMerkleRoot([]),
+        difficulty,
+      };
 
-    genesisBlock.hash = this.calculateHash(genesisBlock);
-    return genesisBlock;
+      genesisBlock.hash = this.calculateHash(genesisBlock);
+      return genesisBlock;
+    }
+
+    // Handle GenesisConfig parameter
+    const config = difficultyOrConfig as GenesisConfig;
+    return GenesisConfigManager.createGenesisBlock(config);
   }
 
   static createBlock(
