@@ -1,47 +1,23 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { SPVManager } from './SPVManager.js';
 import { MerkleTree } from './MerkleTree.js';
-import { TransactionManager } from '../transaction.js';
 import { UTXOTransactionManager } from '../utxo-transaction.js';
 import { UTXOManager } from '../utxo.js';
-import { BlockManager } from '../block.js';
 import type {
-  Transaction,
   UTXOTransaction,
   UTXO,
   MerkleProof,
   BlockHeader,
-  Block,
 } from '../types.js';
 
 describe('SPVManager', () => {
-  let mockTransaction: Transaction;
-  let mockTransactions: Transaction[];
   let mockUTXOTransaction: UTXOTransaction;
   let mockUTXOTransactions: UTXOTransaction[];
-  let mockBlock: Block;
   let mockBlockHeader: BlockHeader;
   let mockProof: MerkleProof;
   let utxoManager: UTXOManager;
 
   beforeEach(() => {
-    // Create mock legacy transactions
-    mockTransaction = TransactionManager.createTransaction(
-      'from-address',
-      'to-address',
-      100,
-      'private-key'
-    );
-    mockTransactions = [
-      mockTransaction,
-      TransactionManager.createTransaction(
-        'from-address-2',
-        'to-address-2',
-        200,
-        'private-key-2'
-      ),
-    ];
-
     // Create mock UTXO manager and transactions
     utxoManager = new UTXOManager();
     const utxoTransactionManager = new UTXOTransactionManager();
@@ -85,26 +61,26 @@ describe('SPVManager', () => {
 
     mockUTXOTransactions = [mockUTXOTransaction, mockUTXOTransaction2];
 
-    // Create mock block with proper 64-character hash
-    const properPreviousHash = 'a'.repeat(64);
-    mockBlock = BlockManager.createBlock(
-      1,
-      mockTransactions,
-      properPreviousHash
-    );
-
     // Create mock block header
-    mockBlockHeader = BlockManager.createBlockHeader(mockBlock);
+    mockBlockHeader = {
+      index: 1,
+      timestamp: Date.now(),
+      previousHash: 'a'.repeat(64),
+      merkleRoot: MerkleTree.calculateRoot(mockUTXOTransactions),
+      hash: 'b'.repeat(64),
+      nonce: 0,
+      transactionCount: mockUTXOTransactions.length,
+    };
 
     // Generate mock proof
-    mockProof = MerkleTree.generateProofLegacy(
-      mockTransactions,
-      mockTransaction.id
+    mockProof = MerkleTree.generateProof(
+      mockUTXOTransactions,
+      mockUTXOTransaction.id
     )!;
   });
 
   describe('verifyTransaction', () => {
-    it('should verify valid UTXO transaction', () => {
+    it('should verify valid transaction', () => {
       const utxoProof = MerkleTree.generateProof(
         mockUTXOTransactions,
         mockUTXOTransaction.id
@@ -198,39 +174,6 @@ describe('SPVManager', () => {
       expect(result.isValid).toBe(false);
       expect(result.transactionVerified).toBe(false);
       expect(result.errors).toContain('Transaction ID does not match proof');
-    });
-  });
-
-  describe('verifyTransactionLegacy', () => {
-    it('should verify valid legacy transaction', () => {
-      const result = SPVManager.verifyTransactionLegacy(
-        mockTransaction,
-        mockProof,
-        mockBlockHeader
-      );
-
-      expect(result.isValid).toBe(true);
-      expect(result.transactionVerified).toBe(true);
-      expect(result.proofValid).toBe(true);
-      expect(result.blockHeaderValid).toBe(true);
-      expect(result.errors).toHaveLength(0);
-    });
-
-    it('should reject legacy transaction with invalid proof', () => {
-      const invalidBlockHeader: BlockHeader = {
-        ...mockBlockHeader,
-        merkleRoot: 'invalid-merkle-root'.padEnd(64, '0'),
-      };
-
-      const result = SPVManager.verifyTransactionLegacy(
-        mockTransaction,
-        mockProof,
-        invalidBlockHeader
-      );
-
-      expect(result.isValid).toBe(false);
-      expect(result.proofValid).toBe(false);
-      expect(result.errors).toContain('Merkle proof verification failed');
     });
   });
 
@@ -433,17 +376,12 @@ describe('SPVManager', () => {
   });
 
   describe('validateUTXOOwnership', () => {
-    it.skip('should validate UTXO ownership with valid proof', () => {
-      // TODO: This test requires more complex setup to properly match transaction hashes
-      // The validateUTXOOwnership method constructs a simplified transaction that won't
-      // match the hash of the original transaction used to generate the proof
-      // This is a placeholder implementation and needs improvement for production use
-
+    it('should validate UTXO ownership with valid proof', () => {
       const mockUTXO: UTXO = {
-        txId: mockTransaction.id,
+        txId: mockUTXOTransaction.id,
         outputIndex: 0,
-        value: mockTransaction.amount,
-        lockingScript: mockTransaction.to,
+        value: 100,
+        lockingScript: 'to-address',
         blockHeight: 1,
         isSpent: false,
       };
@@ -452,7 +390,7 @@ describe('SPVManager', () => {
         mockUTXO,
         mockProof,
         mockBlockHeader,
-        mockTransaction.to
+        'to-address'
       );
 
       expect(isOwner).toBe(true);
@@ -460,10 +398,10 @@ describe('SPVManager', () => {
 
     it('should reject UTXO ownership with wrong public key', () => {
       const mockUTXO: UTXO = {
-        txId: mockTransaction.id,
+        txId: mockUTXOTransaction.id,
         outputIndex: 0,
-        value: mockTransaction.amount,
-        lockingScript: mockTransaction.to,
+        value: 100,
+        lockingScript: 'to-address',
         blockHeight: 1,
         isSpent: false,
       };
@@ -480,10 +418,10 @@ describe('SPVManager', () => {
 
     it('should reject UTXO ownership with invalid proof', () => {
       const mockUTXO: UTXO = {
-        txId: mockTransaction.id,
+        txId: mockUTXOTransaction.id,
         outputIndex: 0,
-        value: mockTransaction.amount,
-        lockingScript: mockTransaction.to,
+        value: 100,
+        lockingScript: 'to-address',
         blockHeight: 1,
         isSpent: false,
       };
@@ -497,7 +435,7 @@ describe('SPVManager', () => {
         mockUTXO,
         mockProof,
         invalidBlockHeader,
-        mockTransaction.to
+        'to-address'
       );
 
       expect(isOwner).toBe(false);

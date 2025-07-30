@@ -1,6 +1,5 @@
 import { createHash } from 'crypto';
 import type {
-  Transaction,
   UTXOTransaction,
   MerkleNode,
   MerkleProof,
@@ -10,7 +9,7 @@ import type {
 
 export class MerkleTree {
   /**
-   * Build merkle tree for UTXO transactions (future state)
+   * Build merkle tree for UTXO transactions
    * This method constructs a complete tree structure for proof generation
    */
   static buildTree(transactions: UTXOTransaction[]): MerkleNode[] {
@@ -35,33 +34,7 @@ export class MerkleTree {
   }
 
   /**
-   * Build merkle tree for legacy transactions (current state)
-   * Maintains backward compatibility during transition
-   */
-  static buildTreeLegacy(transactions: Transaction[]): MerkleNode[] {
-    if (transactions.length === 0) {
-      const emptyHash = createHash('sha256').update('').digest('hex');
-      return [
-        {
-          hash: emptyHash,
-          isLeaf: true,
-        },
-      ];
-    }
-
-    // Create leaf nodes from transactions
-    const leafNodes: MerkleNode[] = transactions.map(tx => ({
-      hash: createHash('sha256').update(JSON.stringify(tx)).digest('hex'),
-      isLeaf: true,
-      transactionId: tx.id,
-    }));
-
-    return this.buildTreeFromLeaves(leafNodes);
-  }
-
-  /**
    * Calculate merkle root for UTXO transactions
-   * This method is compatible with existing BlockManager.calculateMerkleRoot
    */
   static calculateRoot(transactions: UTXOTransaction[]): string {
     if (transactions.length === 0) {
@@ -90,7 +63,7 @@ export class MerkleTree {
   }
 
   /**
-   * Generate merkle proof for a specific UTXO transaction
+   * Generate merkle proof for a specific transaction
    */
   static generateProof(
     transactions: UTXOTransaction[],
@@ -109,44 +82,6 @@ export class MerkleTree {
 
     // Build complete tree to generate proof
     const tree = this.buildTree(transactions);
-    const proof = this.generateProofFromTree(tree, targetHash, targetIndex);
-
-    return {
-      transactionId: targetTxId,
-      transactionHash: targetHash,
-      merkleRoot,
-      proof,
-      leafIndex: targetIndex,
-    };
-  }
-
-  /**
-   * Generate merkle proof for legacy transactions
-   * Maintains backward compatibility during transition
-   */
-  static generateProofLegacy(
-    transactions: Transaction[],
-    targetTxId: string
-  ): MerkleProof | null {
-    const targetIndex = transactions.findIndex(tx => tx.id === targetTxId);
-    if (targetIndex === -1) {
-      return null;
-    }
-
-    const targetTransaction = transactions[targetIndex];
-    const targetHash = createHash('sha256')
-      .update(JSON.stringify(targetTransaction))
-      .digest('hex');
-
-    // Use existing calculateMerkleRoot for consistency
-    const hashes = transactions.map(tx =>
-      createHash('sha256').update(JSON.stringify(tx)).digest('hex')
-    );
-
-    const merkleRoot = this.calculateMerkleRootFromHashes(hashes);
-
-    // Build complete tree to generate proof
-    const tree = this.buildTreeLegacy(transactions);
     const proof = this.generateProofFromTree(tree, targetHash, targetIndex);
 
     return {
@@ -342,33 +277,6 @@ export class MerkleTree {
     }
 
     return proof;
-  }
-
-  /**
-   * Calculate merkle root from hash array (compatible with existing implementation)
-   */
-  private static calculateMerkleRootFromHashes(hashes: string[]): string {
-    if (hashes.length === 0) {
-      return createHash('sha256').update('').digest('hex');
-    }
-
-    const workingHashes = [...hashes];
-
-    while (workingHashes.length > 1) {
-      const newHashes: string[] = [];
-      for (let i = 0; i < workingHashes.length; i += 2) {
-        const left = workingHashes[i];
-        const right = workingHashes[i + 1] || left;
-        const combined = createHash('sha256')
-          .update(left + right)
-          .digest('hex');
-        newHashes.push(combined);
-      }
-      workingHashes.length = 0;
-      workingHashes.push(...newHashes);
-    }
-
-    return workingHashes[0];
   }
 
   /**

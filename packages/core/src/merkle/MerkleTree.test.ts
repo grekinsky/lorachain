@@ -1,35 +1,15 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { MerkleTree } from './MerkleTree.js';
-import { TransactionManager } from '../transaction.js';
 import { UTXOTransactionManager } from '../utxo-transaction.js';
 import { UTXOManager } from '../utxo.js';
-import type { Transaction, UTXOTransaction, UTXO } from '../types.js';
+import type { UTXOTransaction, UTXO } from '../types.js';
 
 describe('MerkleTree', () => {
-  let mockTransaction: Transaction;
-  let mockTransactions: Transaction[];
   let mockUTXOTransaction: UTXOTransaction;
   let mockUTXOTransactions: UTXOTransaction[];
   let utxoManager: UTXOManager;
 
   beforeEach(() => {
-    // Create mock legacy transactions
-    mockTransaction = TransactionManager.createTransaction(
-      'from-address',
-      'to-address',
-      100,
-      'private-key'
-    );
-    mockTransactions = [
-      mockTransaction,
-      TransactionManager.createTransaction(
-        'from-address-2',
-        'to-address-2',
-        200,
-        'private-key-2'
-      ),
-    ];
-
     // Create mock UTXO manager and transactions
     utxoManager = new UTXOManager();
     const utxoTransactionManager = new UTXOTransactionManager();
@@ -76,7 +56,7 @@ describe('MerkleTree', () => {
   });
 
   describe('buildTree', () => {
-    it('should build tree for empty UTXO transactions', () => {
+    it('should build tree for empty transactions', () => {
       const tree = MerkleTree.buildTree([]);
 
       expect(tree).toHaveLength(1);
@@ -84,7 +64,7 @@ describe('MerkleTree', () => {
       expect(tree[0].hash).toHaveLength(64);
     });
 
-    it('should build tree for single UTXO transaction', () => {
+    it('should build tree for single transaction', () => {
       const tree = MerkleTree.buildTree([mockUTXOTransaction]);
 
       expect(tree).toHaveLength(1);
@@ -93,7 +73,7 @@ describe('MerkleTree', () => {
       expect(tree[0].hash).toHaveLength(64);
     });
 
-    it('should build tree for multiple UTXO transactions', () => {
+    it('should build tree for multiple transactions', () => {
       const tree = MerkleTree.buildTree(mockUTXOTransactions);
 
       expect(tree.length).toBeGreaterThan(mockUTXOTransactions.length);
@@ -110,7 +90,7 @@ describe('MerkleTree', () => {
       expect(rootNodes).toHaveLength(1);
     });
 
-    it('should build tree for odd number of UTXO transactions', () => {
+    it('should build tree for odd number of transactions', () => {
       const threeTransactions = [
         ...mockUTXOTransactions,
         {
@@ -126,35 +106,18 @@ describe('MerkleTree', () => {
     });
   });
 
-  describe('buildTreeLegacy', () => {
-    it('should build tree for empty legacy transactions', () => {
-      const tree = MerkleTree.buildTreeLegacy([]);
-
-      expect(tree).toHaveLength(1);
-      expect(tree[0].isLeaf).toBe(true);
-      expect(tree[0].hash).toHaveLength(64);
-    });
-
-    it('should build tree for legacy transactions', () => {
-      const tree = MerkleTree.buildTreeLegacy(mockTransactions);
-
-      const leafNodes = tree.filter(node => node.isLeaf);
-      expect(leafNodes).toHaveLength(mockTransactions.length);
-    });
-  });
-
   describe('calculateRoot', () => {
-    it('should calculate root for empty UTXO transactions', () => {
+    it('should calculate root for empty transactions', () => {
       const root = MerkleTree.calculateRoot([]);
       expect(root).toHaveLength(64);
     });
 
-    it('should calculate root for single UTXO transaction', () => {
+    it('should calculate root for single transaction', () => {
       const root = MerkleTree.calculateRoot([mockUTXOTransaction]);
       expect(root).toHaveLength(64);
     });
 
-    it('should calculate root for multiple UTXO transactions', () => {
+    it('should calculate root for multiple transactions', () => {
       const root = MerkleTree.calculateRoot(mockUTXOTransactions);
       expect(root).toHaveLength(64);
     });
@@ -173,7 +136,7 @@ describe('MerkleTree', () => {
   });
 
   describe('generateProof', () => {
-    it('should generate proof for existing UTXO transaction', () => {
+    it('should generate proof for existing transaction', () => {
       const proof = MerkleTree.generateProof(
         mockUTXOTransactions,
         mockUTXOTransaction.id
@@ -187,7 +150,7 @@ describe('MerkleTree', () => {
       expect(Array.isArray(proof!.proof)).toBe(true);
     });
 
-    it('should return null for non-existing UTXO transaction', () => {
+    it('should return null for non-existing transaction', () => {
       const proof = MerkleTree.generateProof(
         mockUTXOTransactions,
         'non-existing-id'
@@ -219,44 +182,11 @@ describe('MerkleTree', () => {
     });
   });
 
-  describe('generateProofLegacy', () => {
-    it('should generate proof for existing legacy transaction', () => {
-      const proof = MerkleTree.generateProofLegacy(
-        mockTransactions,
-        mockTransaction.id
-      );
-
-      expect(proof).not.toBeNull();
-      expect(proof!.transactionId).toBe(mockTransaction.id);
-      expect(proof!.transactionHash).toHaveLength(64);
-      expect(proof!.merkleRoot).toHaveLength(64);
-    });
-
-    it('should return null for non-existing legacy transaction', () => {
-      const proof = MerkleTree.generateProofLegacy(
-        mockTransactions,
-        'non-existing-id'
-      );
-      expect(proof).toBeNull();
-    });
-  });
-
   describe('verifyProof', () => {
-    it('should verify valid UTXO transaction proof', () => {
+    it('should verify valid transaction proof', () => {
       const proof = MerkleTree.generateProof(
         mockUTXOTransactions,
         mockUTXOTransaction.id
-      );
-
-      expect(proof).not.toBeNull();
-      const isValid = MerkleTree.verifyProof(proof!, proof!.merkleRoot);
-      expect(isValid).toBe(true);
-    });
-
-    it('should verify valid legacy transaction proof', () => {
-      const proof = MerkleTree.generateProofLegacy(
-        mockTransactions,
-        mockTransaction.id
       );
 
       expect(proof).not.toBeNull();

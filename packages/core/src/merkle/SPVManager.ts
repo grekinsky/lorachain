@@ -1,6 +1,5 @@
 import { createHash } from 'crypto';
 import type {
-  Transaction,
   UTXOTransaction,
   MerkleProof,
   BlockHeader,
@@ -13,7 +12,7 @@ import { MerkleTree } from './MerkleTree.js';
 
 export class SPVManager {
   /**
-   * Verify UTXO transaction using Simplified Payment Verification
+   * Verify transaction using Simplified Payment Verification
    * This allows light clients to verify transactions without full block data
    */
   static verifyTransaction(
@@ -50,57 +49,6 @@ export class SPVManager {
     }
 
     // Basic block header validation (will be enhanced when previous header is available)
-    blockHeaderValid = this.validateBasicBlockHeader(blockHeader);
-    if (!blockHeaderValid) {
-      errors.push('Block header validation failed');
-    }
-
-    return {
-      isValid: errors.length === 0,
-      errors,
-      transactionVerified,
-      proofValid,
-      blockHeaderValid,
-    };
-  }
-
-  /**
-   * Verify legacy transaction using SPV (backward compatibility)
-   */
-  static verifyTransactionLegacy(
-    tx: Transaction,
-    proof: MerkleProof,
-    blockHeader: BlockHeader
-  ): SPVValidationResult {
-    const errors: string[] = [];
-    let transactionVerified = false;
-    let proofValid = false;
-    let blockHeaderValid = false;
-
-    // Verify the merkle proof
-    proofValid = MerkleTree.verifyProof(proof, blockHeader.merkleRoot);
-    if (!proofValid) {
-      errors.push('Merkle proof verification failed');
-    }
-
-    // Verify transaction hash matches proof
-    const txHash = createHash('sha256')
-      .update(JSON.stringify(tx))
-      .digest('hex');
-    if (txHash !== proof.transactionHash) {
-      errors.push('Transaction hash does not match proof');
-      transactionVerified = false;
-    } else {
-      transactionVerified = true;
-    }
-
-    // Verify transaction ID matches
-    if (tx.id !== proof.transactionId) {
-      errors.push('Transaction ID does not match proof');
-      transactionVerified = false;
-    }
-
-    // Basic block header validation
     blockHeaderValid = this.validateBasicBlockHeader(blockHeader);
     if (!blockHeaderValid) {
       errors.push('Block header validation failed');
@@ -240,24 +188,14 @@ export class SPVManager {
     blockHeader: BlockHeader,
     publicKey: string
   ): boolean {
-    // First verify the transaction is in the block
-    const spvResult = this.verifyTransactionLegacy(
-      // Convert UTXO reference to transaction (simplified)
-      {
-        id: utxo.txId,
-        from: '',
-        to: utxo.lockingScript,
-        amount: utxo.value,
-        fee: 0,
-        timestamp: 0,
-        signature: '',
-        nonce: 0,
-      },
-      proof,
-      blockHeader
-    );
+    // Verify the merkle proof against the block header
+    const proofValid = MerkleTree.verifyProof(proof, blockHeader.merkleRoot);
+    if (!proofValid) {
+      return false;
+    }
 
-    if (!spvResult.isValid) {
+    // Verify transaction ID matches
+    if (utxo.txId !== proof.transactionId) {
       return false;
     }
 

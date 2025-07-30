@@ -156,26 +156,25 @@ export class BlockManager {
 
   /**
    * Generate merkle proof for a transaction in a block
-   * Uses legacy transaction support for current block structure
+   * Note: This requires the block to contain UTXO transactions
    */
   static generateMerkleProof(
-    block: Block,
+    transactions: UTXOTransaction[],
     transactionId: string
   ): MerkleProof | null {
-    return MerkleTree.generateProofLegacy(block.transactions, transactionId);
+    return MerkleTree.generateProof(transactions, transactionId);
   }
 
   /**
-   * Verify transaction inclusion in block using merkle proof
-   * Supports both legacy and UTXO transactions
+   * Verify transaction inclusion using merkle proof
    */
   static verifyTransactionInBlock(
-    transaction: Transaction | UTXOTransaction,
+    transaction: UTXOTransaction,
     proof: MerkleProof,
-    block: Block
+    merkleRoot: string
   ): boolean {
-    // Verify proof against block's merkle root
-    const proofValid = MerkleTree.verifyProof(proof, block.merkleRoot);
+    // Verify proof against merkle root
+    const proofValid = MerkleTree.verifyProof(proof, merkleRoot);
     if (!proofValid) {
       return false;
     }
@@ -214,32 +213,28 @@ export class BlockManager {
   }
 
   /**
-   * Create block with UTXO transactions (future state)
-   * This method supports the transition to UTXO-only blocks
+   * Create UTXO block structure (for future UTXO-only blocks)
+   * Note: This creates a structure optimized for UTXO transactions
    */
-  static createBlockWithUTXO(
+  static createUTXOBlock(
     index: number,
     transactions: UTXOTransaction[],
     previousHash: string,
     validator?: string
-  ): Block {
-    // For now, we need to convert UTXOTransactions to legacy format
-    // to maintain compatibility with existing Block interface
-    const legacyTransactions: Transaction[] = transactions.map(utxoTx => ({
-      id: utxoTx.id,
-      from: utxoTx.inputs[0]?.previousTxId || 'genesis',
-      to: utxoTx.outputs[0]?.lockingScript || '',
-      amount: utxoTx.outputs.reduce((sum, output) => sum + output.value, 0),
-      fee: utxoTx.fee,
-      timestamp: utxoTx.timestamp,
-      signature: utxoTx.inputs[0]?.unlockingScript || '',
-      nonce: 0,
-    }));
-
-    const block: Block = {
+  ): {
+    index: number;
+    timestamp: number;
+    transactions: UTXOTransaction[];
+    previousHash: string;
+    hash: string;
+    nonce: number;
+    merkleRoot: string;
+    validator?: string;
+  } {
+    const utxoBlock = {
       index,
       timestamp: Date.now(),
-      transactions: legacyTransactions,
+      transactions,
       previousHash,
       hash: '',
       nonce: 0,
@@ -247,19 +242,19 @@ export class BlockManager {
       validator,
     };
 
-    block.hash = this.calculateHash(block);
-    return block;
-  }
+    // Calculate hash for UTXO block structure
+    const blockString = JSON.stringify({
+      index: utxoBlock.index,
+      timestamp: utxoBlock.timestamp,
+      transactions: utxoBlock.transactions,
+      previousHash: utxoBlock.previousHash,
+      nonce: utxoBlock.nonce,
+      merkleRoot: utxoBlock.merkleRoot,
+      validator: utxoBlock.validator,
+    });
 
-  /**
-   * Generate merkle proof for UTXO transaction (future state)
-   * This method will be used when blocks fully support UTXO transactions
-   */
-  static generateMerkleProofUTXO(
-    transactions: UTXOTransaction[],
-    transactionId: string
-  ): MerkleProof | null {
-    return MerkleTree.generateProof(transactions, transactionId);
+    utxoBlock.hash = createHash('sha256').update(blockString).digest('hex');
+    return utxoBlock;
   }
 
   /**
@@ -288,13 +283,5 @@ export class BlockManager {
    */
   static getTransactionIds(block: Block): string[] {
     return block.transactions.map(tx => tx.id);
-  }
-
-  /**
-   * Calculate merkle root for UTXO transactions
-   * This provides consistency with the MerkleTree class
-   */
-  static calculateMerkleRootUTXO(transactions: UTXOTransaction[]): string {
-    return MerkleTree.calculateRoot(transactions);
   }
 }
