@@ -26,3 +26,15 @@ export { UTXOTransactionManager } from './utxo-transaction.js';
 // Merkle Tree and SPV exports
 export * from './merkle/index.js';
 export { MerkleTree, SPVManager } from './merkle/index.js';
+
+// Persistence exports
+export * from './database.js';
+export * from './persistence.js';
+export { 
+  LevelDatabase, 
+  MemoryDatabase, 
+  DatabaseFactory,
+  SubLevels,
+  KeyPrefixes
+} from './database.js';
+export { UTXOPersistenceManager } from './persistence.js';
