@@ -201,3 +201,97 @@ export interface SPVValidationResult extends ValidationResult {
   proofValid: boolean;
   blockHeaderValid: boolean;
 }
+
+// Database Persistence Types
+export interface BatchOperation {
+  type: 'put' | 'del';
+  key: string;
+  value?: unknown;
+  sublevel?: string;
+}
+
+export interface KeyValue {
+  key: string;
+  value: unknown;
+}
+
+export interface Snapshot {
+  id: string;
+  timestamp: number;
+}
+
+export interface IteratorOptions {
+  start?: string;
+  end?: string;
+  limit?: number;
+  reverse?: boolean;
+  sublevel?: string;
+  snapshot?: Snapshot;
+}
+
+export interface IDatabase {
+  get<T>(key: string, sublevel?: string): Promise<T | null>;
+  put<T>(key: string, value: T, sublevel?: string): Promise<void>;
+  del(key: string, sublevel?: string): Promise<void>;
+  batch(operations: BatchOperation[]): Promise<void>;
+  iterator(options: IteratorOptions): AsyncIterable<KeyValue>;
+  multiGet(
+    keys: Array<{ key: string; sublevel?: string }>
+  ): Promise<Array<unknown | null>>;
+  createSnapshot(): Promise<Snapshot>;
+  releaseSnapshot(snapshot: Snapshot): Promise<void>;
+  compact(sublevel?: string): Promise<void>;
+  close(): Promise<void>;
+}
+
+// Persistence Configuration
+export interface UTXOPersistenceConfig {
+  enabled: boolean;
+  dbPath: string;
+  dbType: 'leveldb' | 'memory';
+  autoSave: boolean;
+  batchSize: number;
+  compressionType: 'gzip' | 'none';
+  maxDatabaseSize?: number;
+  pruningEnabled?: boolean;
+  backupEnabled?: boolean;
+  utxoSetCacheSize: number;
+  cryptographicAlgorithm: 'secp256k1' | 'ed25519';
+  compactionStyle: 'size' | 'universal';
+}
+
+// Persistence State Types
+export interface UTXOBlockchainState {
+  blocks: Block[];
+  utxoSet: Map<string, UTXO>;
+  pendingUTXOTransactions: UTXOTransaction[];
+  difficulty: number;
+  miningReward: number;
+  latestBlockIndex: number;
+  utxoRootHash: string;
+  cryptographicKeys: Map<string, unknown>;
+}
+
+// Validation and Repair Results
+export interface RepairResult {
+  repaired: boolean;
+  errors: string[];
+  utxoSetRebuilt: boolean;
+  corruptedBlocks: number[];
+}
+
+// Database Statistics
+export interface UTXODatabaseStats {
+  totalUTXOs: number;
+  totalValue: number;
+  totalBlocks: number;
+  totalTransactions: number;
+  databaseSizeBytes: number;
+  lastCompactionTime: number;
+}
+
+export interface ColumnFamilyStats {
+  totalKeys: number;
+  sizeBytes: number;
+  compressionRatio: number;
+}
