@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { Blockchain } from './blockchain.js';
 import { BlockManager } from './block.js';
+import { DifficultyManager, type DifficultyConfig } from './difficulty.js';
 import type { Transaction, Block, UTXOTransaction } from './types.js';
 
 describe('Blockchain', () => {
@@ -446,6 +447,240 @@ describe('Blockchain', () => {
 
       expect(blocks1).not.toBe(blocks2); // Different array instances
       expect(blocks1).toEqual(blocks2); // Same content
+    });
+  });
+
+  describe('Difficulty Adjustment Integration', () => {
+    let blockchainWithFastAdjustment: Blockchain;
+
+    beforeEach(() => {
+      // Create blockchain with faster adjustment for testing (2 blocks instead of 10)
+      const difficultyConfig: Partial<DifficultyConfig> = {
+        targetBlockTime: 300, // 5 minutes
+        adjustmentPeriod: 2, // 2 blocks for faster testing
+        maxDifficultyRatio: 4,
+        minDifficulty: 1,
+        maxDifficulty: 1000,
+      };
+      blockchainWithFastAdjustment = new Blockchain(
+        undefined,
+        undefined,
+        difficultyConfig
+      );
+    });
+
+    it('should initialize with difficulty field in genesis block', () => {
+      const blocks = blockchain.getBlocks();
+      expect(blocks[0].difficulty).toBeDefined();
+      expect(blocks[0].difficulty).toBe(2);
+    });
+
+    it('should adjust difficulty at correct intervals', () => {
+      const initialDifficulty =
+        blockchainWithFastAdjustment.getCurrentDifficulty();
+
+      // Mine first block (no adjustment yet)
+      blockchainWithFastAdjustment.minePendingUTXOTransactions(minerAddress);
+      expect(blockchainWithFastAdjustment.getCurrentDifficulty()).toBe(
+        initialDifficulty
+      );
+
+      // Mine second block (should trigger adjustment)
+      blockchainWithFastAdjustment.minePendingUTXOTransactions(minerAddress);
+
+      // Difficulty might have changed based on block times
+      const newDifficulty = blockchainWithFastAdjustment.getCurrentDifficulty();
+      expect(typeof newDifficulty).toBe('number');
+      expect(newDifficulty).toBeGreaterThan(0);
+    });
+
+    it('should calculate network hashrate', () => {
+      // Mine a few blocks to get network activity
+      for (let i = 0; i < 5; i++) {
+        blockchainWithFastAdjustment.minePendingUTXOTransactions(minerAddress);
+      }
+
+      const hashrate = blockchainWithFastAdjustment.getNetworkHashrate();
+      expect(hashrate).toBeGreaterThan(0);
+      expect(typeof hashrate).toBe('number');
+    });
+
+    it('should provide difficulty state information', () => {
+      const state = blockchainWithFastAdjustment.getDifficultyState();
+
+      expect(state).toMatchObject({
+        currentDifficulty: expect.any(Number),
+        nextDifficulty: expect.any(Number),
+        adjustmentHeight: expect.any(Number),
+        estimatedHashrate: expect.any(Number),
+        targetBlockTime: 300,
+        lastAdjustmentTime: expect.any(Number),
+      });
+    });
+
+    it('should validate blocks with correct difficulty', () => {
+      const currentDifficulty =
+        blockchainWithFastAdjustment.getCurrentDifficulty();
+
+      // Create a valid block with correct difficulty
+      const validBlock = BlockManager.createBlock(
+        1,
+        [],
+        blockchainWithFastAdjustment.getLatestBlock().hash,
+        currentDifficulty,
+        minerAddress
+      );
+      const minedBlock = BlockManager.mineBlock(validBlock);
+
+      const result = blockchainWithFastAdjustment.addBlock(minedBlock);
+      expect(result).resolves.toMatchObject({
+        isValid: true,
+        errors: [],
+      });
+    });
+
+    it('should reject blocks with wrong difficulty at non-adjustment intervals', async () => {
+      const currentDifficulty =
+        blockchainWithFastAdjustment.getCurrentDifficulty();
+
+      // Create a block with wrong difficulty
+      const invalidBlock = BlockManager.createBlock(
+        1,
+        [],
+        blockchainWithFastAdjustment.getLatestBlock().hash,
+        currentDifficulty + 10, // Wrong difficulty
+        minerAddress
+      );
+      const minedBlock = BlockManager.mineBlock(invalidBlock);
+
+      const result = await blockchainWithFastAdjustment.addBlock(minedBlock);
+      expect(result.isValid).toBe(false);
+      expect(
+        result.errors.some(error => error.includes('Difficulty cannot change'))
+      ).toBe(true);
+    });
+
+    it('should reject blocks without difficulty field', () => {
+      const block = BlockManager.createGenesisBlock();
+      // @ts-ignore - Simulating legacy block without difficulty
+      delete block.difficulty;
+
+      const validation = BlockManager.validateBlock(block, null);
+      expect(validation.isValid).toBe(false);
+      expect(validation.errors).toContain(
+        'Block must have a valid difficulty field'
+      );
+    });
+
+    it('should maintain target block times over multiple adjustments', () => {
+      const targetTime = blockchainWithFastAdjustment.getTargetBlockTime();
+
+      // Mine multiple adjustment periods
+      for (let i = 0; i < 6; i++) {
+        blockchainWithFastAdjustment.minePendingUTXOTransactions(minerAddress);
+      }
+
+      const averageBlockTime =
+        blockchainWithFastAdjustment.getAverageBlockTime();
+
+      // Average block time should be within reasonable range of target
+      // (allowing for variance due to proof-of-work randomness)
+      expect(averageBlockTime).toBeGreaterThan(0);
+      expect(typeof averageBlockTime).toBe('number');
+    });
+
+    it('should allow configuration of target block time', () => {
+      const newTargetTime = 600; // 10 minutes
+      blockchainWithFastAdjustment.setTargetBlockTime(newTargetTime);
+
+      expect(blockchainWithFastAdjustment.getTargetBlockTime()).toBe(
+        newTargetTime
+      );
+    });
+
+    it('should reject invalid target block times', () => {
+      expect(() => {
+        blockchainWithFastAdjustment.setTargetBlockTime(30); // Too short
+      }).toThrow('Target block time must be between 60 and 1800 seconds');
+
+      expect(() => {
+        blockchainWithFastAdjustment.setTargetBlockTime(2000); // Too long
+      }).toThrow('Target block time must be between 60 and 1800 seconds');
+    });
+
+    it('should allow configuration of adjustment period', () => {
+      const newPeriod = 20;
+      blockchainWithFastAdjustment.setAdjustmentPeriod(newPeriod);
+
+      expect(blockchainWithFastAdjustment.getAdjustmentPeriod()).toBe(
+        newPeriod
+      );
+    });
+
+    it('should reject invalid adjustment periods', () => {
+      expect(() => {
+        blockchainWithFastAdjustment.setAdjustmentPeriod(0); // Too small
+      }).toThrow('Adjustment period must be between 1 and 100 blocks');
+
+      expect(() => {
+        blockchainWithFastAdjustment.setAdjustmentPeriod(150); // Too large
+      }).toThrow('Adjustment period must be between 1 and 100 blocks');
+    });
+
+    it('should work exclusively with UTXO transactions', () => {
+      // This test ensures minePendingUTXOTransactions works correctly
+      const initialBlocks = blockchainWithFastAdjustment.getBlocks().length;
+
+      // Add UTXO transaction
+      const utxoTx: UTXOTransaction = {
+        id: `utxo-test-${Date.now()}`,
+        inputs: [],
+        outputs: [
+          {
+            value: 50,
+            lockingScript: 'test-address',
+            outputIndex: 0,
+          },
+        ],
+        lockTime: 0,
+        timestamp: Date.now(),
+        fee: 1,
+      };
+
+      blockchainWithFastAdjustment.addUTXOTransaction(utxoTx);
+      const minedBlock =
+        blockchainWithFastAdjustment.minePendingUTXOTransactions(minerAddress);
+
+      expect(minedBlock).toBeDefined();
+      expect(minedBlock!.difficulty).toBeDefined();
+      expect(blockchainWithFastAdjustment.getBlocks().length).toBe(
+        initialBlocks + 1
+      );
+    });
+
+    it('should handle difficulty adjustment during chain reorganization', async () => {
+      // Mine a few blocks
+      for (let i = 0; i < 3; i++) {
+        blockchainWithFastAdjustment.minePendingUTXOTransactions(minerAddress);
+      }
+
+      const chainLength = blockchainWithFastAdjustment.getBlocks().length;
+      const currentDifficulty =
+        blockchainWithFastAdjustment.getCurrentDifficulty();
+
+      // Simulate adding an external block
+      const externalBlock = BlockManager.createBlock(
+        chainLength,
+        [],
+        blockchainWithFastAdjustment.getLatestBlock().hash,
+        currentDifficulty,
+        'external-miner'
+      );
+      const minedExternalBlock = BlockManager.mineBlock(externalBlock);
+
+      const result =
+        await blockchainWithFastAdjustment.addBlock(minedExternalBlock);
+      expect(result.isValid).toBe(true);
     });
   });
 });

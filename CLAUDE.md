@@ -162,12 +162,14 @@ The merkle tree implementation is **UTXO-only** and follows the project's "NO BA
 The persistence layer is **UTXO-only** and follows the project's "NO BACKWARDS COMPATIBILITY" policy:
 
 #### Database Implementation
+
 - **`LevelDatabase`**: Production LevelDB wrapper with async initialization and sublevel organization
 - **`MemoryDatabase`**: In-memory implementation for testing and development
 - **`DatabaseFactory`**: Factory pattern for creating database instances based on configuration
 - **Sublevel Organization**: Data separated into blocks, utxo_set, utxo_transactions, pending_utxo_tx, metadata, config, nodes, crypto_keys
 
 #### Persistence Manager Operations
+
 - **`UTXOPersistenceManager.saveBlock()`**: Save blocks with automatic latest block index updates
 - **`UTXOPersistenceManager.saveUTXO()`**: Store UTXO with address-based indexing
 - **`UTXOPersistenceManager.getUTXOsForAddress()`**: Retrieve all UTXOs for an address (sorted by value)
@@ -179,6 +181,7 @@ The persistence layer is **UTXO-only** and follows the project's "NO BACKWARDS C
 - **`UTXOPersistenceManager.rebuildUTXOSet()`**: Rebuild UTXO set from blocks
 
 #### Database Features
+
 - **Batch Operations**: Atomic multi-operation transactions grouped by sublevel
 - **Compression**: Optional gzip compression for efficient storage
 - **Error Handling**: Graceful degradation for corrupted data and network failures
@@ -187,6 +190,7 @@ The persistence layer is **UTXO-only** and follows the project's "NO BACKWARDS C
 - **Performance Optimization**: UTXO selection algorithms and efficient address-based queries
 
 **Key Constraints:**
+
 - All persistence operations are UTXO-exclusive (no legacy Transaction type support)
 - Database supports both LevelDB (production) and Memory (testing) backends
 - Sublevel organization ensures clean data separation and efficient queries

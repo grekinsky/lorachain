@@ -38,3 +38,11 @@ export {
   KeyPrefixes,
 } from './database.js';
 export { UTXOPersistenceManager } from './persistence.js';
+
+// Difficulty Management exports
+export * from './difficulty.js';
+export {
+  DifficultyManager,
+  type DifficultyConfig,
+  type DifficultyState,
+} from './difficulty.js';

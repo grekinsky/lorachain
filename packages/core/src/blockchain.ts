@@ -13,6 +13,11 @@ import { UTXOManager } from './utxo.js';
 import { UTXOTransactionManager } from './utxo-transaction.js';
 import { UTXOPersistenceManager } from './persistence.js';
 import { CryptographicService, type KeyPair } from './cryptographic.js';
+import {
+  DifficultyManager,
+  type DifficultyConfig,
+  type DifficultyState,
+} from './difficulty.js';
 
 // Simple logger for development
 class SimpleLogger {
@@ -39,11 +44,37 @@ export class Blockchain {
   private persistence?: UTXOPersistenceManager;
   private autoSave: boolean = true;
   private logger = new SimpleLogger('Blockchain');
+  private difficultyManager: DifficultyManager;
+  private targetBlockTime: number = 300; // 5 minutes
+  private adjustmentPeriod: number = 10; // 10 blocks
+  private maxDifficultyRatio: number = 4; // 4x max change
 
-  constructor(persistence?: UTXOPersistenceManager, utxoManager?: UTXOManager) {
+  constructor(
+    persistence?: UTXOPersistenceManager,
+    utxoManager?: UTXOManager,
+    difficultyConfig?: Partial<DifficultyConfig>
+  ) {
     this.persistence = persistence;
     this.utxoManager = utxoManager || new UTXOManager();
     this.utxoTransactionManager = new UTXOTransactionManager();
+
+    // Initialize difficulty manager with config
+    const config: DifficultyConfig = {
+      targetBlockTime:
+        difficultyConfig?.targetBlockTime || this.targetBlockTime,
+      adjustmentPeriod:
+        difficultyConfig?.adjustmentPeriod || this.adjustmentPeriod,
+      maxDifficultyRatio:
+        difficultyConfig?.maxDifficultyRatio || this.maxDifficultyRatio,
+      minDifficulty: difficultyConfig?.minDifficulty || 1,
+      maxDifficulty: difficultyConfig?.maxDifficulty || Math.pow(2, 32),
+    };
+    this.difficultyManager = new DifficultyManager(config);
+
+    // Update local properties from config
+    this.targetBlockTime = config.targetBlockTime;
+    this.adjustmentPeriod = config.adjustmentPeriod;
+    this.maxDifficultyRatio = config.maxDifficultyRatio;
 
     // Only initialize genesis if no persistence or if we can't load state
     this.initializeBlockchain();
@@ -78,7 +109,7 @@ export class Blockchain {
     }
 
     // Initialize new blockchain with genesis block
-    const genesisBlock = BlockManager.createGenesisBlock();
+    const genesisBlock = BlockManager.createGenesisBlock(this.difficulty);
     this.blocks.push(genesisBlock);
     this.initializeUTXOFromGenesis(genesisBlock);
 
@@ -150,6 +181,20 @@ export class Blockchain {
   }
 
   minePendingTransactions(minerAddress: string): Block | null {
+    return this.minePendingUTXOTransactions(minerAddress);
+  }
+
+  minePendingUTXOTransactions(minerAddress: string): Block | null {
+    // Check if difficulty should be adjusted
+    const nextBlockIndex = this.getLatestBlock().index + 1;
+    if (this.shouldAdjustDifficulty()) {
+      const newDifficulty = this.calculateNextDifficulty();
+      this.logger.debug(
+        `Adjusting difficulty from ${this.difficulty} to ${newDifficulty} at block ${nextBlockIndex}`
+      );
+      this.difficulty = newDifficulty;
+    }
+
     // Always create a mining reward transaction, even if no pending transactions
 
     // Create mining reward as UTXO transaction
@@ -203,17 +248,18 @@ export class Blockchain {
     }));
 
     const newBlock = BlockManager.createBlock(
-      this.getLatestBlock().index + 1,
+      nextBlockIndex,
       legacyTransactions,
       this.getLatestBlock().hash,
+      this.difficulty,
       minerAddress
     );
 
-    const minedBlock = BlockManager.mineBlock(newBlock, this.difficulty);
+    const minedBlock = BlockManager.mineBlock(newBlock);
     this.blocks.push(minedBlock);
 
     this.logger.debug(
-      `Mining block ${minedBlock.index} with ${minedBlock.transactions.length} transactions`
+      `Mining block ${minedBlock.index} with ${minedBlock.transactions.length} transactions at difficulty ${minedBlock.difficulty}`
     );
 
     // Process UTXO updates with the original UTXO transactions
@@ -227,17 +273,40 @@ export class Blockchain {
 
   async addBlock(block: Block): Promise<ValidationResult> {
     const previousBlock = this.getLatestBlock();
-    const validation = BlockManager.validateBlock(
-      block,
-      previousBlock,
-      this.difficulty
-    );
+    const validation = BlockManager.validateBlock(block, previousBlock);
+
+    // Additional validation for difficulty
+    if (validation.isValid && block.difficulty !== this.difficulty) {
+      // Allow difficulty changes only at adjustment intervals
+      if (this.difficultyManager.shouldAdjustDifficulty(block.index)) {
+        const expectedDifficulty = this.calculateNextDifficulty();
+        if (block.difficulty !== expectedDifficulty) {
+          validation.errors.push(
+            `Invalid difficulty adjustment: expected ${expectedDifficulty}, got ${block.difficulty}`
+          );
+          validation.isValid = false;
+        }
+      } else {
+        validation.errors.push(
+          `Difficulty cannot change at block ${block.index}: expected ${this.difficulty}, got ${block.difficulty}`
+        );
+        validation.isValid = false;
+      }
+    }
 
     if (!validation.isValid) {
       return validation;
     }
 
     this.blocks.push(block);
+
+    // Update difficulty if this was an adjustment block
+    if (this.difficultyManager.shouldAdjustDifficulty(block.index)) {
+      this.difficulty = block.difficulty;
+      this.logger.debug(
+        `Difficulty adjusted to ${this.difficulty} at block ${block.index}`
+      );
+    }
 
     // Process UTXO transactions
     block.transactions.forEach(tx => {
@@ -343,8 +412,7 @@ export class Blockchain {
 
       const blockValidation = BlockManager.validateBlock(
         currentBlock,
-        previousBlock,
-        this.difficulty
+        previousBlock
       );
 
       if (!blockValidation.isValid) {
@@ -606,5 +674,132 @@ export class Blockchain {
       await this.persistence.close();
       this.logger.debug('Blockchain persistence closed');
     }
+  }
+
+  // Difficulty adjustment methods
+
+  /**
+   * Calculate the next difficulty based on recent block times
+   */
+  calculateNextDifficulty(): number {
+    return this.difficultyManager.calculateNextDifficulty(
+      this.difficulty,
+      this.blocks
+    );
+  }
+
+  /**
+   * Get estimated network hashrate
+   */
+  getNetworkHashrate(sampleSize?: number): number {
+    return DifficultyManager.calculateNetworkHashrate(this.blocks, sampleSize);
+  }
+
+  /**
+   * Check if difficulty should be adjusted
+   */
+  shouldAdjustDifficulty(): boolean {
+    const nextBlockHeight = this.getLatestBlock().index + 1;
+    return this.difficultyManager.shouldAdjustDifficulty(nextBlockHeight);
+  }
+
+  /**
+   * Get current difficulty state
+   */
+  getDifficultyState(): DifficultyState {
+    return this.difficultyManager.getDifficultyState(
+      this.blocks,
+      this.difficulty
+    );
+  }
+
+  /**
+   * Get current difficulty
+   */
+  getCurrentDifficulty(): number {
+    return this.difficulty;
+  }
+
+  /**
+   * Get next difficulty (what it would be if adjusted now)
+   */
+  getNextDifficulty(): number {
+    if (this.shouldAdjustDifficulty()) {
+      return this.calculateNextDifficulty();
+    }
+    return this.difficulty;
+  }
+
+  /**
+   * Set target block time
+   */
+  setTargetBlockTime(seconds: number): void {
+    if (seconds < 60 || seconds > 1800) {
+      throw new Error('Target block time must be between 60 and 1800 seconds');
+    }
+    this.targetBlockTime = seconds;
+    // Recreate difficulty manager with new config
+    this.difficultyManager = new DifficultyManager({
+      targetBlockTime: seconds,
+      adjustmentPeriod: this.adjustmentPeriod,
+      maxDifficultyRatio: this.maxDifficultyRatio,
+      minDifficulty: 1,
+      maxDifficulty: Math.pow(2, 32),
+    });
+  }
+
+  /**
+   * Get target block time
+   */
+  getTargetBlockTime(): number {
+    return this.targetBlockTime;
+  }
+
+  /**
+   * Set adjustment period
+   */
+  setAdjustmentPeriod(blocks: number): void {
+    if (blocks < 1 || blocks > 100) {
+      throw new Error('Adjustment period must be between 1 and 100 blocks');
+    }
+    this.adjustmentPeriod = blocks;
+    // Recreate difficulty manager with new config
+    this.difficultyManager = new DifficultyManager({
+      targetBlockTime: this.targetBlockTime,
+      adjustmentPeriod: blocks,
+      maxDifficultyRatio: this.maxDifficultyRatio,
+      minDifficulty: 1,
+      maxDifficulty: Math.pow(2, 32),
+    });
+  }
+
+  /**
+   * Get adjustment period
+   */
+  getAdjustmentPeriod(): number {
+    return this.adjustmentPeriod;
+  }
+
+  /**
+   * Get average block time for recent blocks
+   */
+  getAverageBlockTime(sampleSize: number = 10): number {
+    if (this.blocks.length < 2) {
+      return 0;
+    }
+
+    const sampleBlocks = this.blocks.slice(
+      -Math.min(sampleSize, this.blocks.length)
+    );
+    if (sampleBlocks.length < 2) {
+      return 0;
+    }
+
+    const firstBlock = sampleBlocks[0];
+    const lastBlock = sampleBlocks[sampleBlocks.length - 1];
+    const totalTime = (lastBlock.timestamp - firstBlock.timestamp) / 1000; // seconds
+    const averageBlockTime = totalTime / (sampleBlocks.length - 1);
+
+    return averageBlockTime;
   }
 }
