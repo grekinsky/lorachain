@@ -52,3 +52,6 @@ coverage/
 
 # Screenshots
 screenshots
+
+# Test Blockchain data
+packages/core/test-blockchain-data

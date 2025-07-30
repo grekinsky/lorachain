@@ -281,10 +281,19 @@ export class UTXOPersistenceManager {
         return null;
       }
 
-      const difficulty =
-        (await this.db.get<number>('difficulty', SubLevels.CONFIG)) || 2;
-      const miningReward =
-        (await this.db.get<number>('mining_reward', SubLevels.CONFIG)) || 10;
+      // Load configuration with defaults
+      const difficultyValue = await this.db.get<number>(
+        'difficulty',
+        SubLevels.CONFIG
+      );
+      const difficulty = difficultyValue !== null ? difficultyValue : 2;
+
+      const miningRewardValue = await this.db.get<number>(
+        'mining_reward',
+        SubLevels.CONFIG
+      );
+      const miningReward = miningRewardValue !== null ? miningRewardValue : 10;
+
       const utxoRootHash =
         (await this.db.get<string>('utxo_root_hash', SubLevels.METADATA)) || '';
 
@@ -392,7 +401,12 @@ export class UTXOPersistenceManager {
         'difficulty',
         SubLevels.CONFIG
       );
-      if (difficulty === null || difficulty < 1) {
+      if (
+        difficulty !== null &&
+        (typeof difficulty !== 'number' ||
+          difficulty < 1 ||
+          !Number.isFinite(difficulty))
+      ) {
         errors.push('Invalid difficulty configuration');
       }
 

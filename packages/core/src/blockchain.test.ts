@@ -68,8 +68,8 @@ describe('Blockchain', () => {
   });
 
   describe('addTransaction', () => {
-    it('should add valid UTXO transaction', () => {
-      const result = blockchain.addTransaction(mockUTXOTransaction);
+    it('should add valid UTXO transaction', async () => {
+      const result = await blockchain.addTransaction(mockUTXOTransaction);
 
       expect(result.isValid).toBe(true);
       expect(result.errors).toHaveLength(0);
@@ -79,7 +79,7 @@ describe('Blockchain', () => {
       expect(pending[0].id).toBe(mockUTXOTransaction.id);
     });
 
-    it('should reject invalid UTXO transaction', () => {
+    it('should reject invalid UTXO transaction', async () => {
       const invalidTransaction = {
         ...mockUTXOTransaction,
         outputs: [
@@ -91,7 +91,7 @@ describe('Blockchain', () => {
         ],
         fee: 0, // Keep fee as 0 for genesis transaction
       };
-      const result = blockchain.addTransaction(invalidTransaction);
+      const result = await blockchain.addTransaction(invalidTransaction);
 
       expect(result.isValid).toBe(false);
       expect(result.errors.length).toBeGreaterThan(0);
@@ -100,9 +100,9 @@ describe('Blockchain', () => {
       expect(pending).toHaveLength(0);
     });
 
-    it('should reject duplicate UTXO transaction', () => {
-      blockchain.addTransaction(mockUTXOTransaction);
-      const result = blockchain.addTransaction(mockUTXOTransaction);
+    it('should reject duplicate UTXO transaction', async () => {
+      await blockchain.addTransaction(mockUTXOTransaction);
+      const result = await blockchain.addTransaction(mockUTXOTransaction);
 
       expect(result.isValid).toBe(false);
       expect(result.errors).toContain(
@@ -181,7 +181,7 @@ describe('Blockchain', () => {
   describe('addBlock', () => {
     let validBlock: Block;
 
-    beforeEach(() => {
+    beforeEach(async () => {
       // Create a fresh blockchain and UTXO transaction for each test
       blockchain = new Blockchain();
       mockUTXOTransaction = {
@@ -225,11 +225,11 @@ describe('Blockchain', () => {
       );
 
       // Add the UTXO transaction to pending for other tests
-      blockchain.addTransaction(mockUTXOTransaction);
+      await blockchain.addTransaction(mockUTXOTransaction);
     });
 
-    it('should add valid block', () => {
-      const result = blockchain.addBlock(validBlock);
+    it('should add valid block', async () => {
+      const result = await blockchain.addBlock(validBlock);
 
       if (!result.isValid) {
         console.log('Block validation errors:', result.errors);
@@ -243,9 +243,9 @@ describe('Blockchain', () => {
       expect(blocks[1].index).toBe(1);
     });
 
-    it('should reject invalid block', () => {
+    it('should reject invalid block', async () => {
       const invalidBlock = { ...validBlock, hash: 'invalid-hash' };
-      const result = blockchain.addBlock(invalidBlock);
+      const result = await blockchain.addBlock(invalidBlock);
 
       expect(result.isValid).toBe(false);
       expect(result.errors.length).toBeGreaterThan(0);
@@ -254,13 +254,13 @@ describe('Blockchain', () => {
       expect(blocks).toHaveLength(1); // Only genesis block
     });
 
-    it('should remove processed transactions from pending', () => {
+    it('should remove processed transactions from pending', async () => {
       // The validBlock may not contain the exact same transaction as pending
       // Let's check the behavior more carefully
       const pendingBefore = blockchain.getPendingTransactions();
       const pendingCount = pendingBefore.length;
 
-      blockchain.addBlock(validBlock);
+      await blockchain.addBlock(validBlock);
 
       const pendingAfter = blockchain.getPendingTransactions();
       // The pending transactions should be reduced or remain same depending on whether

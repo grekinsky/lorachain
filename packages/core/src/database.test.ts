@@ -181,8 +181,8 @@ describe('MemoryDatabase', () => {
       }
 
       expect(items).toHaveLength(4);
-      expect(items.map((item) => item.key)).toContain('key001');
-      expect(items.map((item) => item.key)).toContain('other');
+      expect(items.map(item => item.key)).toContain('key001');
+      expect(items.map(item => item.key)).toContain('other');
     });
 
     it('should respect start and end range', async () => {
@@ -197,7 +197,11 @@ describe('MemoryDatabase', () => {
       }
 
       expect(items).toHaveLength(3);
-      expect(items.map((item) => item.key)).toEqual(['key001', 'key002', 'key003']);
+      expect(items.map(item => item.key)).toEqual([
+        'key001',
+        'key002',
+        'key003',
+      ]);
     });
 
     it('should respect limit option', async () => {
@@ -374,6 +378,9 @@ describe('LevelDatabase', () => {
       });
 
       try {
+        // Wait a bit for database initialization to complete
+        await new Promise(resolve => setTimeout(resolve, 100));
+
         const batchSize = 1000;
         const operations: BatchOperation[] = [];
 
@@ -394,8 +401,14 @@ describe('LevelDatabase', () => {
         expect(endTime - startTime).toBeLessThan(5000); // 5 seconds
 
         // Verify some of the data was stored correctly
-        const firstItem = await perfDb.get('batch-key-000000', SubLevels.UTXO_SET);
-        const lastItem = await perfDb.get('batch-key-000999', SubLevels.UTXO_SET);
+        const firstItem = await perfDb.get(
+          'batch-key-000000',
+          SubLevels.UTXO_SET
+        );
+        const lastItem = await perfDb.get(
+          'batch-key-000999',
+          SubLevels.UTXO_SET
+        );
 
         expect(firstItem).toEqual({ index: 0, data: 'test-data-0' });
         expect(lastItem).toEqual({ index: 999, data: 'test-data-999' });
@@ -449,7 +462,14 @@ describe('LevelDatabase', () => {
     });
 
     it('should clear sublevel data', async () => {
+      // Verify the item exists before clearing
+      const itemBefore = await db.get('item3', SubLevels.BLOCKS);
+      expect(itemBefore).toEqual({ value: 3 });
+
       await db.clear(SubLevels.BLOCKS);
+
+      // Add a small delay to ensure clear operation completes
+      await new Promise(resolve => setTimeout(resolve, 10));
 
       const item = await db.get('item3', SubLevels.BLOCKS);
       expect(item).toBeNull();
@@ -624,8 +644,8 @@ describe('Database Integration with UTXO Types', () => {
     }
 
     expect(addressUtxos).toHaveLength(2);
-    expect(addressUtxos.map((u) => u.txId)).toContain('tx-1');
-    expect(addressUtxos.map((u) => u.txId)).toContain('tx-2');
-    expect(addressUtxos.map((u) => u.txId)).not.toContain('tx-3');
+    expect(addressUtxos.map(u => u.txId)).toContain('tx-1');
+    expect(addressUtxos.map(u => u.txId)).toContain('tx-2');
+    expect(addressUtxos.map(u => u.txId)).not.toContain('tx-3');
   });
 });

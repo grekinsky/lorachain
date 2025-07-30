@@ -58,6 +58,8 @@ export class LevelDatabase implements IDatabase {
   private snapshots: Map<string, Snapshot> = new Map();
   private config: UTXOPersistenceConfig;
   private logger = new SimpleLogger('LevelDatabase');
+  private isOpen = false;
+  private initPromise?: Promise<void>;
 
   constructor(config: UTXOPersistenceConfig) {
     this.config = config;
@@ -66,8 +68,25 @@ export class LevelDatabase implements IDatabase {
       keyEncoding: 'utf8',
     });
 
-    // Initialize sublevels
-    this.initializeSublevels();
+    // Initialize sublevels and open database lazily
+    this.initPromise = this.initializeDatabase();
+  }
+
+  private async initializeDatabase(): Promise<void> {
+    try {
+      await this.db.open();
+      this.isOpen = true;
+      this.initializeSublevels();
+    } catch (error) {
+      this.logger.error(`Failed to open database: ${error}`);
+      throw error;
+    }
+  }
+
+  private async ensureOpen(): Promise<void> {
+    if (this.initPromise) {
+      await this.initPromise;
+    }
   }
 
   private initializeSublevels(): void {
@@ -125,11 +144,22 @@ export class LevelDatabase implements IDatabase {
 
   async get<T>(key: string, sublevel?: string): Promise<T | null> {
     try {
+      await this.ensureOpen();
       const db = this.getSublevel(sublevel);
       const buffer = await db.get(key);
       return await this.deserialize<T>(buffer);
     } catch (error: any) {
       if (error.code === 'LEVEL_NOT_FOUND') {
+        return null;
+      }
+      // Handle deserialization errors by treating them as null (data not found/corrupted)
+      if (
+        error.message &&
+        error.message.includes('Failed to deserialize value')
+      ) {
+        this.logger.warn(
+          `Deserialization failed for key ${key}, treating as null: ${error.message}`
+        );
         return null;
       }
       this.logger.error(`Get operation failed for key ${key}: ${error}`);
@@ -139,6 +169,7 @@ export class LevelDatabase implements IDatabase {
 
   async put<T>(key: string, value: T, sublevel?: string): Promise<void> {
     try {
+      await this.ensureOpen();
       const db = this.getSublevel(sublevel);
       const serialized = await this.serialize(value);
       await db.put(key, serialized);
@@ -153,6 +184,7 @@ export class LevelDatabase implements IDatabase {
 
   async del(key: string, sublevel?: string): Promise<void> {
     try {
+      await this.ensureOpen();
       const db = this.getSublevel(sublevel);
       await db.del(key);
       this.logger.debug(
@@ -168,20 +200,38 @@ export class LevelDatabase implements IDatabase {
 
   async batch(operations: BatchOperation[]): Promise<void> {
     try {
-      const batch = this.db.batch();
+      await this.ensureOpen();
+
+      // Group operations by sublevel
+      const sublevelOps = new Map<string, BatchOperation[]>();
 
       for (const op of operations) {
-        const db = this.getSublevel(op.sublevel);
-
-        if (op.type === 'put' && op.value !== undefined) {
-          const serialized = await this.serialize(op.value);
-          batch.put(op.key, serialized);
-        } else if (op.type === 'del') {
-          batch.del(op.key);
+        const sublevelName = op.sublevel || 'default';
+        if (!sublevelOps.has(sublevelName)) {
+          sublevelOps.set(sublevelName, []);
         }
+        sublevelOps.get(sublevelName)!.push(op);
       }
 
-      await batch.write();
+      // Execute batch operations for each sublevel
+      for (const [sublevelName, ops] of sublevelOps) {
+        const db = this.getSublevel(
+          sublevelName === 'default' ? undefined : sublevelName
+        );
+        const batch = db.batch();
+
+        for (const op of ops) {
+          if (op.type === 'put' && op.value !== undefined) {
+            const serialized = await this.serialize(op.value);
+            batch.put(op.key, serialized);
+          } else if (op.type === 'del') {
+            batch.del(op.key);
+          }
+        }
+
+        await batch.write();
+      }
+
       this.logger.debug(
         `Executed batch operation with ${operations.length} operations`
       );
@@ -193,6 +243,7 @@ export class LevelDatabase implements IDatabase {
 
   async *iterator(options: IteratorOptions): AsyncIterable<KeyValue> {
     try {
+      await this.ensureOpen();
       const db = this.getSublevel(options.sublevel);
       const iterator = db.iterator({
         gte: options.start,
@@ -263,6 +314,8 @@ export class LevelDatabase implements IDatabase {
 
   async close(): Promise<void> {
     try {
+      await this.ensureOpen();
+
       // Close all sublevels
       for (const [name, sublevel] of this.sublevels) {
         await sublevel.close();
@@ -271,6 +324,8 @@ export class LevelDatabase implements IDatabase {
 
       // Close main database
       await this.db.close();
+      this.isOpen = false;
+      this.initPromise = undefined;
       this.logger.debug('Database closed successfully');
     } catch (error) {
       this.logger.error(`Database close failed: ${error}`);
@@ -281,6 +336,7 @@ export class LevelDatabase implements IDatabase {
   // Utility methods for database management
   async clear(sublevel?: string): Promise<void> {
     try {
+      await this.ensureOpen();
       const db = this.getSublevel(sublevel);
       await db.clear();
       this.logger.debug(`Cleared sublevel: ${sublevel || 'default'}`);
@@ -350,7 +406,7 @@ export class MemoryDatabase implements IDatabase {
   async get<T>(key: string, sublevel?: string): Promise<T | null> {
     const storage = this.getSublevelStorage(sublevel);
     const value = storage.get(key);
-    return value ? (value as T) : null;
+    return value !== undefined ? (value as T) : null;
   }
 
   async put<T>(key: string, value: T, sublevel?: string): Promise<void> {

@@ -81,7 +81,11 @@ function createMockUTXOTransaction(id: string): UTXOTransaction {
   };
 }
 
-function createMockUTXO(txId: string, outputIndex: number, value: number): UTXO {
+function createMockUTXO(
+  txId: string,
+  outputIndex: number,
+  value: number
+): UTXO {
   return {
     txId,
     outputIndex,
@@ -100,7 +104,11 @@ describe('UTXOPersistenceManager', () => {
   beforeEach(() => {
     db = new MemoryDatabase();
     cryptoService = new CryptographicService();
-    persistenceManager = new UTXOPersistenceManager(db, testConfig, cryptoService);
+    persistenceManager = new UTXOPersistenceManager(
+      db,
+      testConfig,
+      cryptoService
+    );
   });
 
   afterEach(async () => {
@@ -140,13 +148,15 @@ describe('UTXOPersistenceManager', () => {
       const transaction = createMockUTXOTransaction('test-tx-1');
 
       await persistenceManager.saveUTXOTransaction(transaction);
-      const retrieved = await persistenceManager.getUTXOTransaction('test-tx-1');
+      const retrieved =
+        await persistenceManager.getUTXOTransaction('test-tx-1');
 
       expect(retrieved).toEqual(transaction);
     });
 
     it('should return null for non-existent transactions', async () => {
-      const result = await persistenceManager.getUTXOTransaction('non-existent');
+      const result =
+        await persistenceManager.getUTXOTransaction('non-existent');
       expect(result).toBeNull();
     });
   });
@@ -175,8 +185,15 @@ describe('UTXOPersistenceManager', () => {
       const utxos = [
         { ...createMockUTXO('tx-1', 0, 100000), lockingScript: address },
         { ...createMockUTXO('tx-2', 1, 200000), lockingScript: address },
-        { ...createMockUTXO('tx-3', 0, 150000), lockingScript: 'different-address' },
-        { ...createMockUTXO('tx-4', 0, 50000), lockingScript: address, isSpent: true },
+        {
+          ...createMockUTXO('tx-3', 0, 150000),
+          lockingScript: 'different-address',
+        },
+        {
+          ...createMockUTXO('tx-4', 0, 50000),
+          lockingScript: address,
+          isSpent: true,
+        },
       ];
 
       // Save all UTXOs
@@ -191,12 +208,16 @@ describe('UTXOPersistenceManager', () => {
       expect(addressUtxos).toHaveLength(2);
       expect(addressUtxos[0].value).toBe(200000); // Highest value first
       expect(addressUtxos[1].value).toBe(100000);
-      expect(addressUtxos.every((utxo) => utxo.lockingScript === address)).toBe(true);
-      expect(addressUtxos.every((utxo) => !utxo.isSpent)).toBe(true);
+      expect(addressUtxos.every(utxo => utxo.lockingScript === address)).toBe(
+        true
+      );
+      expect(addressUtxos.every(utxo => !utxo.isSpent)).toBe(true);
     });
 
     it('should return empty array for address with no UTXOs', async () => {
-      const utxos = await persistenceManager.getUTXOsForAddress('non-existent-address');
+      const utxos = await persistenceManager.getUTXOsForAddress(
+        'non-existent-address'
+      );
       expect(utxos).toEqual([]);
     });
   });
@@ -213,7 +234,9 @@ describe('UTXOPersistenceManager', () => {
     });
 
     it('should return null for non-existent key pairs', async () => {
-      const result = await persistenceManager.getKeyPair('non-existent-address');
+      const result = await persistenceManager.getKeyPair(
+        'non-existent-address'
+      );
       expect(result).toBeNull();
     });
   });
@@ -316,7 +339,7 @@ describe('UTXOPersistenceManager', () => {
       // Set up blockchain with blocks first
       await persistenceManager.saveBlock(createMockBlock(0));
       await db.put('latest_block', 0, SubLevels.METADATA);
-      
+
       // Save invalid difficulty directly
       await db.put('difficulty', -1, SubLevels.CONFIG);
 
@@ -450,7 +473,7 @@ describe('UTXOPersistenceManager', () => {
     it('should handle database errors gracefully', async () => {
       // Since MemoryDatabase handles errors gracefully, test with actual error conditions
       const errorResult = await persistenceManager.validateIntegrity();
-      
+
       // The validation should work even with empty database
       expect(errorResult.isValid).toBe(true);
     });
@@ -491,7 +514,8 @@ describe('UTXOPersistenceManager', () => {
       // Verify data can be retrieved with proper keys
       const retrievedBlock = await persistenceManager.getBlock(123);
       const retrievedUtxo = await persistenceManager.getUTXO('test-tx-id', 5);
-      const retrievedTx = await persistenceManager.getUTXOTransaction('test-utxo-tx');
+      const retrievedTx =
+        await persistenceManager.getUTXOTransaction('test-utxo-tx');
 
       expect(retrievedBlock).toEqual(block);
       expect(retrievedUtxo).toEqual(utxo);
