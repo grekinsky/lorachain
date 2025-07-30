@@ -72,9 +72,11 @@ cd packages/core && pnpm test    # Test specific package
 - **`Blockchain`** (core) - Main blockchain state and UTXO-based operations
 - **`UTXOManager`** (core) - UTXO set management, balance calculation, and UTXO selection
 - **`UTXOTransactionManager`** (core) - UTXO transaction creation, validation, and fee calculation
+- **`MerkleTree`** (core) - UTXO merkle tree operations, proof generation, and compression
+- **`SPVManager`** (core) - Simplified Payment Verification for light clients
 - **`CryptographicService`** (core) - Key generation, signing, and verification (ECDSA/Ed25519)
 - **`SecureTransactionManager`** (core) - Cryptographically secure transaction creation
-- **`BlockManager`** (core) - Block creation, mining, and validation
+- **`BlockManager`** (core) - Block creation, mining, validation, and merkle proof generation
 - **`SecureMobileWallet`** (mobile-wallet) - Cryptographically secure wallet with key pairs
 - **`LorachainNode`** (node) - Full node with mining and peer management
 - **`MeshProtocol`** (mesh-protocol) - LoRa mesh communication
@@ -91,8 +93,10 @@ cd packages/core && pnpm test    # Test specific package
 
 Each package includes comprehensive unit tests using Vitest:
 
-- **Core package**: Tests for blockchain, UTXO management, cryptographic services, and block functionality
+- **Core package**: Tests for blockchain, UTXO management, cryptographic services, merkle trees, and block functionality
   - UTXO transaction creation and validation
+  - Merkle tree proof generation, verification, and compression
+  - SPV transaction verification and block header validation
   - Cryptographic key generation and signing (ECDSA/Ed25519)
   - UTXO set management and balance calculation
 - **Shared package**: Tests for logger and utility functions
@@ -105,7 +109,31 @@ Run package-specific tests with `cd packages/<name> && pnpm test` or use watch m
 ### Key Implementation Details
 
 - **UTXO Model**: All transactions use inputs/outputs instead of account balances
+- **Merkle Tree System**: UTXO-only merkle tree with proof generation, verification, and compression
+- **SPV Support**: Simplified Payment Verification for light clients without full blockchain data
+- **Proof Compression**: Optimized for LoRa's 256-byte message constraints using bit manipulation
 - **Cryptographic Signatures**: Transactions are signed with either secp256k1 or ed25519
 - **Transaction Structure**: UTXOTransaction with inputs (referencing previous outputs) and outputs
 - **Balance Calculation**: Derived from unspent transaction outputs (UTXOs) for each address
 - **Transaction Validation**: Checks UTXO existence, ownership, and signature validity
+
+### Merkle Tree System (NO LEGACY SUPPORT)
+
+The merkle tree implementation is **UTXO-only** and follows the project's "NO BACKWARDS COMPATIBILITY" policy:
+
+- **`MerkleTree.buildTree()`**: Build merkle tree from UTXO transactions only
+- **`MerkleTree.generateProof()`**: Generate merkle proof for UTXO transactions
+- **`MerkleTree.verifyProof()`**: Verify merkle proofs against merkle roots
+- **`MerkleTree.compressProof()`**: Compress proofs for LoRa transmission (~50% reduction)
+- **`MerkleTree.calculateRoot()`**: Calculate merkle root from UTXO transactions
+- **`SPVManager.verifyTransaction()`**: SPV verification for UTXO transactions
+- **`SPVManager.validateBlockHeader()`**: Block header validation for chain continuity
+- **`SPVManager.verifyTransactionBatch()`**: Batch verification for efficiency
+- **`BlockManager.generateMerkleProof()`**: Generate proofs from UTXO transaction sets
+- **`BlockManager.verifyTransactionInBlock()`**: Verify UTXO transactions in blocks
+
+**Key Constraints:**
+- LoRa 256-byte message limit requires proof compression and potential fragmentation
+- All merkle operations are UTXO-exclusive (no legacy Transaction type support)
+- SPV clients can verify transactions without downloading full blocks
+- Proof compression uses bit manipulation to optimize for network constraints

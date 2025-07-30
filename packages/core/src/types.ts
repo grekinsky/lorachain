@@ -153,3 +153,51 @@ export interface IUTXOTransactionManager {
     targetAmount: number
   ): UTXOSelectionResult;
 }
+
+// Merkle Tree Types
+export interface MerkleNode {
+  hash: string;
+  left?: MerkleNode;
+  right?: MerkleNode;
+  isLeaf: boolean;
+  transactionId?: string;
+}
+
+export interface MerkleProof {
+  transactionId: string;
+  transactionHash: string;
+  merkleRoot: string;
+  proof: ProofElement[];
+  leafIndex: number;
+}
+
+export interface ProofElement {
+  hash: string;
+  direction: 'left' | 'right';
+}
+
+export interface CompressedMerkleProof {
+  txId: string;
+  txHash: string;
+  root: string;
+  path: string; // Compressed proof path
+  index: number;
+}
+
+export interface BlockHeader {
+  index: number;
+  timestamp: number;
+  previousHash: string;
+  merkleRoot: string;
+  hash: string;
+  nonce: number;
+  transactionCount: number;
+  difficulty?: number;
+  validator?: string;
+}
+
+export interface SPVValidationResult extends ValidationResult {
+  transactionVerified: boolean;
+  proofValid: boolean;
+  blockHeaderValid: boolean;
+}

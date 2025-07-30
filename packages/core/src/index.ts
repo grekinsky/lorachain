@@ -22,3 +22,7 @@ export * from './utxo.js';
 export * from './utxo-transaction.js';
 export { UTXOManager } from './utxo.js';
 export { UTXOTransactionManager } from './utxo-transaction.js';
+
+// Merkle Tree and SPV exports
+export * from './merkle/index.js';
+export { MerkleTree, SPVManager } from './merkle/index.js';

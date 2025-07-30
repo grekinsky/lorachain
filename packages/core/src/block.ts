@@ -1,6 +1,14 @@
 import { createHash } from 'crypto';
-import type { Block, Transaction, ValidationResult } from './types.js';
+import type {
+  Block,
+  Transaction,
+  UTXOTransaction,
+  ValidationResult,
+  MerkleProof,
+  BlockHeader,
+} from './types.js';
 import { TransactionManager } from './transaction.js';
+import { MerkleTree } from './merkle/index.js';
 
 export class BlockManager {
   static createGenesisBlock(): Block {
@@ -142,5 +150,138 @@ export class BlockManager {
 
   static getBlockSize(block: Block): number {
     return JSON.stringify(block).length;
+  }
+
+  // Enhanced Merkle Tree Methods
+
+  /**
+   * Generate merkle proof for a transaction in a block
+   * Note: This requires the block to contain UTXO transactions
+   */
+  static generateMerkleProof(
+    transactions: UTXOTransaction[],
+    transactionId: string
+  ): MerkleProof | null {
+    return MerkleTree.generateProof(transactions, transactionId);
+  }
+
+  /**
+   * Verify transaction inclusion using merkle proof
+   */
+  static verifyTransactionInBlock(
+    transaction: UTXOTransaction,
+    proof: MerkleProof,
+    merkleRoot: string
+  ): boolean {
+    // Verify proof against merkle root
+    const proofValid = MerkleTree.verifyProof(proof, merkleRoot);
+    if (!proofValid) {
+      return false;
+    }
+
+    // Verify transaction hash matches proof
+    const txHash = createHash('sha256')
+      .update(JSON.stringify(transaction))
+      .digest('hex');
+    if (txHash !== proof.transactionHash) {
+      return false;
+    }
+
+    // Verify transaction ID matches
+    if (transaction.id !== proof.transactionId) {
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
+   * Create block header from full block
+   * Essential for SPV clients that only need headers
+   */
+  static createBlockHeader(block: Block): BlockHeader {
+    return {
+      index: block.index,
+      timestamp: block.timestamp,
+      previousHash: block.previousHash,
+      merkleRoot: block.merkleRoot,
+      hash: block.hash,
+      nonce: block.nonce,
+      transactionCount: block.transactions.length,
+      validator: block.validator,
+    };
+  }
+
+  /**
+   * Create UTXO block structure (for future UTXO-only blocks)
+   * Note: This creates a structure optimized for UTXO transactions
+   */
+  static createUTXOBlock(
+    index: number,
+    transactions: UTXOTransaction[],
+    previousHash: string,
+    validator?: string
+  ): {
+    index: number;
+    timestamp: number;
+    transactions: UTXOTransaction[];
+    previousHash: string;
+    hash: string;
+    nonce: number;
+    merkleRoot: string;
+    validator?: string;
+  } {
+    const utxoBlock = {
+      index,
+      timestamp: Date.now(),
+      transactions,
+      previousHash,
+      hash: '',
+      nonce: 0,
+      merkleRoot: MerkleTree.calculateRoot(transactions),
+      validator,
+    };
+
+    // Calculate hash for UTXO block structure
+    const blockString = JSON.stringify({
+      index: utxoBlock.index,
+      timestamp: utxoBlock.timestamp,
+      transactions: utxoBlock.transactions,
+      previousHash: utxoBlock.previousHash,
+      nonce: utxoBlock.nonce,
+      merkleRoot: utxoBlock.merkleRoot,
+      validator: utxoBlock.validator,
+    });
+
+    utxoBlock.hash = createHash('sha256').update(blockString).digest('hex');
+    return utxoBlock;
+  }
+
+  /**
+   * Verify block's merkle root calculation is correct
+   * This method validates that the stored merkle root matches calculated value
+   */
+  static verifyBlockMerkleRoot(block: Block): boolean {
+    const calculatedRoot = this.calculateMerkleRoot(block.transactions);
+    return calculatedRoot === block.merkleRoot;
+  }
+
+  /**
+   * Get transaction by ID from block
+   * Helper method for proof generation and verification
+   */
+  static getTransactionById(
+    block: Block,
+    transactionId: string
+  ): Transaction | null {
+    return block.transactions.find(tx => tx.id === transactionId) || null;
+  }
+
+  /**
+   * Get all transaction IDs from block
+   * Useful for generating multiple proofs or analysis
+   */
+  static getTransactionIds(block: Block): string[] {
+    return block.transactions.map(tx => tx.id);
   }
 }

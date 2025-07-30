@@ -18,7 +18,9 @@ The Lorachain network operates on a hybrid architecture with two distinct client
 ### Key Features
 
 - **UTXO Model**: Full Unspent Transaction Output (UTXO) model for enhanced security and transaction verification
+- **Merkle Tree Verification**: Advanced merkle proof generation and SPV support for light clients
 - **Cryptographic Security**: ECDSA (secp256k1) and Ed25519 signature algorithms for transaction signing
+- **LoRa Optimization**: Proof compression and fragmentation optimized for 256-byte message constraints
 - **Low Resource Consumption**: Optimized for battery-powered devices and minimal data transfer
 - **Mesh Network Resilience**: Multi-hop communication through LoRa mesh with automatic route discovery
 - **Hybrid Connectivity**: Combines offline resilience with online synchronization capabilities
@@ -100,6 +102,7 @@ pnpm test:run     # Run tests once (no watch mode)
 Core blockchain functionality including:
 
 - UTXO-based transaction management and validation
+- Merkle tree verification with proof generation and SPV support
 - Cryptographic services (ECDSA/Ed25519 key generation and signing)
 - Block creation and mining
 - Blockchain state management with UTXO set
@@ -178,11 +181,24 @@ Features:
 ### Blockchain Features
 
 - **Transaction Model**: UTXO (Unspent Transaction Output) for enhanced security and verification
+- **Merkle Tree System**: Merkle proof generation, verification, and compression for SPV support
+- **Light Client Support**: Simplified Payment Verification (SPV) for mobile wallets
 - **Consensus**: Proof-of-Work with adaptive difficulty
 - **Block Time**: Dynamic based on network conditions
 - **Transaction Fees**: Calculated based on transaction size and UTXO inputs/outputs
 - **Security**: SHA-256 hashing with ECDSA (secp256k1) or Ed25519 digital signatures
 - **UTXO Management**: Efficient UTXO set tracking and balance calculation
+
+### Merkle Tree and SPV Features
+
+- **UTXO-Only Design**: Merkle trees built exclusively from UTXO transactions (no legacy support)
+- **Proof Generation**: Generate merkle proofs for any transaction in a block
+- **Proof Verification**: Verify transaction inclusion without full block data
+- **SPV Support**: Simplified Payment Verification for light clients and mobile wallets
+- **Proof Compression**: ~50% size reduction using bit manipulation techniques
+- **LoRa Optimization**: Proofs compressed to fit within 256-byte message constraints
+- **Batch Verification**: Efficient verification of multiple transactions simultaneously
+- **Block Header Validation**: Chain continuity and proof-of-work validation for SPV clients
 
 ### LoRa Network Constraints
 
@@ -271,10 +287,12 @@ For support and questions:
 ### Recently Implemented Features
 
 - **UTXO Transaction Model**: Complete implementation replacing the account-based model
+- **Merkle Tree Verification**: Advanced merkle proof generation and SPV support for light clients
 - **Cryptographic Security**: Full ECDSA (secp256k1) and Ed25519 signature support
 - **Secure Wallets**: Cryptographically secure wallet implementation with key pair generation
 - **UTXO Management**: Efficient UTXO set tracking, selection algorithms, and balance calculation
 - **Enhanced Security**: All transactions now use proper cryptographic signatures
+- **LoRa Optimization**: Proof compression techniques optimized for 256-byte message constraints
 
 ### Foundation Features
 
