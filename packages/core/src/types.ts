@@ -50,6 +50,7 @@ export interface Block {
   hash: string;
   nonce: number;
   merkleRoot: string;
+  difficulty: number;
   validator?: string;
 }
 

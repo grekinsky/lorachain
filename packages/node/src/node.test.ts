@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { LorachainNode } from './node.js';
-import { Blockchain, TransactionManager, BlockManager } from '@lorachain/core';
+import { Blockchain, BlockManager } from '@lorachain/core';
 import { Logger } from '@lorachain/shared';
 import type { NodeConfig } from './node.js';
 import type { NetworkNode } from '@lorachain/core';
@@ -142,16 +142,24 @@ describe('LorachainNode', () => {
 
     beforeEach(() => {
       node = new LorachainNode(nodeConfig);
-      transaction = TransactionManager.createTransaction(
-        'from-address',
-        'to-address',
-        100,
-        'private-key'
-      );
+      transaction = {
+        id: `test-tx-${Date.now()}`,
+        inputs: [],
+        outputs: [
+          {
+            value: 100,
+            lockingScript: 'to-address',
+            outputIndex: 0,
+          },
+        ],
+        lockTime: 0,
+        timestamp: Date.now(),
+        fee: 0,
+      };
     });
 
-    it('should add valid transaction', () => {
-      const result = node.addTransaction(transaction);
+    it('should add valid transaction', async () => {
+      const result = await node.addTransaction(transaction);
 
       expect(result).toBe(true);
       expect(mockLogger.info).toHaveBeenCalledWith(
@@ -160,9 +168,18 @@ describe('LorachainNode', () => {
       );
     });
 
-    it('should reject invalid transaction', () => {
-      const invalidTransaction = { ...transaction, amount: -100 };
-      const result = node.addTransaction(invalidTransaction);
+    it('should reject invalid transaction', async () => {
+      const invalidTransaction = {
+        ...transaction,
+        outputs: [
+          {
+            value: -100, // Invalid negative value
+            lockingScript: 'to-address',
+            outputIndex: 0,
+          },
+        ],
+      };
+      const result = await node.addTransaction(invalidTransaction);
 
       expect(result).toBe(false);
       expect(mockLogger.warn).toHaveBeenCalledWith(
@@ -174,8 +191,8 @@ describe('LorachainNode', () => {
       );
     });
 
-    it('should add transaction to blockchain', () => {
-      node.addTransaction(transaction);
+    it('should add transaction to blockchain', async () => {
+      await node.addTransaction(transaction);
 
       const blockchain = node.getBlockchain();
       const pendingTransactions = blockchain.getPendingTransactions();
@@ -192,12 +209,16 @@ describe('LorachainNode', () => {
       node = new LorachainNode(nodeConfig);
 
       // Create a valid block manually using BlockManager
-      const transaction = TransactionManager.createTransaction(
-        'from-address',
-        'to-address',
-        100,
-        'private-key'
-      );
+      const transaction = {
+        id: `block-test-tx-${Date.now()}`,
+        from: 'from-address',
+        to: 'to-address',
+        amount: 100,
+        fee: 1,
+        timestamp: Date.now(),
+        signature: 'test-signature',
+        nonce: 0,
+      };
 
       const blockchain = node.getBlockchain();
       const latestBlock = blockchain.getLatestBlock();
@@ -207,16 +228,14 @@ describe('LorachainNode', () => {
         latestBlock.index + 1,
         [transaction],
         latestBlock.hash,
+        blockchain.getDifficulty(),
         'miner-address'
       );
-      validBlock = BlockManager.mineBlock(
-        validBlock,
-        blockchain.getDifficulty()
-      );
+      validBlock = BlockManager.mineBlock(validBlock);
     });
 
-    it('should add valid block', () => {
-      const result = node.addBlock(validBlock);
+    it('should add valid block', async () => {
+      const result = await node.addBlock(validBlock);
 
       expect(result).toBe(true);
       expect(mockLogger.info).toHaveBeenCalledWith(
@@ -225,9 +244,9 @@ describe('LorachainNode', () => {
       );
     });
 
-    it('should reject invalid block', () => {
+    it('should reject invalid block', async () => {
       const invalidBlock = { ...validBlock, hash: 'invalid-hash' };
-      const result = node.addBlock(invalidBlock);
+      const result = await node.addBlock(invalidBlock);
 
       expect(result).toBe(false);
       expect(mockLogger.warn).toHaveBeenCalledWith('Invalid block rejected', {
@@ -236,8 +255,8 @@ describe('LorachainNode', () => {
       });
     });
 
-    it('should add block to blockchain', () => {
-      node.addBlock(validBlock);
+    it('should add block to blockchain', async () => {
+      await node.addBlock(validBlock);
 
       const blockchain = node.getBlockchain();
       const blocks = blockchain.getBlocks();
@@ -374,12 +393,20 @@ describe('LorachainNode', () => {
     });
 
     it('should mine blocks when transactions are available', async () => {
-      const transaction = TransactionManager.createTransaction(
-        'from-address',
-        'to-address',
-        100,
-        'private-key'
-      );
+      const transaction = {
+        id: `mining-test-tx-${Date.now()}`,
+        inputs: [],
+        outputs: [
+          {
+            value: 100,
+            lockingScript: 'to-address',
+            outputIndex: 0,
+          },
+        ],
+        lockTime: 0,
+        timestamp: Date.now(),
+        fee: 0,
+      };
 
       miningNode.addTransaction(transaction);
       await miningNode.start();
@@ -469,15 +496,23 @@ describe('LorachainNode', () => {
       });
     });
 
-    it('should log transaction broadcast', () => {
-      const transaction = TransactionManager.createTransaction(
-        'from-address',
-        'to-address',
-        100,
-        'private-key'
-      );
+    it('should log transaction broadcast', async () => {
+      const transaction = {
+        id: `broadcast-test-tx-${Date.now()}`,
+        inputs: [],
+        outputs: [
+          {
+            value: 100,
+            lockingScript: 'to-address',
+            outputIndex: 0,
+          },
+        ],
+        lockTime: 0,
+        timestamp: Date.now(),
+        fee: 0,
+      };
 
-      node.addTransaction(transaction);
+      await node.addTransaction(transaction);
 
       expect(mockLogger.debug).toHaveBeenCalledWith(
         'Broadcasting transaction to peers',

@@ -65,13 +65,14 @@ cd packages/core && pnpm test    # Test specific package
 - **Path mapping** configured for `@lorachain/*` packages in tsconfig.json
 - **LevelDB** for production database persistence with sublevel organization
 - **MessagePack** for efficient data serialization with optional gzip compression
-- **Vitest** for testing framework with comprehensive coverage (266+ tests)
+- **Vitest** for testing framework with comprehensive coverage (306+ tests)
 - **ESLint + Prettier** for code quality
 - **LoRa constraints**: 256-byte message limit, duty cycle restrictions
 
 ### Core Classes and Responsibilities
 
-- **`Blockchain`** (core) - Main blockchain state and UTXO-based operations
+- **`Blockchain`** (core) - Main blockchain state and UTXO-based operations with difficulty adjustment
+- **`DifficultyManager`** (core) - Bitcoin-style difficulty adjustment algorithms and network hashrate calculation
 - **`UTXOManager`** (core) - UTXO set management, balance calculation, and UTXO selection
 - **`UTXOTransactionManager`** (core) - UTXO transaction creation, validation, and fee calculation
 - **`UTXOPersistenceManager`** (core) - Blockchain state persistence, UTXO storage, and data integrity management
@@ -99,10 +100,12 @@ cd packages/core && pnpm test    # Test specific package
 
 Each package includes comprehensive unit tests using Vitest:
 
-- **Core package**: Tests for blockchain, UTXO management, persistence layer, cryptographic services, merkle trees, and block functionality
+- **Core package**: Tests for blockchain, UTXO management, persistence layer, cryptographic services, merkle trees, difficulty adjustment, and block functionality
   - **Database layer**: 29 tests covering LevelDB wrapper, memory database, and sublevel operations
   - **Persistence manager**: 30 tests covering UTXO storage, blockchain state management, and cryptographic key persistence
   - **Integration tests**: 19 tests covering full persistence workflows, cross-database compatibility, and performance
+  - **Difficulty adjustment**: 25 tests covering Bitcoin-style algorithms, hashrate calculation, and edge cases
+  - **Blockchain integration**: 15 tests covering end-to-end difficulty adjustment and validation
   - **UTXO transaction creation and validation**
   - **Merkle tree proof generation, verification, and compression**
   - **SPV transaction verification and block header validation**
@@ -114,13 +117,16 @@ Each package includes comprehensive unit tests using Vitest:
 - **Node package**: Tests for full node functionality
 - **Mesh protocol**: Tests for LoRa communication protocol
 
-**Total test coverage**: 266+ tests across all packages with 100% passing rate.
+**Total test coverage**: 306+ tests across all packages with 100% passing rate.
 
 Run package-specific tests with `cd packages/<name> && pnpm test` or use watch mode for development with `pnpm test:watch`.
 
 ### Key Implementation Details
 
 - **UTXO Model**: All transactions use inputs/outputs instead of account balances
+- **Difficulty Adjustment**: Bitcoin-style algorithm with 10-block adjustment periods and 4x max change bounds
+- **Network Monitoring**: Real-time hashrate calculation and difficulty state tracking
+- **Block Validation**: Enhanced validation including difficulty requirements and timestamp manipulation protection
 - **Persistence Architecture**: Comprehensive blockchain state persistence with LevelDB and memory database support
 - **Database Organization**: Sublevel-based data separation (blocks, UTXOs, transactions, keys, metadata, config)
 - **UTXO Storage**: Efficient UTXO set persistence with address-based indexing and balance calculation
@@ -162,12 +168,14 @@ The merkle tree implementation is **UTXO-only** and follows the project's "NO BA
 The persistence layer is **UTXO-only** and follows the project's "NO BACKWARDS COMPATIBILITY" policy:
 
 #### Database Implementation
+
 - **`LevelDatabase`**: Production LevelDB wrapper with async initialization and sublevel organization
 - **`MemoryDatabase`**: In-memory implementation for testing and development
 - **`DatabaseFactory`**: Factory pattern for creating database instances based on configuration
 - **Sublevel Organization**: Data separated into blocks, utxo_set, utxo_transactions, pending_utxo_tx, metadata, config, nodes, crypto_keys
 
 #### Persistence Manager Operations
+
 - **`UTXOPersistenceManager.saveBlock()`**: Save blocks with automatic latest block index updates
 - **`UTXOPersistenceManager.saveUTXO()`**: Store UTXO with address-based indexing
 - **`UTXOPersistenceManager.getUTXOsForAddress()`**: Retrieve all UTXOs for an address (sorted by value)
@@ -179,6 +187,7 @@ The persistence layer is **UTXO-only** and follows the project's "NO BACKWARDS C
 - **`UTXOPersistenceManager.rebuildUTXOSet()`**: Rebuild UTXO set from blocks
 
 #### Database Features
+
 - **Batch Operations**: Atomic multi-operation transactions grouped by sublevel
 - **Compression**: Optional gzip compression for efficient storage
 - **Error Handling**: Graceful degradation for corrupted data and network failures
@@ -187,6 +196,7 @@ The persistence layer is **UTXO-only** and follows the project's "NO BACKWARDS C
 - **Performance Optimization**: UTXO selection algorithms and efficient address-based queries
 
 **Key Constraints:**
+
 - All persistence operations are UTXO-exclusive (no legacy Transaction type support)
 - Database supports both LevelDB (production) and Memory (testing) backends
 - Sublevel organization ensures clean data separation and efficient queries

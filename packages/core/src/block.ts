@@ -11,7 +11,7 @@ import { TransactionManager } from './transaction.js';
 import { MerkleTree } from './merkle/index.js';
 
 export class BlockManager {
-  static createGenesisBlock(): Block {
+  static createGenesisBlock(difficulty: number = 1): Block {
     const genesisBlock: Block = {
       index: 0,
       timestamp: Date.now(),
@@ -20,6 +20,7 @@ export class BlockManager {
       hash: '',
       nonce: 0,
       merkleRoot: this.calculateMerkleRoot([]),
+      difficulty,
     };
 
     genesisBlock.hash = this.calculateHash(genesisBlock);
@@ -30,6 +31,7 @@ export class BlockManager {
     index: number,
     transactions: Transaction[],
     previousHash: string,
+    difficulty: number,
     validator?: string
   ): Block {
     const block: Block = {
@@ -40,6 +42,7 @@ export class BlockManager {
       hash: '',
       nonce: 0,
       merkleRoot: this.calculateMerkleRoot(transactions),
+      difficulty,
       validator,
     };
 
@@ -55,6 +58,7 @@ export class BlockManager {
       previousHash: block.previousHash,
       nonce: block.nonce,
       merkleRoot: block.merkleRoot,
+      difficulty: block.difficulty,
       validator: block.validator,
     });
 
@@ -87,11 +91,11 @@ export class BlockManager {
     return hashes[0];
   }
 
-  static mineBlock(block: Block, difficulty: number): Block {
-    const target = Array(difficulty + 1).join('0');
+  static mineBlock(block: Block): Block {
+    const target = Array(block.difficulty + 1).join('0');
     const minedBlock = { ...block };
 
-    while (minedBlock.hash.substring(0, difficulty) !== target) {
+    while (minedBlock.hash.substring(0, block.difficulty) !== target) {
       minedBlock.nonce++;
       minedBlock.hash = this.calculateHash(minedBlock);
     }
@@ -101,8 +105,7 @@ export class BlockManager {
 
   static validateBlock(
     block: Block,
-    previousBlock: Block | null,
-    difficulty: number
+    previousBlock: Block | null
   ): ValidationResult {
     const errors: string[] = [];
 
@@ -126,6 +129,11 @@ export class BlockManager {
       errors.push('Block merkle root is invalid');
     }
 
+    // Validate difficulty field exists
+    if (block.difficulty === undefined || block.difficulty < 1) {
+      errors.push('Block must have a valid difficulty field');
+    }
+
     for (const transaction of block.transactions) {
       const txValidation = TransactionManager.validateTransaction(transaction);
       if (!txValidation.isValid) {
@@ -137,9 +145,16 @@ export class BlockManager {
       }
     }
 
-    const target = Array(difficulty + 1).join('0');
-    if (block.hash.substring(0, difficulty) !== target) {
-      errors.push('Block does not meet difficulty requirement');
+    // Validate block meets its own difficulty requirement (only if difficulty is valid and not genesis block)
+    if (
+      block.difficulty !== undefined &&
+      block.difficulty >= 1 &&
+      block.index > 0
+    ) {
+      const target = Array(block.difficulty + 1).join('0');
+      if (block.hash.substring(0, block.difficulty) !== target) {
+        errors.push('Block does not meet its difficulty requirement');
+      }
     }
 
     return {
@@ -220,6 +235,7 @@ export class BlockManager {
     index: number,
     transactions: UTXOTransaction[],
     previousHash: string,
+    difficulty: number,
     validator?: string
   ): {
     index: number;
@@ -229,6 +245,7 @@ export class BlockManager {
     hash: string;
     nonce: number;
     merkleRoot: string;
+    difficulty: number;
     validator?: string;
   } {
     const utxoBlock = {
@@ -239,6 +256,7 @@ export class BlockManager {
       hash: '',
       nonce: 0,
       merkleRoot: MerkleTree.calculateRoot(transactions),
+      difficulty,
       validator,
     };
 
@@ -250,6 +268,7 @@ export class BlockManager {
       previousHash: utxoBlock.previousHash,
       nonce: utxoBlock.nonce,
       merkleRoot: utxoBlock.merkleRoot,
+      difficulty: utxoBlock.difficulty,
       validator: utxoBlock.validator,
     });
 

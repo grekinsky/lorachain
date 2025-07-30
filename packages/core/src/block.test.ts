@@ -51,7 +51,8 @@ describe('BlockManager', () => {
       const block = BlockManager.createBlock(
         1,
         mockTransactions,
-        'previous-hash'
+        'previous-hash',
+        2 // difficulty
       );
 
       expect(block).toMatchObject({
@@ -70,6 +71,7 @@ describe('BlockManager', () => {
         1,
         mockTransactions,
         'previous-hash',
+        2, // difficulty
         'validator-address'
       );
 
@@ -80,7 +82,8 @@ describe('BlockManager', () => {
       const block = BlockManager.createBlock(
         1,
         mockTransactions,
-        'previous-hash'
+        'previous-hash',
+        2 // difficulty
       );
 
       expect(block.validator).toBeUndefined();
@@ -183,10 +186,11 @@ describe('BlockManager', () => {
       const block = BlockManager.createBlock(
         1,
         mockTransactions,
-        'previous-hash'
+        'previous-hash',
+        1 // difficulty
       );
 
-      const minedBlock = BlockManager.mineBlock(block, 1);
+      const minedBlock = BlockManager.mineBlock(block);
 
       expect(minedBlock.hash.startsWith('0')).toBe(true);
       expect(minedBlock.nonce).toBeGreaterThanOrEqual(0);
@@ -196,10 +200,11 @@ describe('BlockManager', () => {
       const block = BlockManager.createBlock(
         1,
         mockTransactions,
-        'previous-hash'
+        'previous-hash',
+        2 // difficulty
       );
 
-      const minedBlock = BlockManager.mineBlock(block, 2);
+      const minedBlock = BlockManager.mineBlock(block);
 
       expect(minedBlock.hash.startsWith('00')).toBe(true);
       expect(minedBlock.nonce).toBeGreaterThan(0);
@@ -209,10 +214,11 @@ describe('BlockManager', () => {
       const block = BlockManager.createBlock(
         1,
         mockTransactions,
-        'previous-hash'
+        'previous-hash',
+        1 // difficulty
       );
 
-      const minedBlock = BlockManager.mineBlock(block, 1);
+      const minedBlock = BlockManager.mineBlock(block);
 
       expect(minedBlock.index).toBe(block.index);
       expect(minedBlock.timestamp).toBe(block.timestamp);
@@ -231,20 +237,21 @@ describe('BlockManager', () => {
       validBlock = BlockManager.createBlock(
         1,
         mockTransactions,
-        previousBlock.hash
+        previousBlock.hash,
+        1 // difficulty
       );
-      validBlock = BlockManager.mineBlock(validBlock, 1);
+      validBlock = BlockManager.mineBlock(validBlock);
     });
 
     it('should validate correct block', () => {
-      const result = BlockManager.validateBlock(validBlock, previousBlock, 1);
+      const result = BlockManager.validateBlock(validBlock, previousBlock);
       expect(result.isValid).toBe(true);
       expect(result.errors).toHaveLength(0);
     });
 
     it('should reject block with negative index', () => {
       const block = { ...validBlock, index: -1 };
-      const result = BlockManager.validateBlock(block, previousBlock, 1);
+      const result = BlockManager.validateBlock(block, previousBlock);
 
       expect(result.isValid).toBe(false);
       expect(result.errors).toContain('Block index must be non-negative');
@@ -252,7 +259,7 @@ describe('BlockManager', () => {
 
     it('should reject block with non-sequential index', () => {
       const block = { ...validBlock, index: 3 };
-      const result = BlockManager.validateBlock(block, previousBlock, 1);
+      const result = BlockManager.validateBlock(block, previousBlock);
 
       expect(result.isValid).toBe(false);
       expect(result.errors).toContain('Block index must be sequential');
@@ -260,7 +267,7 @@ describe('BlockManager', () => {
 
     it('should reject block with incorrect previous hash', () => {
       const block = { ...validBlock, previousHash: 'wrong-hash' };
-      const result = BlockManager.validateBlock(block, previousBlock, 1);
+      const result = BlockManager.validateBlock(block, previousBlock);
 
       expect(result.isValid).toBe(false);
       expect(result.errors).toContain('Block previous hash does not match');
@@ -268,7 +275,7 @@ describe('BlockManager', () => {
 
     it('should reject block with invalid hash', () => {
       const block = { ...validBlock, hash: 'invalid-hash' };
-      const result = BlockManager.validateBlock(block, previousBlock, 1);
+      const result = BlockManager.validateBlock(block, previousBlock);
 
       expect(result.isValid).toBe(false);
       expect(result.errors).toContain('Block hash is invalid');
@@ -276,28 +283,28 @@ describe('BlockManager', () => {
 
     it('should reject block with invalid merkle root', () => {
       const block = { ...validBlock, merkleRoot: 'invalid-merkle-root' };
-      const result = BlockManager.validateBlock(block, previousBlock, 1);
+      const result = BlockManager.validateBlock(block, previousBlock);
 
       expect(result.isValid).toBe(false);
       expect(result.errors).toContain('Block merkle root is invalid');
     });
 
     it('should reject block that does not meet difficulty', () => {
+      // Create an unmined block with difficulty 2 (requires 2 leading zeros)
       const unmined = BlockManager.createBlock(
         1,
         mockTransactions,
-        previousBlock.hash
+        previousBlock.hash,
+        2 // difficulty (requires '00' prefix)
       );
 
-      // Force the hash to not meet difficulty requirement by setting a non-zero starting hash
-      unmined.hash = 'f' + unmined.hash.substring(1); // Ensure it doesn't start with '0'
-      unmined.nonce = 0; // Reset nonce
-
-      const result = BlockManager.validateBlock(unmined, previousBlock, 1);
+      // The createBlock method calculates a hash that likely doesn't start with '00'
+      // So this block should fail the difficulty requirement
+      const result = BlockManager.validateBlock(unmined, previousBlock);
 
       expect(result.isValid).toBe(false);
       expect(result.errors).toContain(
-        'Block does not meet difficulty requirement'
+        'Block does not meet its difficulty requirement'
       );
     });
 
@@ -306,14 +313,14 @@ describe('BlockManager', () => {
       const invalidBlock = BlockManager.createBlock(
         1,
         [invalidTransaction],
-        previousBlock.hash
+        previousBlock.hash,
+        1 // difficulty
       );
-      const minedInvalidBlock = BlockManager.mineBlock(invalidBlock, 1);
+      const minedInvalidBlock = BlockManager.mineBlock(invalidBlock);
 
       const result = BlockManager.validateBlock(
         minedInvalidBlock,
-        previousBlock,
-        1
+        previousBlock
       );
 
       expect(result.isValid).toBe(false);
@@ -324,7 +331,7 @@ describe('BlockManager', () => {
 
     it('should validate genesis block without previous block', () => {
       const genesisBlock = BlockManager.createGenesisBlock();
-      const result = BlockManager.validateBlock(genesisBlock, null, 0);
+      const result = BlockManager.validateBlock(genesisBlock, null);
 
       expect(result.isValid).toBe(true);
     });
@@ -336,7 +343,7 @@ describe('BlockManager', () => {
         previousHash: 'wrong-hash',
         hash: 'invalid-hash',
       };
-      const result = BlockManager.validateBlock(block, previousBlock, 1);
+      const result = BlockManager.validateBlock(block, previousBlock);
 
       expect(result.isValid).toBe(false);
       expect(result.errors.length).toBeGreaterThan(1);
@@ -348,7 +355,8 @@ describe('BlockManager', () => {
       const block = BlockManager.createBlock(
         1,
         mockTransactions,
-        'previous-hash'
+        'previous-hash',
+        2 // difficulty
       );
 
       const size = BlockManager.getBlockSize(block);
@@ -357,12 +365,13 @@ describe('BlockManager', () => {
     });
 
     it('should calculate different sizes for different blocks', () => {
-      const block1 = BlockManager.createBlock(1, [], 'previous-hash');
+      const block1 = BlockManager.createBlock(1, [], 'previous-hash', 2);
 
       const block2 = BlockManager.createBlock(
         1,
         mockTransactions,
-        'previous-hash'
+        'previous-hash',
+        2 // difficulty
       );
 
       const size1 = BlockManager.getBlockSize(block1);
