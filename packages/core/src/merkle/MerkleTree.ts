@@ -16,14 +16,16 @@ export class MerkleTree {
   static buildTree(transactions: UTXOTransaction[]): MerkleNode[] {
     if (transactions.length === 0) {
       const emptyHash = createHash('sha256').update('').digest('hex');
-      return [{
-        hash: emptyHash,
-        isLeaf: true,
-      }];
+      return [
+        {
+          hash: emptyHash,
+          isLeaf: true,
+        },
+      ];
     }
 
     // Create leaf nodes from transactions
-    const leafNodes: MerkleNode[] = transactions.map((tx, index) => ({
+    const leafNodes: MerkleNode[] = transactions.map(tx => ({
       hash: createHash('sha256').update(JSON.stringify(tx)).digest('hex'),
       isLeaf: true,
       transactionId: tx.id,
@@ -39,14 +41,16 @@ export class MerkleTree {
   static buildTreeLegacy(transactions: Transaction[]): MerkleNode[] {
     if (transactions.length === 0) {
       const emptyHash = createHash('sha256').update('').digest('hex');
-      return [{
-        hash: emptyHash,
-        isLeaf: true,
-      }];
+      return [
+        {
+          hash: emptyHash,
+          isLeaf: true,
+        },
+      ];
     }
 
     // Create leaf nodes from transactions
-    const leafNodes: MerkleNode[] = transactions.map((tx, index) => ({
+    const leafNodes: MerkleNode[] = transactions.map(tx => ({
       hash: createHash('sha256').update(JSON.stringify(tx)).digest('hex'),
       isLeaf: true,
       transactionId: tx.id,
@@ -88,14 +92,19 @@ export class MerkleTree {
   /**
    * Generate merkle proof for a specific UTXO transaction
    */
-  static generateProof(transactions: UTXOTransaction[], targetTxId: string): MerkleProof | null {
+  static generateProof(
+    transactions: UTXOTransaction[],
+    targetTxId: string
+  ): MerkleProof | null {
     const targetIndex = transactions.findIndex(tx => tx.id === targetTxId);
     if (targetIndex === -1) {
       return null;
     }
 
     const targetTransaction = transactions[targetIndex];
-    const targetHash = createHash('sha256').update(JSON.stringify(targetTransaction)).digest('hex');
+    const targetHash = createHash('sha256')
+      .update(JSON.stringify(targetTransaction))
+      .digest('hex');
     const merkleRoot = this.calculateRoot(transactions);
 
     // Build complete tree to generate proof
@@ -115,15 +124,20 @@ export class MerkleTree {
    * Generate merkle proof for legacy transactions
    * Maintains backward compatibility during transition
    */
-  static generateProofLegacy(transactions: Transaction[], targetTxId: string): MerkleProof | null {
+  static generateProofLegacy(
+    transactions: Transaction[],
+    targetTxId: string
+  ): MerkleProof | null {
     const targetIndex = transactions.findIndex(tx => tx.id === targetTxId);
     if (targetIndex === -1) {
       return null;
     }
 
     const targetTransaction = transactions[targetIndex];
-    const targetHash = createHash('sha256').update(JSON.stringify(targetTransaction)).digest('hex');
-    
+    const targetHash = createHash('sha256')
+      .update(JSON.stringify(targetTransaction))
+      .digest('hex');
+
     // Use existing calculateMerkleRoot for consistency
     const hashes = transactions.map(tx =>
       createHash('sha256').update(JSON.stringify(tx)).digest('hex')
@@ -197,7 +211,7 @@ export class MerkleTree {
    */
   static decompressProof(compressed: CompressedMerkleProof): MerkleProof {
     const [pathHex, hashConcat] = compressed.path.split('|');
-    
+
     if (!pathHex || !hashConcat) {
       return {
         transactionId: compressed.txId,
@@ -207,7 +221,7 @@ export class MerkleTree {
         leafIndex: compressed.index,
       };
     }
-    
+
     const pathBits = this.hexToBits(pathHex);
     const proof: ProofElement[] = [];
     const hashLength = 64; // SHA-256 hash length in hex
@@ -219,7 +233,7 @@ export class MerkleTree {
     for (let i = 0; i < actualBits; i++) {
       const direction = pathBits[i] === '0' ? 'left' : 'right';
       const hash = hashConcat.substring(i * hashLength, (i + 1) * hashLength);
-      
+
       // Only add if hash is valid (not empty)
       if (hash && hash.length === hashLength) {
         proof.push({ hash, direction });
@@ -280,7 +294,7 @@ export class MerkleTree {
   ): ProofElement[] {
     const proof: ProofElement[] = [];
     const leafNodes = tree.filter(node => node.isLeaf);
-    
+
     if (leafNodes.length === 0) return proof;
     if (leafNodes.length === 1) return proof; // Single transaction needs no proof
 
@@ -290,12 +304,12 @@ export class MerkleTree {
 
     while (currentLevel.length > 1) {
       const nextLevel: MerkleNode[] = [];
-      
+
       // Build next level and find sibling
       for (let i = 0; i < currentLevel.length; i += 2) {
         const left = currentLevel[i];
         const right = currentLevel[i + 1] || left; // Duplicate if odd number
-        
+
         const parent: MerkleNode = {
           hash: createHash('sha256')
             .update(left.hash + right.hash)
@@ -304,7 +318,7 @@ export class MerkleTree {
           right: currentLevel[i + 1] ? right : undefined,
           isLeaf: false,
         };
-        
+
         nextLevel.push(parent);
       }
 
@@ -312,7 +326,7 @@ export class MerkleTree {
       if (currentIndex < currentLevel.length) {
         const isLeft = currentIndex % 2 === 0;
         const siblingIndex = isLeft ? currentIndex + 1 : currentIndex - 1;
-        
+
         if (siblingIndex < currentLevel.length) {
           const siblingHash = currentLevel[siblingIndex].hash;
           proof.push({
@@ -363,13 +377,13 @@ export class MerkleTree {
   private static bitsToHex(bits: string): string {
     // Pad to multiple of 4 bits
     const paddedBits = bits.padEnd(Math.ceil(bits.length / 4) * 4, '0');
-    
+
     let hex = '';
     for (let i = 0; i < paddedBits.length; i += 4) {
       const nibble = paddedBits.substring(i, i + 4);
       hex += parseInt(nibble, 2).toString(16);
     }
-    
+
     return hex;
   }
 

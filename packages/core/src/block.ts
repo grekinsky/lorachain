@@ -1,11 +1,11 @@
 import { createHash } from 'crypto';
-import type { 
-  Block, 
-  Transaction, 
+import type {
+  Block,
+  Transaction,
   UTXOTransaction,
-  ValidationResult, 
+  ValidationResult,
   MerkleProof,
-  BlockHeader
+  BlockHeader,
 } from './types.js';
 import { TransactionManager } from './transaction.js';
 import { MerkleTree } from './merkle/index.js';
@@ -158,7 +158,10 @@ export class BlockManager {
    * Generate merkle proof for a transaction in a block
    * Uses legacy transaction support for current block structure
    */
-  static generateMerkleProof(block: Block, transactionId: string): MerkleProof | null {
+  static generateMerkleProof(
+    block: Block,
+    transactionId: string
+  ): MerkleProof | null {
     return MerkleTree.generateProofLegacy(block.transactions, transactionId);
   }
 
@@ -167,8 +170,8 @@ export class BlockManager {
    * Supports both legacy and UTXO transactions
    */
   static verifyTransactionInBlock(
-    transaction: Transaction | UTXOTransaction, 
-    proof: MerkleProof, 
+    transaction: Transaction | UTXOTransaction,
+    proof: MerkleProof,
     block: Block
   ): boolean {
     // Verify proof against block's merkle root
@@ -178,7 +181,9 @@ export class BlockManager {
     }
 
     // Verify transaction hash matches proof
-    const txHash = createHash('sha256').update(JSON.stringify(transaction)).digest('hex');
+    const txHash = createHash('sha256')
+      .update(JSON.stringify(transaction))
+      .digest('hex');
     if (txHash !== proof.transactionHash) {
       return false;
     }
@@ -251,7 +256,7 @@ export class BlockManager {
    * This method will be used when blocks fully support UTXO transactions
    */
   static generateMerkleProofUTXO(
-    transactions: UTXOTransaction[], 
+    transactions: UTXOTransaction[],
     transactionId: string
   ): MerkleProof | null {
     return MerkleTree.generateProof(transactions, transactionId);
@@ -270,7 +275,10 @@ export class BlockManager {
    * Get transaction by ID from block
    * Helper method for proof generation and verification
    */
-  static getTransactionById(block: Block, transactionId: string): Transaction | null {
+  static getTransactionById(
+    block: Block,
+    transactionId: string
+  ): Transaction | null {
     return block.transactions.find(tx => tx.id === transactionId) || null;
   }
 

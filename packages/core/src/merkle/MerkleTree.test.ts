@@ -3,8 +3,7 @@ import { MerkleTree } from './MerkleTree.js';
 import { TransactionManager } from '../transaction.js';
 import { UTXOTransactionManager } from '../utxo-transaction.js';
 import { UTXOManager } from '../utxo.js';
-import { CryptographicService } from '../cryptographic.js';
-import type { Transaction, UTXOTransaction, UTXO, MerkleProof } from '../types.js';
+import type { Transaction, UTXOTransaction, UTXO } from '../types.js';
 
 describe('MerkleTree', () => {
   let mockTransaction: Transaction;
@@ -79,7 +78,7 @@ describe('MerkleTree', () => {
   describe('buildTree', () => {
     it('should build tree for empty UTXO transactions', () => {
       const tree = MerkleTree.buildTree([]);
-      
+
       expect(tree).toHaveLength(1);
       expect(tree[0].isLeaf).toBe(true);
       expect(tree[0].hash).toHaveLength(64);
@@ -87,7 +86,7 @@ describe('MerkleTree', () => {
 
     it('should build tree for single UTXO transaction', () => {
       const tree = MerkleTree.buildTree([mockUTXOTransaction]);
-      
+
       expect(tree).toHaveLength(1);
       expect(tree[0].isLeaf).toBe(true);
       expect(tree[0].transactionId).toBe(mockUTXOTransaction.id);
@@ -96,26 +95,32 @@ describe('MerkleTree', () => {
 
     it('should build tree for multiple UTXO transactions', () => {
       const tree = MerkleTree.buildTree(mockUTXOTransactions);
-      
+
       expect(tree.length).toBeGreaterThan(mockUTXOTransactions.length);
-      
+
       // Check leaf nodes
       const leafNodes = tree.filter(node => node.isLeaf);
       expect(leafNodes).toHaveLength(mockUTXOTransactions.length);
-      
+
       // Check root node exists
-      const rootNodes = tree.filter(node => !node.isLeaf && !tree.some(n => n.left === node || n.right === node));
+      const rootNodes = tree.filter(
+        node =>
+          !node.isLeaf && !tree.some(n => n.left === node || n.right === node)
+      );
       expect(rootNodes).toHaveLength(1);
     });
 
     it('should build tree for odd number of UTXO transactions', () => {
-      const threeTransactions = [...mockUTXOTransactions, {
-        ...mockUTXOTransaction,
-        id: 'third-transaction',
-      }];
-      
+      const threeTransactions = [
+        ...mockUTXOTransactions,
+        {
+          ...mockUTXOTransaction,
+          id: 'third-transaction',
+        },
+      ];
+
       const tree = MerkleTree.buildTree(threeTransactions);
-      
+
       const leafNodes = tree.filter(node => node.isLeaf);
       expect(leafNodes).toHaveLength(3);
     });
@@ -124,7 +129,7 @@ describe('MerkleTree', () => {
   describe('buildTreeLegacy', () => {
     it('should build tree for empty legacy transactions', () => {
       const tree = MerkleTree.buildTreeLegacy([]);
-      
+
       expect(tree).toHaveLength(1);
       expect(tree[0].isLeaf).toBe(true);
       expect(tree[0].hash).toHaveLength(64);
@@ -132,7 +137,7 @@ describe('MerkleTree', () => {
 
     it('should build tree for legacy transactions', () => {
       const tree = MerkleTree.buildTreeLegacy(mockTransactions);
-      
+
       const leafNodes = tree.filter(node => node.isLeaf);
       expect(leafNodes).toHaveLength(mockTransactions.length);
     });
@@ -169,8 +174,11 @@ describe('MerkleTree', () => {
 
   describe('generateProof', () => {
     it('should generate proof for existing UTXO transaction', () => {
-      const proof = MerkleTree.generateProof(mockUTXOTransactions, mockUTXOTransaction.id);
-      
+      const proof = MerkleTree.generateProof(
+        mockUTXOTransactions,
+        mockUTXOTransaction.id
+      );
+
       expect(proof).not.toBeNull();
       expect(proof!.transactionId).toBe(mockUTXOTransaction.id);
       expect(proof!.transactionHash).toHaveLength(64);
@@ -180,13 +188,19 @@ describe('MerkleTree', () => {
     });
 
     it('should return null for non-existing UTXO transaction', () => {
-      const proof = MerkleTree.generateProof(mockUTXOTransactions, 'non-existing-id');
+      const proof = MerkleTree.generateProof(
+        mockUTXOTransactions,
+        'non-existing-id'
+      );
       expect(proof).toBeNull();
     });
 
     it('should generate proof with correct structure', () => {
-      const proof = MerkleTree.generateProof(mockUTXOTransactions, mockUTXOTransaction.id);
-      
+      const proof = MerkleTree.generateProof(
+        mockUTXOTransactions,
+        mockUTXOTransaction.id
+      );
+
       expect(proof).not.toBeNull();
       for (const element of proof!.proof) {
         expect(element.hash).toHaveLength(64);
@@ -195,8 +209,11 @@ describe('MerkleTree', () => {
     });
 
     it('should generate proof for single transaction (empty proof)', () => {
-      const proof = MerkleTree.generateProof([mockUTXOTransaction], mockUTXOTransaction.id);
-      
+      const proof = MerkleTree.generateProof(
+        [mockUTXOTransaction],
+        mockUTXOTransaction.id
+      );
+
       expect(proof).not.toBeNull();
       expect(proof!.proof).toHaveLength(0); // Single transaction needs no proof elements
     });
@@ -204,8 +221,11 @@ describe('MerkleTree', () => {
 
   describe('generateProofLegacy', () => {
     it('should generate proof for existing legacy transaction', () => {
-      const proof = MerkleTree.generateProofLegacy(mockTransactions, mockTransaction.id);
-      
+      const proof = MerkleTree.generateProofLegacy(
+        mockTransactions,
+        mockTransaction.id
+      );
+
       expect(proof).not.toBeNull();
       expect(proof!.transactionId).toBe(mockTransaction.id);
       expect(proof!.transactionHash).toHaveLength(64);
@@ -213,39 +233,57 @@ describe('MerkleTree', () => {
     });
 
     it('should return null for non-existing legacy transaction', () => {
-      const proof = MerkleTree.generateProofLegacy(mockTransactions, 'non-existing-id');
+      const proof = MerkleTree.generateProofLegacy(
+        mockTransactions,
+        'non-existing-id'
+      );
       expect(proof).toBeNull();
     });
   });
 
   describe('verifyProof', () => {
     it('should verify valid UTXO transaction proof', () => {
-      const proof = MerkleTree.generateProof(mockUTXOTransactions, mockUTXOTransaction.id);
-      
+      const proof = MerkleTree.generateProof(
+        mockUTXOTransactions,
+        mockUTXOTransaction.id
+      );
+
       expect(proof).not.toBeNull();
       const isValid = MerkleTree.verifyProof(proof!, proof!.merkleRoot);
       expect(isValid).toBe(true);
     });
 
     it('should verify valid legacy transaction proof', () => {
-      const proof = MerkleTree.generateProofLegacy(mockTransactions, mockTransaction.id);
-      
+      const proof = MerkleTree.generateProofLegacy(
+        mockTransactions,
+        mockTransaction.id
+      );
+
       expect(proof).not.toBeNull();
       const isValid = MerkleTree.verifyProof(proof!, proof!.merkleRoot);
       expect(isValid).toBe(true);
     });
 
     it('should reject proof with wrong merkle root', () => {
-      const proof = MerkleTree.generateProof(mockUTXOTransactions, mockUTXOTransaction.id);
-      
+      const proof = MerkleTree.generateProof(
+        mockUTXOTransactions,
+        mockUTXOTransaction.id
+      );
+
       expect(proof).not.toBeNull();
-      const isValid = MerkleTree.verifyProof(proof!, 'wrong-merkle-root'.padEnd(64, '0'));
+      const isValid = MerkleTree.verifyProof(
+        proof!,
+        'wrong-merkle-root'.padEnd(64, '0')
+      );
       expect(isValid).toBe(false);
     });
 
     it('should reject proof with tampered proof elements', () => {
-      const proof = MerkleTree.generateProof(mockUTXOTransactions, mockUTXOTransaction.id);
-      
+      const proof = MerkleTree.generateProof(
+        mockUTXOTransactions,
+        mockUTXOTransaction.id
+      );
+
       expect(proof).not.toBeNull();
       if (proof!.proof.length > 0) {
         proof!.proof[0].hash = 'tampered-hash'.padEnd(64, '0');
@@ -255,8 +293,11 @@ describe('MerkleTree', () => {
     });
 
     it('should verify empty proof for single transaction', () => {
-      const proof = MerkleTree.generateProof([mockUTXOTransaction], mockUTXOTransaction.id);
-      
+      const proof = MerkleTree.generateProof(
+        [mockUTXOTransaction],
+        mockUTXOTransaction.id
+      );
+
       expect(proof).not.toBeNull();
       expect(proof!.proof).toHaveLength(0);
       const isValid = MerkleTree.verifyProof(proof!, proof!.merkleRoot);
@@ -266,12 +307,15 @@ describe('MerkleTree', () => {
 
   describe('compressProof', () => {
     it('should compress and decompress proof correctly', () => {
-      const proof = MerkleTree.generateProof(mockUTXOTransactions, mockUTXOTransaction.id);
-      
+      const proof = MerkleTree.generateProof(
+        mockUTXOTransactions,
+        mockUTXOTransaction.id
+      );
+
       expect(proof).not.toBeNull();
       const compressed = MerkleTree.compressProof(proof!);
       const decompressed = MerkleTree.decompressProof(compressed);
-      
+
       expect(decompressed.transactionId).toBe(proof!.transactionId);
       expect(decompressed.transactionHash).toBe(proof!.transactionHash);
       expect(decompressed.merkleRoot).toBe(proof!.merkleRoot);
@@ -280,24 +324,30 @@ describe('MerkleTree', () => {
     });
 
     it('should create smaller compressed proof', () => {
-      const proof = MerkleTree.generateProof(mockUTXOTransactions, mockUTXOTransaction.id);
-      
+      const proof = MerkleTree.generateProof(
+        mockUTXOTransactions,
+        mockUTXOTransaction.id
+      );
+
       expect(proof).not.toBeNull();
       const compressed = MerkleTree.compressProof(proof!);
-      
+
       const originalSize = JSON.stringify(proof).length;
       const compressedSize = JSON.stringify(compressed).length;
-      
+
       // Compressed should be smaller (though not necessarily by much for small proofs)
       expect(compressedSize).toBeLessThanOrEqual(originalSize);
     });
 
     it('should compress proof with correct structure', () => {
-      const proof = MerkleTree.generateProof(mockUTXOTransactions, mockUTXOTransaction.id);
-      
+      const proof = MerkleTree.generateProof(
+        mockUTXOTransactions,
+        mockUTXOTransaction.id
+      );
+
       expect(proof).not.toBeNull();
       const compressed = MerkleTree.compressProof(proof!);
-      
+
       expect(compressed.txId).toBe(proof!.transactionId);
       expect(compressed.txHash).toBe(proof!.transactionHash);
       expect(compressed.root).toBe(proof!.merkleRoot);
@@ -309,13 +359,19 @@ describe('MerkleTree', () => {
 
   describe('decompressProof', () => {
     it('should maintain proof validity after compression/decompression', () => {
-      const proof = MerkleTree.generateProof(mockUTXOTransactions, mockUTXOTransaction.id);
-      
+      const proof = MerkleTree.generateProof(
+        mockUTXOTransactions,
+        mockUTXOTransaction.id
+      );
+
       expect(proof).not.toBeNull();
       const compressed = MerkleTree.compressProof(proof!);
       const decompressed = MerkleTree.decompressProof(compressed);
-      
-      const isValid = MerkleTree.verifyProof(decompressed, decompressed.merkleRoot);
+
+      const isValid = MerkleTree.verifyProof(
+        decompressed,
+        decompressed.merkleRoot
+      );
       expect(isValid).toBe(true);
     });
   });
@@ -323,7 +379,7 @@ describe('MerkleTree', () => {
   describe('Large transaction sets', () => {
     it('should handle large number of transactions efficiently', () => {
       const largeTransactionSet: UTXOTransaction[] = [];
-      
+
       // Create 100 mock transactions
       for (let i = 0; i < 100; i++) {
         const mockUTXO: UTXO = {
@@ -335,7 +391,7 @@ describe('MerkleTree', () => {
           isSpent: false,
         };
         utxoManager.addUTXO(mockUTXO);
-        
+
         const utxoTransactionManager = new UTXOTransactionManager();
         const tx = utxoTransactionManager.createTransaction(
           `address-${i}`,
@@ -347,18 +403,18 @@ describe('MerkleTree', () => {
         tx.id = `tx-${i}`; // Override ID for predictability
         largeTransactionSet.push(tx);
       }
-      
+
       const startTime = Date.now();
       const root = MerkleTree.calculateRoot(largeTransactionSet);
       const endTime = Date.now();
-      
+
       expect(root).toHaveLength(64);
       expect(endTime - startTime).toBeLessThan(1000); // Should complete in less than 1 second
     });
 
     it('should generate and verify proofs for large transaction sets', () => {
       const largeTransactionSet: UTXOTransaction[] = [];
-      
+
       // Create 50 mock transactions for faster testing
       for (let i = 0; i < 50; i++) {
         const mockUTXO: UTXO = {
@@ -370,7 +426,7 @@ describe('MerkleTree', () => {
           isSpent: false,
         };
         utxoManager.addUTXO(mockUTXO);
-        
+
         const utxoTransactionManager = new UTXOTransactionManager();
         const tx = utxoTransactionManager.createTransaction(
           `address-${i}`,
@@ -382,11 +438,11 @@ describe('MerkleTree', () => {
         tx.id = `tx-${i}`;
         largeTransactionSet.push(tx);
       }
-      
+
       // Test proof generation and verification for middle transaction
       const targetTxId = 'tx-25';
       const proof = MerkleTree.generateProof(largeTransactionSet, targetTxId);
-      
+
       expect(proof).not.toBeNull();
       const isValid = MerkleTree.verifyProof(proof!, proof!.merkleRoot);
       expect(isValid).toBe(true);
@@ -398,7 +454,7 @@ describe('MerkleTree', () => {
       const root = MerkleTree.calculateRoot([]);
       const tree = MerkleTree.buildTree([]);
       const proof = MerkleTree.generateProof([], 'any-id');
-      
+
       expect(root).toHaveLength(64);
       expect(tree).toHaveLength(1);
       expect(proof).toBeNull();
@@ -408,10 +464,10 @@ describe('MerkleTree', () => {
       // Create two transactions that would theoretically have the same hash
       const tx1 = { ...mockUTXOTransaction, id: 'tx-1' };
       const tx2 = { ...mockUTXOTransaction, id: 'tx-2' };
-      
+
       const transactions = [tx1, tx2];
       const root = MerkleTree.calculateRoot(transactions);
-      
+
       expect(root).toHaveLength(64);
     });
   });

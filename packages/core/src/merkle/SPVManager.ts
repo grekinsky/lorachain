@@ -33,7 +33,9 @@ export class SPVManager {
     }
 
     // Verify transaction hash matches proof
-    const txHash = createHash('sha256').update(JSON.stringify(tx)).digest('hex');
+    const txHash = createHash('sha256')
+      .update(JSON.stringify(tx))
+      .digest('hex');
     if (txHash !== proof.transactionHash) {
       errors.push('Transaction hash does not match proof');
       transactionVerified = false;
@@ -82,7 +84,9 @@ export class SPVManager {
     }
 
     // Verify transaction hash matches proof
-    const txHash = createHash('sha256').update(JSON.stringify(tx)).digest('hex');
+    const txHash = createHash('sha256')
+      .update(JSON.stringify(tx))
+      .digest('hex');
     if (txHash !== proof.transactionHash) {
       errors.push('Transaction hash does not match proof');
       transactionVerified = false;
@@ -116,14 +120,16 @@ export class SPVManager {
    * This allows light clients to maintain transaction history without full blockchain
    */
   static getTransactionHistory(
-    address: string,
-    proofs: MerkleProof[]
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _address: string,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _proofs: MerkleProof[]
   ): UTXOTransaction[] {
     // Note: In a real implementation, this would require additional data
     // about which transactions belong to the address. For now, we return
     // an empty array as this method needs the actual transactions,
     // not just proofs.
-    
+
     // This method should be called with validated proofs and their corresponding transactions
     return [];
   }
@@ -189,14 +195,23 @@ export class SPVManager {
     proofs: MerkleProof[],
     blockHeaders: BlockHeader[]
   ): SPVValidationResult[] {
-    if (transactions.length !== proofs.length || proofs.length !== blockHeaders.length) {
-      throw new Error('Transactions, proofs, and block headers arrays must have the same length');
+    if (
+      transactions.length !== proofs.length ||
+      proofs.length !== blockHeaders.length
+    ) {
+      throw new Error(
+        'Transactions, proofs, and block headers arrays must have the same length'
+      );
     }
 
     const results: SPVValidationResult[] = [];
 
     for (let i = 0; i < transactions.length; i++) {
-      const result = this.verifyTransaction(transactions[i], proofs[i], blockHeaders[i]);
+      const result = this.verifyTransaction(
+        transactions[i],
+        proofs[i],
+        blockHeaders[i]
+      );
       results.push(result);
     }
 
@@ -287,13 +302,15 @@ export class SPVManager {
   private static validateBasicBlockHeader(header: BlockHeader): boolean {
     try {
       // Check required fields exist
-      if (typeof header.index !== 'number' ||
-          typeof header.timestamp !== 'number' ||
-          typeof header.previousHash !== 'string' ||
-          typeof header.merkleRoot !== 'string' ||
-          typeof header.hash !== 'string' ||
-          typeof header.nonce !== 'number' ||
-          typeof header.transactionCount !== 'number') {
+      if (
+        typeof header.index !== 'number' ||
+        typeof header.timestamp !== 'number' ||
+        typeof header.previousHash !== 'string' ||
+        typeof header.merkleRoot !== 'string' ||
+        typeof header.hash !== 'string' ||
+        typeof header.nonce !== 'number' ||
+        typeof header.transactionCount !== 'number'
+      ) {
         return false;
       }
 
@@ -307,13 +324,15 @@ export class SPVManager {
       // Check hash lengths (SHA-256 hashes are 64 hex characters)
       if (header.hash.length !== 64) return false;
       if (header.merkleRoot.length !== 64) return false;
-      if (header.previousHash !== '0' && header.previousHash.length !== 64) return false;
+      if (header.previousHash !== '0' && header.previousHash.length !== 64)
+        return false;
 
       // Check hash format (must be hex) - be more lenient with case
       const hexRegex = /^[0-9a-fA-F]+$/;
       if (!hexRegex.test(header.hash)) return false;
       if (!hexRegex.test(header.merkleRoot)) return false;
-      if (header.previousHash !== '0' && !hexRegex.test(header.previousHash)) return false;
+      if (header.previousHash !== '0' && !hexRegex.test(header.previousHash))
+        return false;
 
       return true;
     } catch (error) {
@@ -328,7 +347,7 @@ export class SPVManager {
   static estimateProofSize(proof: MerkleProof): number {
     const baseSize = 128; // Transaction ID, hash, merkle root, leaf index
     const proofElementSize = 65; // Hash (64) + direction (1)
-    return baseSize + (proof.proof.length * proofElementSize);
+    return baseSize + proof.proof.length * proofElementSize;
   }
 
   /**
