@@ -1,11 +1,40 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { BlockManager } from './block.js';
 import { TransactionManager } from './transaction.js';
-import type { Block, Transaction } from './types.js';
+import type { Block, Transaction, GenesisConfig } from './types.js';
 
 describe('BlockManager', () => {
   let mockTransaction: Transaction;
   let mockTransactions: Transaction[];
+
+  const testGenesisConfig: GenesisConfig = {
+    chainId: 'block-test-v1',
+    networkName: 'Block Test Network',
+    version: '1.0.0',
+    initialAllocations: [
+      {
+        address: 'lora1test000000000000000000000000000000000',
+        amount: 1000000,
+        description: 'Test allocation',
+      },
+    ],
+    totalSupply: 21000000,
+    networkParams: {
+      initialDifficulty: 1,
+      targetBlockTime: 180,
+      adjustmentPeriod: 10,
+      maxDifficultyRatio: 4,
+      maxBlockSize: 1024 * 1024,
+      miningReward: 10,
+      halvingInterval: 210000,
+    },
+    metadata: {
+      timestamp: 1700000000000,
+      description: 'Block Test Genesis Block',
+      creator: 'Test Suite',
+      networkType: 'testnet',
+    },
+  };
 
   beforeEach(() => {
     mockTransaction = TransactionManager.createTransaction(
@@ -18,31 +47,29 @@ describe('BlockManager', () => {
   });
 
   describe('createGenesisBlock', () => {
-    it('should create genesis block', () => {
-      const genesisBlock = BlockManager.createGenesisBlock();
+    it('should create genesis block with configuration', () => {
+      const genesisBlock = BlockManager.createGenesisBlock(testGenesisConfig);
 
       expect(genesisBlock).toMatchObject({
         index: 0,
-        transactions: [],
+        transactions: [], // Empty - UTXO allocations handled separately
         previousHash: '0',
         nonce: 0,
+        difficulty: 1, // From testGenesisConfig
       });
-      expect(genesisBlock.timestamp).toBeDefined();
+      expect(genesisBlock.timestamp).toBe(testGenesisConfig.metadata.timestamp);
       expect(genesisBlock.hash).toBeDefined();
       expect(genesisBlock.merkleRoot).toBeDefined();
     });
 
-    it('should have different hashes due to different timestamps', () => {
-      const block1 = BlockManager.createGenesisBlock();
-      // Wait to ensure different timestamp
-      const now = Date.now();
-      while (Date.now() === now) {
-        // Wait for time to pass
-      }
-      const block2 = BlockManager.createGenesisBlock();
+    it('should create consistent blocks with same configuration', () => {
+      const block1 = BlockManager.createGenesisBlock(testGenesisConfig);
+      const block2 = BlockManager.createGenesisBlock(testGenesisConfig);
 
-      // Hash should be different due to different timestamps
-      expect(block1.hash).not.toBe(block2.hash);
+      // Should be identical since timestamp is fixed in config
+      expect(block1.hash).toBe(block2.hash);
+      expect(block1.timestamp).toBe(block2.timestamp);
+      expect(block1.difficulty).toBe(block2.difficulty);
     });
   });
 
@@ -233,7 +260,7 @@ describe('BlockManager', () => {
     let previousBlock: Block;
 
     beforeEach(() => {
-      previousBlock = BlockManager.createGenesisBlock();
+      previousBlock = BlockManager.createGenesisBlock(testGenesisConfig);
       validBlock = BlockManager.createBlock(
         1,
         mockTransactions,
@@ -330,7 +357,7 @@ describe('BlockManager', () => {
     });
 
     it('should validate genesis block without previous block', () => {
-      const genesisBlock = BlockManager.createGenesisBlock();
+      const genesisBlock = BlockManager.createGenesisBlock(testGenesisConfig);
       const result = BlockManager.validateBlock(genesisBlock, null);
 
       expect(result.isValid).toBe(true);

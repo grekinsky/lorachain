@@ -1,0 +1,48 @@
+{
+  "chainId": "lorachain-mainnet-v1",
+  "networkName": "Lorachain Mainnet",
+  "version": "1.0.0",
+  "initialAllocations": [
+    {
+      "address": "lora1foundation000000000000000000000000000",
+      "amount": 5000000,
+      "description": "Foundation treasury allocation"
+    },
+    {
+      "address": "lora1development0000000000000000000000000",
+      "amount": 2000000,
+      "description": "Development fund allocation"
+    },
+    {
+      "address": "lora1community00000000000000000000000000",
+      "amount": 1500000,
+      "description": "Community programs allocation"
+    },
+    {
+      "address": "lora1ecosystem000000000000000000000000000",
+      "amount": 1000000,
+      "description": "Ecosystem growth allocation"
+    },
+    {
+      "address": "lora1advisors000000000000000000000000000",
+      "amount": 500000,
+      "description": "Advisors and partners allocation"
+    }
+  ],
+  "totalSupply": 21000000,
+  "networkParams": {
+    "initialDifficulty": 4,
+    "targetBlockTime": 300,
+    "adjustmentPeriod": 10,
+    "maxDifficultyRatio": 4,
+    "maxBlockSize": 1048576,
+    "miningReward": 50,
+    "halvingInterval": 210000
+  },
+  "metadata": {
+    "timestamp": 1700000000000,
+    "description": "Lorachain Mainnet Genesis Block - Production network for LoRa mesh cryptocurrency transactions",
+    "creator": "Lorachain Foundation",
+    "networkType": "mainnet"
+  }
+}

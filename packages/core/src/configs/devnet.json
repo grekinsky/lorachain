@@ -1,0 +1,43 @@
+{
+  "chainId": "lorachain-devnet-v1",
+  "networkName": "Lorachain Development Network",
+  "version": "1.0.0",
+  "initialAllocations": [
+    {
+      "address": "lora1dev000000000000000000000000000000000",
+      "amount": 5000000,
+      "description": "Primary development allocation"
+    },
+    {
+      "address": "lora1test00000000000000000000000000000000",
+      "amount": 3000000,
+      "description": "Test scenarios allocation"
+    },
+    {
+      "address": "lora1local0000000000000000000000000000000",
+      "amount": 2000000,
+      "description": "Local development allocation"
+    },
+    {
+      "address": "lora1demo00000000000000000000000000000000",
+      "amount": 1000000,
+      "description": "Demo and presentation allocation"
+    }
+  ],
+  "totalSupply": 21000000,
+  "networkParams": {
+    "initialDifficulty": 1,
+    "targetBlockTime": 60,
+    "adjustmentPeriod": 3,
+    "maxDifficultyRatio": 4,
+    "maxBlockSize": 1048576,
+    "miningReward": 10,
+    "halvingInterval": 50000
+  },
+  "metadata": {
+    "timestamp": 1700000000000,
+    "description": "Lorachain Development Network Genesis Block - Fast development and testing environment",
+    "creator": "Lorachain Development Team",
+    "networkType": "devnet"
+  }
+}

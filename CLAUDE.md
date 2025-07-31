@@ -65,7 +65,7 @@ cd packages/core && pnpm test    # Test specific package
 - **Path mapping** configured for `@lorachain/*` packages in tsconfig.json
 - **LevelDB** for production database persistence with sublevel organization
 - **MessagePack** for efficient data serialization with optional gzip compression
-- **Vitest** for testing framework with comprehensive coverage (306+ tests)
+- **Vitest** for testing framework with comprehensive coverage (593+ tests)
 - **ESLint + Prettier** for code quality
 - **LoRa constraints**: 256-byte message limit, duty cycle restrictions
 
@@ -84,6 +84,7 @@ cd packages/core && pnpm test    # Test specific package
 - **`CryptographicService`** (core) - Key generation, signing, and verification (ECDSA/Ed25519)
 - **`SecureTransactionManager`** (core) - Cryptographically secure transaction creation
 - **`BlockManager`** (core) - Block creation, mining, validation, and merkle proof generation
+- **`GenesisConfigManager`** (core) - Genesis block configuration and UTXO-based initial allocations
 - **`SecureMobileWallet`** (mobile-wallet) - Cryptographically secure wallet with key pairs
 - **`LorachainNode`** (node) - Full node with mining and peer management
 - **`MeshProtocol`** (mesh-protocol) - LoRa mesh communication
@@ -106,6 +107,7 @@ Each package includes comprehensive unit tests using Vitest:
   - **Integration tests**: 19 tests covering full persistence workflows, cross-database compatibility, and performance
   - **Difficulty adjustment**: 25 tests covering Bitcoin-style algorithms, hashrate calculation, and edge cases
   - **Blockchain integration**: 15 tests covering end-to-end difficulty adjustment and validation
+  - **Genesis configuration**: 35 tests covering configurable genesis blocks, UTXO allocations, and network parameters
   - **UTXO transaction creation and validation**
   - **Merkle tree proof generation, verification, and compression**
   - **SPV transaction verification and block header validation**
@@ -117,7 +119,7 @@ Each package includes comprehensive unit tests using Vitest:
 - **Node package**: Tests for full node functionality
 - **Mesh protocol**: Tests for LoRa communication protocol
 
-**Total test coverage**: 306+ tests across all packages with 100% passing rate.
+**Total test coverage**: 593+ tests across all packages with 100% passing rate.
 
 Run package-specific tests with `cd packages/<name> && pnpm test` or use watch mode for development with `pnpm test:watch`.
 
@@ -140,6 +142,8 @@ Run package-specific tests with `cd packages/<name> && pnpm test` or use watch m
 - **Transaction Structure**: UTXOTransaction with inputs (referencing previous outputs) and outputs
 - **Balance Calculation**: Derived from unspent transaction outputs (UTXOs) for each address
 - **Transaction Validation**: Checks UTXO existence, ownership, and signature validity
+- **Genesis Configuration**: Configurable genesis blocks with UTXO-based initial allocations and network parameters
+- **Clean Implementation**: No backwards compatibility - modern, clean implementations throughout
 
 ### Merkle Tree System (NO LEGACY SUPPORT)
 
@@ -201,3 +205,30 @@ The persistence layer is **UTXO-only** and follows the project's "NO BACKWARDS C
 - Database supports both LevelDB (production) and Memory (testing) backends
 - Sublevel organization ensures clean data separation and efficient queries
 - Batch operations optimize performance while maintaining atomic consistency
+
+### Genesis Configuration System (UTXO-FOCUSED)
+
+The genesis configuration system provides comprehensive control over blockchain initialization:
+
+#### Genesis Configuration Manager Operations
+
+- **`GenesisConfigManager.loadConfig()`**: Load genesis configuration from JSON files (devnet, testnet, mainnet)
+- **`GenesisConfigManager.createGenesisBlock()`**: Generate genesis block with UTXO-based initial allocations
+- **`GenesisConfigManager.validateConfig()`**: Validate genesis configuration structure and values
+- **`GenesisConfigManager.initializeBlockchain()`**: Initialize blockchain with genesis configuration
+- **`GenesisConfigManager.getNetworkParameters()`**: Retrieve network-specific parameters
+
+#### Configuration Features
+
+- **Initial UTXO Allocations**: Configure initial coin distribution with UTXO-based allocations
+- **Network Parameters**: Set block time targets, difficulty adjustment parameters, and reward schedules
+- **Multi-Network Support**: Separate configurations for devnet, testnet, and mainnet
+- **Validation**: Comprehensive validation of all configuration parameters
+- **Clean Implementation**: No backwards compatibility - UTXO-exclusive design
+
+**Key Constraints:**
+
+- All genesis operations are UTXO-exclusive (no legacy support)
+- Initial allocations create proper UTXO outputs for addresses
+- Network parameters are immutable after blockchain initialization
+- Configuration files must pass strict validation before use

@@ -3,7 +3,7 @@ import { LorachainNode } from './node.js';
 import { Blockchain, BlockManager } from '@lorachain/core';
 import { Logger } from '@lorachain/shared';
 import type { NodeConfig } from './node.js';
-import type { NetworkNode } from '@lorachain/core';
+import type { NetworkNode, GenesisConfig } from '@lorachain/core';
 
 // Mock the logger
 vi.mock('@lorachain/shared', () => ({
@@ -21,6 +21,7 @@ describe('LorachainNode', () => {
   let node: LorachainNode;
   let mockLogger: any;
   let nodeConfig: NodeConfig;
+  let testGenesisConfig: GenesisConfig;
 
   beforeEach(() => {
     mockLogger = {
@@ -32,6 +33,36 @@ describe('LorachainNode', () => {
 
     (Logger.getInstance as any).mockReturnValue(mockLogger);
 
+    // Test genesis configuration
+    testGenesisConfig = {
+      chainId: 'node-test-chain',
+      networkName: 'Node Test Network',
+      version: '1.0.0',
+      initialAllocations: [
+        {
+          address: 'lora1test000000000000000000000000000000000',
+          amount: 1000000,
+          description: 'Test allocation for node tests',
+        },
+      ],
+      totalSupply: 21000000,
+      networkParams: {
+        initialDifficulty: 1,
+        targetBlockTime: 180,
+        adjustmentPeriod: 10,
+        maxDifficultyRatio: 4,
+        maxBlockSize: 1024 * 1024,
+        miningReward: 10,
+        halvingInterval: 210000,
+      },
+      metadata: {
+        timestamp: 1700000000000,
+        description: 'Node Test Network Genesis Block',
+        creator: 'Node Test Suite',
+        networkType: 'testnet',
+      },
+    };
+
     nodeConfig = {
       id: 'test-node-1',
       port: 8080,
@@ -39,6 +70,18 @@ describe('LorachainNode', () => {
       type: 'full',
       enableMining: false,
       minerAddress: 'miner-address',
+      genesisConfig: testGenesisConfig,
+      persistenceConfig: {
+        enabled: true,
+        dbPath: ':memory:',
+        dbType: 'memory' as const,
+        autoSave: true,
+        batchSize: 100,
+        compressionType: 'none' as const,
+        utxoSetCacheSize: 1000,
+        cryptographicAlgorithm: 'secp256k1' as const,
+        compactionStyle: 'size' as const,
+      },
     };
   });
 
@@ -51,11 +94,14 @@ describe('LorachainNode', () => {
       expect(node.getPeers()).toHaveLength(0);
     });
 
-    it('should initialize blockchain', () => {
+    it('should initialize blockchain', async () => {
       node = new LorachainNode(nodeConfig);
 
       const blockchain = node.getBlockchain();
       expect(blockchain).toBeInstanceOf(Blockchain);
+
+      // Wait for blockchain initialization to complete
+      await blockchain.waitForInitialization();
       expect(blockchain.getBlocks()).toHaveLength(1); // Genesis block
     });
 
@@ -205,8 +251,12 @@ describe('LorachainNode', () => {
   describe('addBlock', () => {
     let validBlock: any;
 
-    beforeEach(() => {
+    beforeEach(async () => {
       node = new LorachainNode(nodeConfig);
+
+      // Wait for blockchain initialization to complete
+      const blockchain = node.getBlockchain();
+      await blockchain.waitForInitialization();
 
       // Create a valid block manually using BlockManager
       const transaction = {
@@ -220,7 +270,6 @@ describe('LorachainNode', () => {
         nonce: 0,
       };
 
-      const blockchain = node.getBlockchain();
       const latestBlock = blockchain.getLatestBlock();
 
       // Create a valid block using BlockManager

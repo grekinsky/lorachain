@@ -55,3 +55,6 @@ screenshots
 
 # Test Blockchain data
 packages/core/test-blockchain-data
+
+# Node Blockchain data
+packages/node/node-data
