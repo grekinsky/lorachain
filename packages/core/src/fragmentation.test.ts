@@ -5,9 +5,9 @@ import {
   UTXOFragmentCache,
 } from './fragmentation.js';
 import { CryptographicService } from './cryptographic.js';
-import type { 
-  UTXOTransaction, 
-  Block, 
+import type {
+  UTXOTransaction,
+  Block,
   CompressedMerkleProof,
   Fragment,
 } from './types.js';
@@ -66,7 +66,7 @@ describe('UTXOMessageFragmenter', () => {
       const fragments = fragmenter.splitUTXOTransaction(largeTx, keyPair);
 
       expect(fragments.length).toBeGreaterThan(1);
-      
+
       // Verify fragment headers
       fragments.forEach((fragment, index) => {
         expect(fragment.header.sequenceNumber).toBe(index);
@@ -77,7 +77,8 @@ describe('UTXOMessageFragmenter', () => {
     });
 
     it('should calculate optimal fragment size for UTXO transactions', () => {
-      const optimalSize = fragmenter.calculateOptimalFragmentSize('utxo_transaction');
+      const optimalSize =
+        fragmenter.calculateOptimalFragmentSize('utxo_transaction');
       expect(optimalSize).toBe(180); // Per specification
     });
   });
@@ -133,7 +134,8 @@ describe('UTXOMessageFragmenter', () => {
     });
 
     it('should calculate optimal fragment size for merkle proofs', () => {
-      const optimalSize = fragmenter.calculateOptimalFragmentSize('merkle_proof');
+      const optimalSize =
+        fragmenter.calculateOptimalFragmentSize('merkle_proof');
       expect(optimalSize).toBe(150); // Optimized for compressed proofs
     });
   });
@@ -166,9 +168,9 @@ describe('UTXOFragmentReassembler', () => {
     };
 
     const fragments = fragmenter.splitUTXOTransaction(originalTx, keyPair);
-    
+
     // Add fragments in order
-    fragments.forEach((fragment) => {
+    fragments.forEach(fragment => {
       const result = reassembler.addFragment(fragment);
       if (fragment.header.sequenceNumber === fragments.length - 1) {
         expect(result).toBe('message_complete');
@@ -178,7 +180,9 @@ describe('UTXOFragmentReassembler', () => {
     });
 
     // Retrieve complete transaction
-    const reassembledTx = reassembler.getCompleteUTXOTransaction(fragments[0].header.messageId);
+    const reassembledTx = reassembler.getCompleteUTXOTransaction(
+      fragments[0].header.messageId
+    );
     expect(reassembledTx).toBeTruthy();
     expect(reassembledTx?.id).toBe(originalTx.id);
     expect(reassembledTx?.outputs).toHaveLength(originalTx.outputs.length);
@@ -188,20 +192,34 @@ describe('UTXOFragmentReassembler', () => {
     const originalTx: UTXOTransaction = {
       id: 'test-tx-1',
       inputs: [],
-      outputs: [{ value: 100, lockingScript: 'test-address', outputIndex: 0 }],
+      outputs: Array.from({ length: 20 }, (_, i) => ({
+        value: 100,
+        lockingScript: `address-${i}`,
+        outputIndex: i,
+      })),
       lockTime: 0,
       timestamp: Date.now(),
       fee: 0.001,
     };
 
     const fragments = fragmenter.splitUTXOTransaction(originalTx, keyPair);
-    
-    // Add first fragment twice
-    const result1 = reassembler.addFragment(fragments[0]);
-    const result2 = reassembler.addFragment(fragments[0]);
-    
-    expect(result1).toBe('fragment_added');
-    expect(result2).toBe('duplicate_fragment');
+
+    // Only test if we have multiple fragments
+    if (fragments.length > 1) {
+      // Add first fragment twice
+      const result1 = reassembler.addFragment(fragments[0]);
+      const result2 = reassembler.addFragment(fragments[0]);
+
+      expect(result1).toBe('fragment_added');
+      expect(result2).toBe('duplicate_fragment');
+    } else {
+      // For single fragment, adding it completes the message
+      const result1 = reassembler.addFragment(fragments[0]);
+      const result2 = reassembler.addFragment(fragments[0]);
+
+      expect(result1).toBe('message_complete');
+      expect(result2).toBe('duplicate_fragment');
+    }
   });
 
   it('should handle out-of-order fragments', () => {
@@ -219,7 +237,7 @@ describe('UTXOFragmentReassembler', () => {
     };
 
     const fragments = fragmenter.splitUTXOTransaction(originalTx, keyPair);
-    
+
     if (fragments.length > 1) {
       // Add fragments in reverse order
       for (let i = fragments.length - 1; i >= 0; i--) {
@@ -232,7 +250,9 @@ describe('UTXOFragmentReassembler', () => {
       }
 
       // Should still reassemble correctly
-      const reassembledTx = reassembler.getCompleteUTXOTransaction(fragments[0].header.messageId);
+      const reassembledTx = reassembler.getCompleteUTXOTransaction(
+        fragments[0].header.messageId
+      );
       expect(reassembledTx).toBeTruthy();
       expect(reassembledTx?.id).toBe(originalTx.id);
     }
@@ -250,13 +270,13 @@ describe('UTXOFragmentReassembler', () => {
     };
 
     const fragments = fragmenter.splitUTXOTransaction(originalTx, keyPair);
-    
+
     // Add only first fragment
     reassembler.addFragment(fragments[0]);
-    
+
     // Force cleanup
     reassembler.cleanup();
-    
+
     // This should work without throwing errors
     expect(() => reassembler.cleanup()).not.toThrow();
   });
@@ -291,18 +311,23 @@ describe('UTXOFragmentCache', () => {
     await cache.store(fragment);
 
     // Retrieve fragment
-    const retrieved = await cache.retrieve(fragment.header.messageId, fragment.header.sequenceNumber);
-    
+    const retrieved = await cache.retrieve(
+      fragment.header.messageId,
+      fragment.header.sequenceNumber
+    );
+
     expect(retrieved).toBeTruthy();
     expect(retrieved?.header.messageId).toEqual(fragment.header.messageId);
-    expect(retrieved?.header.sequenceNumber).toBe(fragment.header.sequenceNumber);
+    expect(retrieved?.header.sequenceNumber).toBe(
+      fragment.header.sequenceNumber
+    );
   });
 
   it('should return null for non-existent fragments', async () => {
     const fakeMessageId = new Uint8Array(16).fill(0);
-    
+
     const retrieved = await cache.retrieve(fakeMessageId, 0);
-    
+
     expect(retrieved).toBeNull();
   });
 
@@ -317,7 +342,7 @@ describe('UTXOFragmentCache', () => {
     };
 
     const fragments = fragmenter.splitUTXOTransaction(originalTx, keyPair);
-    
+
     // Store fragments
     for (const fragment of fragments) {
       await cache.store(fragment);

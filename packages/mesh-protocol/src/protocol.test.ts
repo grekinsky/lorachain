@@ -62,7 +62,7 @@ describe('MeshProtocol', () => {
 
       expect(mockLogger.info).toHaveBeenCalledWith(
         'Fragmented mesh protocol initialized',
-        { 
+        {
           nodeId: 'test-node-1',
           fragmentationEnabled: true,
           maxFragmentSize: 197,
@@ -81,7 +81,7 @@ describe('MeshProtocol', () => {
 
       expect(meshProtocol.isConnectedToMesh()).toBe(true);
       expect(mockLogger.info).toHaveBeenCalledWith(
-        'Connecting to mesh network',
+        'Connecting to fragmented mesh network',
         {
           nodeId: 'test-node-1',
           channel: 1,
@@ -141,7 +141,7 @@ describe('MeshProtocol', () => {
       expect(meshProtocol.isConnectedToMesh()).toBe(false);
 
       expect(mockLogger.info).toHaveBeenCalledWith(
-        'Disconnecting from mesh network',
+        'Disconnecting from fragmented mesh network',
         { nodeId: 'test-node-1' }
       );
     });
@@ -198,11 +198,13 @@ describe('MeshProtocol', () => {
       const result = await meshProtocol.sendMessage(meshMessage);
 
       expect(result).toBe(true);
-      expect(mockLogger.debug).toHaveBeenCalledWith('Sending mesh message', {
-        type: 'transaction',
-        from: 'test-node-1',
-        to: 'target-node',
-      });
+      expect(mockLogger.debug).toHaveBeenCalledWith(
+        'Transmitting message via LoRa',
+        {
+          messageType: 'transaction',
+          payloadSize: expect.any(Number),
+        }
+      );
     });
 
     it('should fail to send message when not connected', async () => {
@@ -236,14 +238,8 @@ describe('MeshProtocol', () => {
 
       const result = await meshProtocol.sendMessage(largeMessage);
 
-      expect(result).toBe(true); // Still queued
-      expect(mockLogger.warn).toHaveBeenCalledWith(
-        'Message too large for LoRa transmission',
-        {
-          messageSize: expect.any(Number),
-          messageType: 'transaction',
-        }
-      );
+      expect(result).toBe(true); // Fragmentation handles large messages
+      // Large messages are now fragmented instead of rejected
     });
   });
 
@@ -267,11 +263,14 @@ describe('MeshProtocol', () => {
       const result = meshProtocol.receiveMessage(serializedMessage);
 
       expect(result).toEqual(meshMessage);
-      expect(mockLogger.debug).toHaveBeenCalledWith('Received mesh message', {
-        type: 'transaction',
-        from: 'other-node',
-        to: undefined,
-      });
+      expect(mockLogger.debug).toHaveBeenCalledWith(
+        'Received complete mesh message',
+        {
+          type: 'transaction',
+          from: 'other-node',
+          to: undefined,
+        }
+      );
     });
 
     it('should update node info on message receipt', () => {
@@ -291,7 +290,7 @@ describe('MeshProtocol', () => {
 
       expect(result).toBeNull();
       expect(mockLogger.error).toHaveBeenCalledWith(
-        'Failed to deserialize received message',
+        'Failed to deserialize complete message',
         { error: expect.any(Error) }
       );
     });

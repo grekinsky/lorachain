@@ -16,6 +16,13 @@ export class WalletApp {
       bandwidth: 125000,
       spreadingFactor: 7,
       codingRate: 5,
+      fragmentation: {
+        maxFragmentSize: 197,
+        sessionTimeout: 300000,
+        maxConcurrentSessions: 50,
+        retryAttempts: 3,
+        ackRequired: false,
+      },
     });
 
     this.logger.info('Wallet app initialized', {

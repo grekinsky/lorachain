@@ -148,7 +148,7 @@ export class UTXOMessageFragmenter {
   ): Fragment {
     const messageId = this.generateMessageId(data);
     const flags = FragmentFlags.FIRST_FRAGMENT | FragmentFlags.LAST_FRAGMENT;
-    
+
     return this.createFragment(messageId, 0, 1, data, flags, keyPair);
   }
 
@@ -161,7 +161,7 @@ export class UTXOMessageFragmenter {
     keyPair: KeyPair
   ): Fragment {
     const checksum = crc32(payload);
-    
+
     // Create fragment header without signature first
     const headerData = new Uint8Array(27); // 16 + 2 + 2 + 2 + 1 + 4 = 27 bytes
     let offset = 0;
@@ -199,7 +199,7 @@ export class UTXOMessageFragmenter {
     const dataToSign = new Uint8Array(headerData.length + payload.length);
     dataToSign.set(headerData, 0);
     dataToSign.set(payload, headerData.length);
-    
+
     const messageHash = CryptographicService.hashMessage(dataToSign);
     const signature = CryptographicService.sign(
       messageHash,
@@ -286,14 +286,16 @@ export class UTXOFragmentReassembler {
     let session = this.sessions.get(messageId);
     if (!session) {
       session = this.createReassemblySession(fragment);
-      
+
       // Check session limit
       if (this.sessions.size >= this.maxSessions) {
         this.evictOldestSession();
       }
-      
+
       this.sessions.set(messageId, session);
-      this.logger.debug(`Created new reassembly session for message ${messageId}`);
+      this.logger.debug(
+        `Created new reassembly session for message ${messageId}`
+      );
     }
 
     // Check for duplicate fragment
@@ -327,7 +329,7 @@ export class UTXOFragmentReassembler {
   getCompleteUTXOTransaction(messageId: Uint8Array): UTXOTransaction | null {
     const id = bytesToHex(messageId);
     const session = this.sessions.get(id);
-    
+
     if (!session || session.receivedFragments.size !== session.totalFragments) {
       return null;
     }
@@ -347,7 +349,7 @@ export class UTXOFragmentReassembler {
   getCompleteBlock(messageId: Uint8Array): Block | null {
     const id = bytesToHex(messageId);
     const session = this.sessions.get(id);
-    
+
     if (!session || session.receivedFragments.size !== session.totalFragments) {
       return null;
     }
@@ -367,7 +369,7 @@ export class UTXOFragmentReassembler {
   getCompleteMerkleProof(messageId: Uint8Array): CompressedMerkleProof | null {
     const id = bytesToHex(messageId);
     const session = this.sessions.get(id);
-    
+
     if (!session || session.receivedFragments.size !== session.totalFragments) {
       return null;
     }
@@ -400,7 +402,9 @@ export class UTXOFragmentReassembler {
     }
 
     if (expiredSessions.length > 0) {
-      this.logger.debug(`Cleaned up ${expiredSessions.length} expired sessions`);
+      this.logger.debug(
+        `Cleaned up ${expiredSessions.length} expired sessions`
+      );
     }
   }
 
@@ -423,7 +427,7 @@ export class UTXOFragmentReassembler {
     }
 
     // TODO: Validate signature once we integrate cryptographic verification
-    
+
     return true;
   }
 
@@ -472,7 +476,7 @@ export class UTXOFragmentReassembler {
       if (!fragment) {
         throw new Error(`Missing fragment ${i} during reassembly`);
       }
-      
+
       reassembled.set(fragment, offset);
       offset += fragment.length;
     }
@@ -504,22 +508,25 @@ export class UTXOFragmentCache {
     }
   }
 
-  async retrieve(messageId: Uint8Array, sequence: number): Promise<Fragment | null> {
+  async retrieve(
+    messageId: Uint8Array,
+    sequence: number
+  ): Promise<Fragment | null> {
     const key = `${bytesToHex(messageId)}:${sequence}`;
-    
+
     // Check memory cache first
-    let fragment = this.cache.get(key);
-    if (fragment) {
-      return fragment;
+    const cachedFragment = this.cache.get(key);
+    if (cachedFragment) {
+      return cachedFragment;
     }
 
     // Check database if available
     if (this.db) {
       try {
-        fragment = await this.db.get<Fragment>(key, 'fragments');
-        if (fragment) {
-          this.cache.set(key, fragment); // Cache for future access
-          return fragment;
+        const dbFragment = await this.db.get<Fragment>(key, 'fragments');
+        if (dbFragment) {
+          this.cache.set(key, dbFragment); // Cache for future access
+          return dbFragment;
         }
       } catch (error) {
         this.logger.error(`Failed to retrieve fragment ${key}: ${error}`);

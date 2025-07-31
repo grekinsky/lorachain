@@ -1,14 +1,13 @@
-import type {
-  MeshMessage,
-  FragmentedMeshMessage,
-  Fragment,
-  FragmentationConfig,
-  FragmentationStats,
-  UTXOTransaction,
-  Block,
-  CompressedMerkleProof,
+import {
+  type MeshMessage,
+  type Fragment,
+  type FragmentationConfig,
+  type FragmentationStats,
+  type UTXOTransaction,
+  type Block,
+  type CompressedMerkleProof,
   ReassemblyResult,
-  FragmentedMeshProtocol,
+  type FragmentedMeshProtocol,
 } from '@lorachain/core';
 import {
   UTXOMessageFragmenter,
@@ -66,12 +65,12 @@ export class MeshProtocol implements FragmentedMeshProtocol {
     this.config = config;
     this.cryptoService = new CryptographicService();
     this.nodeKeyPair = CryptographicService.generateKeyPair('ed25519');
-    
+
     this.fragmenter = new UTXOMessageFragmenter(this.cryptoService);
     this.reassembler = new UTXOFragmentReassembler();
     this.fragmentCache = new UTXOFragmentCache();
 
-    this.logger.info('Fragmented mesh protocol initialized', { 
+    this.logger.info('Fragmented mesh protocol initialized', {
       nodeId: config.nodeId,
       fragmentationEnabled: true,
       maxFragmentSize: config.fragmentation.maxFragmentSize,
@@ -123,7 +122,7 @@ export class MeshProtocol implements FragmentedMeshProtocol {
     }
 
     const serializedMessage = this.serializeMessage(message);
-    
+
     // Check if fragmentation is needed
     if (serializedMessage.length <= 256) {
       // Send as single message
@@ -151,17 +150,22 @@ export class MeshProtocol implements FragmentedMeshProtocol {
   // New UTXO-specific fragmentation methods
   async sendUTXOTransaction(tx: UTXOTransaction): Promise<boolean> {
     if (!this.isConnected) {
-      this.logger.warn('Cannot send UTXO transaction: not connected to mesh network');
+      this.logger.warn(
+        'Cannot send UTXO transaction: not connected to mesh network'
+      );
       return false;
     }
 
     try {
-      const fragments = this.fragmenter.splitUTXOTransaction(tx, this.nodeKeyPair);
+      const fragments = this.fragmenter.splitUTXOTransaction(
+        tx,
+        this.nodeKeyPair
+      );
       return await this.sendFragments(fragments);
     } catch (error) {
-      this.logger.error('Failed to send UTXO transaction', { 
-        txId: tx.id, 
-        error 
+      this.logger.error('Failed to send UTXO transaction', {
+        txId: tx.id,
+        error,
       });
       return false;
     }
@@ -177,9 +181,9 @@ export class MeshProtocol implements FragmentedMeshProtocol {
       const fragments = this.fragmenter.splitBlock(block, this.nodeKeyPair);
       return await this.sendFragments(fragments);
     } catch (error) {
-      this.logger.error('Failed to send block', { 
-        blockIndex: block.index, 
-        error 
+      this.logger.error('Failed to send block', {
+        blockIndex: block.index,
+        error,
       });
       return false;
     }
@@ -187,17 +191,22 @@ export class MeshProtocol implements FragmentedMeshProtocol {
 
   async sendMerkleProof(proof: CompressedMerkleProof): Promise<boolean> {
     if (!this.isConnected) {
-      this.logger.warn('Cannot send merkle proof: not connected to mesh network');
+      this.logger.warn(
+        'Cannot send merkle proof: not connected to mesh network'
+      );
       return false;
     }
 
     try {
-      const fragments = this.fragmenter.splitMerkleProof(proof, this.nodeKeyPair);
+      const fragments = this.fragmenter.splitMerkleProof(
+        proof,
+        this.nodeKeyPair
+      );
       return await this.sendFragments(fragments);
     } catch (error) {
-      this.logger.error('Failed to send merkle proof', { 
-        txId: proof.txId, 
-        error 
+      this.logger.error('Failed to send merkle proof', {
+        txId: proof.txId,
+        error,
       });
       return false;
     }
@@ -211,9 +220,9 @@ export class MeshProtocol implements FragmentedMeshProtocol {
 
   getFragmentationStats(): FragmentationStats {
     // Update calculated stats
-    this.stats.averageFragmentsPerMessage = 
-      this.stats.totalMessagesSent > 0 
-        ? this.stats.totalFragmentsSent / this.stats.totalMessagesSent 
+    this.stats.averageFragmentsPerMessage =
+      this.stats.totalMessagesSent > 0
+        ? this.stats.totalFragmentsSent / this.stats.totalMessagesSent
         : 0;
 
     return { ...this.stats };
@@ -236,7 +245,7 @@ export class MeshProtocol implements FragmentedMeshProtocol {
     }
 
     this.logger.debug(`Sending ${fragments.length} fragments`);
-    
+
     let successCount = 0;
     for (const fragment of fragments) {
       if (await this.transmitFragment(fragment)) {
@@ -246,12 +255,14 @@ export class MeshProtocol implements FragmentedMeshProtocol {
     }
 
     this.stats.totalMessagesSent++;
-    
+
     const success = successCount === fragments.length;
     if (success) {
       this.logger.debug(`Successfully sent all ${fragments.length} fragments`);
     } else {
-      this.logger.warn(`Only sent ${successCount}/${fragments.length} fragments`);
+      this.logger.warn(
+        `Only sent ${successCount}/${fragments.length} fragments`
+      );
     }
 
     return success;
@@ -259,9 +270,11 @@ export class MeshProtocol implements FragmentedMeshProtocol {
 
   private async transmitFragment(fragment: Fragment): Promise<boolean> {
     const serializedFragment = this.serializeFragment(fragment);
-    
+
     if (serializedFragment.length > 256) {
-      this.logger.error(`Fragment too large: ${serializedFragment.length} bytes`);
+      this.logger.error(
+        `Fragment too large: ${serializedFragment.length} bytes`
+      );
       return false;
     }
 
@@ -299,18 +312,23 @@ export class MeshProtocol implements FragmentedMeshProtocol {
     return true;
   }
 
-  private async fragmentAndSend(data: Uint8Array, messageType: string): Promise<boolean> {
+  private async fragmentAndSend(
+    data: Uint8Array,
+    messageType: string
+  ): Promise<boolean> {
     // Create fragments for legacy messages
     // This is a simplified implementation for backwards compatibility
     const fragmentSize = this.config.fragmentation.maxFragmentSize || 197;
     const totalFragments = Math.ceil(data.length / fragmentSize);
-    
-    this.logger.debug(`Fragmenting ${messageType} message: ${data.length} bytes into ${totalFragments} fragments`);
+
+    this.logger.debug(
+      `Fragmenting ${messageType} message: ${data.length} bytes into ${totalFragments} fragments`
+    );
 
     // For now, just log the fragmentation - full implementation would create proper fragments
     this.stats.totalMessagesSent++;
     this.stats.totalFragmentsSent += totalFragments;
-    
+
     return true;
   }
 
@@ -324,26 +342,28 @@ export class MeshProtocol implements FragmentedMeshProtocol {
       this.stats.totalFragmentsReceived++;
 
       const result = this.reassembler.addFragment(fragment);
-      
+
       switch (result) {
         case ReassemblyResult.MESSAGE_COMPLETE:
-          return this.handleCompleteMessageReassembled(fragment.header.messageId);
-        
+          return this.handleCompleteMessageReassembled(
+            fragment.header.messageId
+          );
+
         case ReassemblyResult.FRAGMENT_ADDED:
           this.logger.debug(`Fragment added to reassembly session`, {
             messageId: Buffer.from(fragment.header.messageId).toString('hex'),
             sequence: fragment.header.sequenceNumber,
           });
           return null;
-        
+
         case ReassemblyResult.DUPLICATE_FRAGMENT:
           this.logger.debug('Duplicate fragment received');
           return null;
-        
+
         case ReassemblyResult.INVALID_FRAGMENT:
           this.logger.warn('Invalid fragment received');
           return null;
-        
+
         default:
           return null;
       }
@@ -356,7 +376,7 @@ export class MeshProtocol implements FragmentedMeshProtocol {
   private handleCompleteMessageReceived(data: Uint8Array): MeshMessage | null {
     try {
       const message = this.deserializeMessage(data);
-      
+
       if (!this.validateMessage(message)) {
         this.logger.warn('Received invalid message');
         return null;
@@ -378,13 +398,17 @@ export class MeshProtocol implements FragmentedMeshProtocol {
     }
   }
 
-  private handleCompleteMessageReassembled(messageId: Uint8Array): MeshMessage | null {
+  private handleCompleteMessageReassembled(
+    messageId: Uint8Array
+  ): MeshMessage | null {
     // Try to get complete UTXO transaction
     const utxoTx = this.reassembler.getCompleteUTXOTransaction(messageId);
     if (utxoTx) {
       this.stats.totalMessagesReceived++;
-      this.logger.debug('Reassembled complete UTXO transaction', { txId: utxoTx.id });
-      
+      this.logger.debug('Reassembled complete UTXO transaction', {
+        txId: utxoTx.id,
+      });
+
       // Convert to MeshMessage format for compatibility
       return {
         type: 'transaction',
@@ -399,8 +423,10 @@ export class MeshProtocol implements FragmentedMeshProtocol {
     const block = this.reassembler.getCompleteBlock(messageId);
     if (block) {
       this.stats.totalMessagesReceived++;
-      this.logger.debug('Reassembled complete block', { blockIndex: block.index });
-      
+      this.logger.debug('Reassembled complete block', {
+        blockIndex: block.index,
+      });
+
       return {
         type: 'block',
         payload: block,
@@ -414,8 +440,10 @@ export class MeshProtocol implements FragmentedMeshProtocol {
     const proof = this.reassembler.getCompleteMerkleProof(messageId);
     if (proof) {
       this.stats.totalMessagesReceived++;
-      this.logger.debug('Reassembled complete merkle proof', { txId: proof.txId });
-      
+      this.logger.debug('Reassembled complete merkle proof', {
+        txId: proof.txId,
+      });
+
       return {
         type: 'sync',
         payload: proof,
@@ -428,14 +456,25 @@ export class MeshProtocol implements FragmentedMeshProtocol {
     this.logger.warn('Could not reassemble message from fragments', {
       messageId: Buffer.from(messageId).toString('hex'),
     });
-    
+
     return null;
   }
 
   private isFragmentData(data: Uint8Array): boolean {
-    // Simple heuristic: fragments have structured headers
-    // More sophisticated detection could be implemented
-    return data.length > 59 && data.length <= 256;
+    // Fragments must have at least 59 bytes for the header
+    if (data.length < 59) {
+      return false;
+    }
+
+    // Check if data starts with a valid fragment header structure
+    // Try to parse as fragment and see if it's valid
+    try {
+      const fragment = this.deserializeFragment(data);
+      return fragment !== null;
+    } catch {
+      // If deserialization fails, it's not a fragment
+      return false;
+    }
   }
 
   private serializeFragment(fragment: Fragment): Uint8Array {
@@ -443,46 +482,46 @@ export class MeshProtocol implements FragmentedMeshProtocol {
     const headerSize = 59; // As per specification
     const totalSize = headerSize + fragment.payload.length;
     const result = new Uint8Array(totalSize);
-    
+
     let offset = 0;
-    
+
     // messageId (16 bytes)
     result.set(fragment.header.messageId, offset);
     offset += 16;
-    
+
     // sequenceNumber (2 bytes, little-endian)
     result[offset] = fragment.header.sequenceNumber & 0xff;
     result[offset + 1] = (fragment.header.sequenceNumber >> 8) & 0xff;
     offset += 2;
-    
+
     // totalFragments (2 bytes, little-endian)
     result[offset] = fragment.header.totalFragments & 0xff;
     result[offset + 1] = (fragment.header.totalFragments >> 8) & 0xff;
     offset += 2;
-    
+
     // fragmentSize (2 bytes, little-endian)
     result[offset] = fragment.header.fragmentSize & 0xff;
     result[offset + 1] = (fragment.header.fragmentSize >> 8) & 0xff;
     offset += 2;
-    
+
     // flags (1 byte)
     result[offset] = fragment.header.flags;
     offset += 1;
-    
+
     // checksum (4 bytes, little-endian)
     result[offset] = fragment.header.checksum & 0xff;
     result[offset + 1] = (fragment.header.checksum >> 8) & 0xff;
     result[offset + 2] = (fragment.header.checksum >> 16) & 0xff;
     result[offset + 3] = (fragment.header.checksum >> 24) & 0xff;
     offset += 4;
-    
+
     // signature (32 bytes)
     result.set(fragment.header.signature.slice(0, 32), offset);
     offset += 32;
-    
+
     // payload
     result.set(fragment.payload, offset);
-    
+
     return result;
   }
 
@@ -491,62 +530,83 @@ export class MeshProtocol implements FragmentedMeshProtocol {
       return null;
     }
 
-    let offset = 0;
-    
-    // messageId (16 bytes)
-    const messageId = data.slice(offset, offset + 16);
-    offset += 16;
-    
-    // sequenceNumber (2 bytes, little-endian)
-    const sequenceNumber = data[offset] | (data[offset + 1] << 8);
-    offset += 2;
-    
-    // totalFragments (2 bytes, little-endian)
-    const totalFragments = data[offset] | (data[offset + 1] << 8);
-    offset += 2;
-    
-    // fragmentSize (2 bytes, little-endian)
-    const fragmentSize = data[offset] | (data[offset + 1] << 8);
-    offset += 2;
-    
-    // flags (1 byte)
-    const flags = data[offset];
-    offset += 1;
-    
-    // checksum (4 bytes, little-endian)
-    const checksum = data[offset] | (data[offset + 1] << 8) | 
-                    (data[offset + 2] << 16) | (data[offset + 3] << 24);
-    offset += 4;
-    
-    // signature (32 bytes)
-    const signature = data.slice(offset, offset + 32);
-    offset += 32;
-    
-    // payload
-    const payload = data.slice(offset);
-    
-    if (payload.length !== fragmentSize) {
-      this.logger.warn(`Fragment size mismatch: expected ${fragmentSize}, got ${payload.length}`);
+    try {
+      let offset = 0;
+
+      // messageId (16 bytes)
+      const messageId = data.slice(offset, offset + 16);
+      offset += 16;
+
+      // sequenceNumber (2 bytes, little-endian)
+      const sequenceNumber = data[offset] | (data[offset + 1] << 8);
+      offset += 2;
+
+      // totalFragments (2 bytes, little-endian)
+      const totalFragments = data[offset] | (data[offset + 1] << 8);
+      offset += 2;
+
+      // fragmentSize (2 bytes, little-endian)
+      const fragmentSize = data[offset] | (data[offset + 1] << 8);
+      offset += 2;
+
+      // flags (1 byte)
+      const flags = data[offset];
+      offset += 1;
+
+      // checksum (4 bytes, little-endian)
+      const checksum =
+        data[offset] |
+        (data[offset + 1] << 8) |
+        (data[offset + 2] << 16) |
+        (data[offset + 3] << 24);
+      offset += 4;
+
+      // signature (32 bytes in header, but Ed25519 is 64 bytes)
+      const signature = data.slice(offset, offset + 32);
+      offset += 32;
+
+      // payload
+      const payload = data.slice(offset);
+
+      // Validate fragment structure
+      if (payload.length !== fragmentSize) {
+        return null;
+      }
+
+      // Basic validation of fragment values
+      if (totalFragments === 0 || sequenceNumber >= totalFragments) {
+        return null;
+      }
+
+      if (fragmentSize > 256 || fragmentSize === 0) {
+        return null;
+      }
+
+      // Check if signature has the expected length as per FragmentHeader spec
+      if (signature.length !== 32) {
+        return null;
+      }
+
+      return {
+        header: {
+          messageId,
+          sequenceNumber,
+          totalFragments,
+          fragmentSize,
+          flags,
+          checksum,
+          signature,
+        },
+        payload,
+      };
+    } catch (error) {
       return null;
     }
-
-    return {
-      header: {
-        messageId,
-        sequenceNumber,
-        totalFragments,
-        fragmentSize,
-        flags,
-        checksum,
-        signature,
-      },
-      payload,
-    };
   }
 
   private performCleanup(): void {
     this.reassembler.cleanup();
-    
+
     // Cleanup old fragments from cache
     this.fragmentCache.evict({
       maxAge: 300000, // 5 minutes
