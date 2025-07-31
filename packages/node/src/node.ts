@@ -1,4 +1,14 @@
-import { Blockchain, UTXOTransaction, Block } from '@lorachain/core';
+import {
+  Blockchain,
+  UTXOTransaction,
+  Block,
+  UTXOManager,
+  UTXOPersistenceManager,
+  DatabaseFactory,
+  CryptographicService,
+  type GenesisConfig,
+  type UTXOPersistenceConfig,
+} from '@lorachain/core';
 import { Logger } from '@lorachain/shared';
 import type { NetworkNode } from '@lorachain/core';
 
@@ -9,6 +19,8 @@ export interface NodeConfig {
   type: 'light' | 'full';
   enableMining: boolean;
   minerAddress?: string;
+  genesisConfig?: GenesisConfig | string; // Genesis config or chain ID (required)
+  persistenceConfig?: UTXOPersistenceConfig; // Optional persistence config
 }
 
 export class LorachainNode {
@@ -20,14 +32,68 @@ export class LorachainNode {
 
   constructor(config: NodeConfig) {
     this.config = config;
-    this.blockchain = new Blockchain();
+
+    // Initialize blockchain with required parameters (NO BACKWARDS COMPATIBILITY)
+    this.blockchain = this.initializeBlockchain(config);
+
     this.logger.info('Lorachain node initialized', { nodeId: config.id });
+  }
+
+  private initializeBlockchain(config: NodeConfig): Blockchain {
+    // Default persistence configuration for nodes
+    const defaultPersistenceConfig: UTXOPersistenceConfig = {
+      enabled: true,
+      dbPath: `./node-data/${config.id}`,
+      dbType: 'leveldb',
+      autoSave: true,
+      batchSize: 100,
+      compressionType: 'gzip',
+      utxoSetCacheSize: 1000,
+      cryptographicAlgorithm: 'secp256k1',
+      compactionStyle: 'size',
+    };
+
+    // Use provided config or default
+    const persistenceConfig =
+      config.persistenceConfig || defaultPersistenceConfig;
+
+    // Create required blockchain components
+    const database = DatabaseFactory.create(persistenceConfig);
+    const cryptoService = new CryptographicService();
+    const persistence = new UTXOPersistenceManager(
+      database,
+      persistenceConfig,
+      cryptoService
+    );
+    const utxoManager = new UTXOManager();
+
+    // Default genesis config if none provided
+    const genesisConfig = config.genesisConfig || 'mainnet'; // Default to mainnet
+
+    // Default difficulty config
+    const difficultyConfig = {
+      targetBlockTime: 300, // 5 minutes
+      adjustmentPeriod: 10,
+      maxDifficultyRatio: 4,
+      minDifficulty: 1,
+      maxDifficulty: 1000,
+    };
+
+    return new Blockchain(
+      persistence,
+      utxoManager,
+      difficultyConfig,
+      genesisConfig
+    );
   }
 
   async start(): Promise<void> {
     if (this.isRunning) {
       throw new Error('Node is already running');
     }
+
+    // Wait for blockchain initialization to complete
+    await this.blockchain.waitForInitialization();
 
     this.isRunning = true;
     this.logger.info('Starting Lorachain node', {
@@ -48,6 +114,9 @@ export class LorachainNode {
 
     this.isRunning = false;
     this.logger.info('Stopping Lorachain node', { nodeId: this.config.id });
+
+    // Close blockchain and persistence layer
+    await this.blockchain.close();
   }
 
   private startMining(): void {

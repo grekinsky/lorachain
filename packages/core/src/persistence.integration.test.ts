@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Blockchain } from './blockchain.js';
+import { UTXOManager } from './utxo.js';
 import { UTXOPersistenceManager } from './persistence.js';
 import { DatabaseFactory, LevelDatabase, MemoryDatabase } from './database.js';
 import { CryptographicService } from './cryptographic.js';
@@ -8,6 +9,7 @@ import type {
   UTXOPersistenceConfig,
   UTXOTransaction,
   UTXOBlockchainState,
+  GenesisConfig,
 } from './types.js';
 import { promises as fs } from 'fs';
 import { join } from 'path';
@@ -31,12 +33,44 @@ const createTestConfig = (
   compactionStyle: 'size',
 });
 
+// Test genesis configuration - required for NO BACKWARDS COMPATIBILITY
+const createTestGenesisConfig = (chainId: string): GenesisConfig => ({
+  chainId,
+  networkName: 'Persistence Test Network',
+  version: '1.0.0',
+  initialAllocations: [
+    {
+      address: 'lora1test000000000000000000000000000000000',
+      amount: 1000000,
+      description: 'Test allocation for integration tests',
+    },
+  ],
+  totalSupply: 21000000,
+  networkParams: {
+    initialDifficulty: 2,
+    targetBlockTime: 180,
+    adjustmentPeriod: 10,
+    maxDifficultyRatio: 4,
+    maxBlockSize: 1024 * 1024,
+    miningReward: 10,
+    halvingInterval: 210000,
+  },
+  metadata: {
+    timestamp: Date.now(),
+    description: 'Persistence Integration Test Genesis Block',
+    creator: 'Test Suite',
+    networkType: 'testnet',
+  },
+});
+
 describe('Persistence Integration Tests', () => {
   let blockchain: Blockchain;
   let persistenceManager: UTXOPersistenceManager;
+  let utxoManager: UTXOManager;
   let db: IDatabase;
   let cryptoService: CryptographicService;
   let testDbPath: string;
+  let genesisConfig: GenesisConfig;
 
   // Test both memory and LevelDB implementations
   const testCases = [
@@ -66,6 +100,9 @@ describe('Persistence Integration Tests', () => {
           `../test-integration-${dbType}-${Date.now()}`
         );
         const config = createTestConfig(dbType, testDbPath);
+        genesisConfig = createTestGenesisConfig(
+          `persistence-test-${dbType}-${Date.now()}`
+        );
 
         db = DatabaseFactory.create(config);
         cryptoService = new CryptographicService();
@@ -74,11 +111,25 @@ describe('Persistence Integration Tests', () => {
           config,
           cryptoService
         );
-        blockchain = new Blockchain();
+        utxoManager = new UTXOManager();
+
+        // Create blockchain with required parameters (NO BACKWARDS COMPATIBILITY)
+        blockchain = new Blockchain(
+          persistenceManager,
+          utxoManager,
+          { targetBlockTime: 180 },
+          genesisConfig
+        );
+
+        // Wait for initialization
+        await blockchain.waitForInitialization();
       });
 
       afterEach(async () => {
         try {
+          if (blockchain) {
+            await blockchain.close();
+          }
           await persistenceManager.close();
           await cleanup(testDbPath);
         } catch (error) {
@@ -135,7 +186,14 @@ describe('Persistence Integration Tests', () => {
           await persistenceManager.saveBlockchainState(utxoBlockchainState);
 
           // Step 4: Create new blockchain instance and restore from persistence
-          const restoredBlockchain = new Blockchain();
+          const restoredUTXOManager = new UTXOManager();
+          const restoredBlockchain = new Blockchain(
+            persistenceManager,
+            restoredUTXOManager,
+            { targetBlockTime: 180 },
+            genesisConfig
+          );
+          await restoredBlockchain.waitForInitialization();
           const loadedState = await persistenceManager.loadBlockchainState();
 
           expect(loadedState).not.toBeNull();

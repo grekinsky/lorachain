@@ -100,8 +100,12 @@ describe('Blockchain with Genesis Configuration (NO BACKWARDS COMPATIBILITY)', (
       expect(blockchain.getTargetBlockTime()).toBe(180);
 
       // Check UTXO allocations
-      const balance1 = blockchain.getBalance('lora1genesis00000000000000000000000000000');
-      const balance2 = blockchain.getBalance('lora1genesis11111111111111111111111111111');
+      const balance1 = blockchain.getBalance(
+        'lora1genesis00000000000000000000000000000'
+      );
+      const balance2 = blockchain.getBalance(
+        'lora1genesis11111111111111111111111111111'
+      );
       expect(balance1).toBe(5000000);
       expect(balance2).toBe(3000000);
     });
@@ -125,7 +129,9 @@ describe('Blockchain with Genesis Configuration (NO BACKWARDS COMPATIBILITY)', (
       expect(blockchain.getDifficulty()).toBe(3);
 
       // Check UTXO allocations were loaded
-      const balance1 = blockchain.getBalance('lora1genesis00000000000000000000000000000');
+      const balance1 = blockchain.getBalance(
+        'lora1genesis00000000000000000000000000000'
+      );
       expect(balance1).toBe(5000000);
     });
 
@@ -171,8 +177,10 @@ describe('Blockchain with Genesis Configuration (NO BACKWARDS COMPATIBILITY)', (
 
       // Verify configuration was saved
       const genesisManager = new GenesisConfigManager(persistence);
-      const savedConfig = await genesisManager.loadConfigFromDatabase('test-blockchain-genesis');
-      
+      const savedConfig = await genesisManager.loadConfigFromDatabase(
+        'test-blockchain-genesis'
+      );
+
       expect(savedConfig).not.toBeNull();
       expect(savedConfig!.chainId).toBe('test-blockchain-genesis');
       expect(savedConfig!.initialAllocations).toHaveLength(2);
@@ -188,8 +196,12 @@ describe('Blockchain with Genesis Configuration (NO BACKWARDS COMPATIBILITY)', (
 
       await blockchain.waitForInitialization();
 
-      const utxos1 = blockchain.getUTXOsForAddress('lora1genesis00000000000000000000000000000');
-      const utxos2 = blockchain.getUTXOsForAddress('lora1genesis11111111111111111111111111111');
+      const utxos1 = await blockchain.getUTXOsForAddress(
+        'lora1genesis00000000000000000000000000000'
+      );
+      const utxos2 = await blockchain.getUTXOsForAddress(
+        'lora1genesis11111111111111111111111111111'
+      );
 
       expect(utxos1).toHaveLength(1);
       expect(utxos2).toHaveLength(1);
@@ -255,13 +267,15 @@ describe('Blockchain with Genesis Configuration (NO BACKWARDS COMPATIBILITY)', (
   describe('Configuration Persistence', () => {
     it('should persist and load genesis configurations', async () => {
       const genesisManager = new GenesisConfigManager(persistence);
-      
+
       // Save configuration
       await genesisManager.saveConfigToDatabase(customGenesisConfig);
-      
+
       // Load configuration
-      const loadedConfig = await genesisManager.loadConfigFromDatabase('test-blockchain-genesis');
-      
+      const loadedConfig = await genesisManager.loadConfigFromDatabase(
+        'test-blockchain-genesis'
+      );
+
       expect(loadedConfig).not.toBeNull();
       expect(loadedConfig!.chainId).toBe('test-blockchain-genesis');
       expect(loadedConfig!.initialAllocations).toHaveLength(2);
@@ -270,30 +284,33 @@ describe('Blockchain with Genesis Configuration (NO BACKWARDS COMPATIBILITY)', (
 
     it('should create and persist genesis blocks', async () => {
       const genesisManager = new GenesisConfigManager(persistence);
-      
-      const genesisBlock = await genesisManager.createAndPersistGenesisBlock(customGenesisConfig);
-      
+
+      const genesisBlock =
+        await genesisManager.createAndPersistGenesisBlock(customGenesisConfig);
+
       expect(genesisBlock.index).toBe(0);
       expect(genesisBlock.difficulty).toBe(3);
       expect(genesisBlock.transactions).toHaveLength(0); // NO BACKWARDS COMPATIBILITY - UTXO only
-      expect(genesisBlock.timestamp).toBe(customGenesisConfig.metadata.timestamp);
+      expect(genesisBlock.timestamp).toBe(
+        customGenesisConfig.metadata.timestamp
+      );
     });
   });
 
   describe('Network Configuration Loading', () => {
     it('should load configuration files from configs directory', async () => {
       const genesisManager = new GenesisConfigManager(persistence);
-      
+
       // Load mainnet config
       const mainnetConfig = await genesisManager.loadConfigFromFile('mainnet');
       expect(mainnetConfig.chainId).toBe('lorachain-mainnet-v1');
       expect(mainnetConfig.networkName).toBe('Lorachain Mainnet');
-      
-      // Load testnet config  
+
+      // Load testnet config
       const testnetConfig = await genesisManager.loadConfigFromFile('testnet');
       expect(testnetConfig.chainId).toBe('lorachain-testnet-v1');
       expect(testnetConfig.networkName).toBe('Lorachain Testnet');
-      
+
       // Load devnet config
       const devnetConfig = await genesisManager.loadConfigFromFile('devnet');
       expect(devnetConfig.chainId).toBe('lorachain-devnet-v1');

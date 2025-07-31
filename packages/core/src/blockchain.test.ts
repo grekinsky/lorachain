@@ -4,13 +4,14 @@ import { UTXOManager } from './utxo.js';
 import { UTXOPersistenceManager } from './persistence.js';
 import { CryptographicService } from './cryptographic.js';
 import { DatabaseFactory } from './database.js';
+import { BlockManager } from './block.js';
 import { DifficultyManager, type DifficultyConfig } from './difficulty.js';
-import type { 
-  Transaction, 
-  Block, 
-  UTXOTransaction, 
+import type {
+  Transaction,
+  Block,
+  UTXOTransaction,
   GenesisConfig,
-  UTXOPersistenceConfig 
+  UTXOPersistenceConfig,
 } from './types.js';
 
 describe('Blockchain (NO BACKWARDS COMPATIBILITY)', () => {
@@ -262,8 +263,14 @@ describe('Blockchain (NO BACKWARDS COMPATIBILITY)', () => {
     let validBlock: Block;
 
     beforeEach(async () => {
-      // Create a fresh blockchain and UTXO transaction for each test
-      blockchain = new Blockchain();
+      // Create a fresh blockchain and UTXO transaction for each test (NO BACKWARDS COMPATIBILITY)
+      blockchain = new Blockchain(
+        persistence,
+        utxoManager,
+        { targetBlockTime: 180 },
+        testGenesisConfig
+      );
+      await blockchain.waitForInitialization();
       mockUTXOTransaction = {
         id: `tx-${Date.now()}-${Math.random()}`,
         inputs: [],
@@ -530,7 +537,7 @@ describe('Blockchain (NO BACKWARDS COMPATIBILITY)', () => {
   describe('Difficulty Adjustment Integration', () => {
     let blockchainWithFastAdjustment: Blockchain;
 
-    beforeEach(() => {
+    beforeEach(async () => {
       // Create blockchain with faster adjustment for testing (2 blocks instead of 10)
       // Use lower difficulty limits to prevent mining from hanging
       const difficultyConfig: Partial<DifficultyConfig> = {
@@ -540,11 +547,36 @@ describe('Blockchain (NO BACKWARDS COMPATIBILITY)', () => {
         minDifficulty: 1,
         maxDifficulty: 4, // Reduced from 1000 to 4 to prevent mining hangs
       };
+      // Create blockchain with fast adjustment and required parameters (NO BACKWARDS COMPATIBILITY)
+      const fastDatabase = DatabaseFactory.create(testConfig);
+      const fastPersistence = new UTXOPersistenceManager(fastDatabase, {
+        compressionType: 'none',
+        cryptographicAlgorithm: 'secp256k1',
+      });
+      const fastUtxoManager = new UTXOManager();
+      const fastGenesisConfig: GenesisConfig = {
+        ...testGenesisConfig,
+        chainId: 'fast-adjustment-test',
+        networkParams: { ...testGenesisConfig.networkParams },
+        metadata: { ...testGenesisConfig.metadata },
+        initialAllocations: [...testGenesisConfig.initialAllocations],
+      };
+
       blockchainWithFastAdjustment = new Blockchain(
-        undefined,
-        undefined,
-        difficultyConfig
+        fastPersistence,
+        fastUtxoManager,
+        difficultyConfig,
+        fastGenesisConfig
       );
+
+      // Wait for initialization
+      await blockchainWithFastAdjustment.waitForInitialization();
+    });
+
+    afterEach(async () => {
+      if (blockchainWithFastAdjustment) {
+        await blockchainWithFastAdjustment.close();
+      }
     });
 
     it('should initialize with difficulty field in genesis block', () => {
@@ -599,7 +631,7 @@ describe('Blockchain (NO BACKWARDS COMPATIBILITY)', () => {
         nextDifficulty: expect.any(Number),
         adjustmentHeight: expect.any(Number),
         estimatedHashrate: expect.any(Number),
-        targetBlockTime: 300,
+        targetBlockTime: 180, // From genesis config, not difficultyConfig
         lastAdjustmentTime: expect.any(Number),
       });
     });

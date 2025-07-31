@@ -52,7 +52,9 @@ export class GenesisConfigManager {
       }
 
       // No configuration found - throw error (NO BACKWARDS COMPATIBILITY)
-      throw new Error('No genesis configuration found in database. Genesis configuration is required.');
+      throw new Error(
+        'No genesis configuration found in database. Genesis configuration is required.'
+      );
     } catch (error) {
       this.logger.error(`Failed to load genesis config: ${error}`);
       throw error;
@@ -77,6 +79,44 @@ export class GenesisConfigManager {
     } catch (error) {
       this.logger.error(`Failed to load config from database: ${error}`);
       return null;
+    }
+  }
+
+  /**
+   * Load genesis configuration from config file
+   */
+  async loadConfigFromFile(networkName: string): Promise<GenesisConfig> {
+    try {
+      const fs = await import('fs/promises');
+      const path = await import('path');
+
+      // Construct path to config file
+      const configPath = path.resolve(
+        path.dirname(import.meta.url.replace('file://', '')),
+        '..',
+        'configs',
+        `${networkName}.json`
+      );
+
+      // Read and parse config file
+      const configData = await fs.readFile(configPath, 'utf-8');
+      const config: GenesisConfig = JSON.parse(configData);
+
+      // Validate config
+      const validation = GenesisConfigManager.validateConfig(config);
+      if (!validation.isValid) {
+        throw new Error(
+          `Invalid config file ${networkName}.json: ${validation.errors.join(', ')}`
+        );
+      }
+
+      this.logger.debug(`Loaded genesis config from file: ${networkName}.json`);
+      return config;
+    } catch (error) {
+      this.logger.error(
+        `Failed to load config from file ${networkName}.json: ${error}`
+      );
+      throw error;
     }
   }
 
@@ -109,7 +149,6 @@ export class GenesisConfigManager {
       throw error;
     }
   }
-
 
   /**
    * Validate genesis configuration
@@ -317,11 +356,6 @@ export class GenesisConfigManager {
    * Create genesis block from configuration
    */
   static createGenesisBlock(config: GenesisConfig): Block {
-    // Create genesis UTXO transactions for initial allocations
-    const genesisTransactions = this.createGenesisUTXOTransactions(
-      config.initialAllocations
-    );
-
     // Genesis block with empty transactions (UTXO allocations handled separately)
     // NO BACKWARDS COMPATIBILITY - genesis allocations are stored as UTXOs, not legacy transactions
     const genesisBlock: Block = {
@@ -335,8 +369,18 @@ export class GenesisConfigManager {
       difficulty: config.networkParams.initialDifficulty,
     };
 
-    // Calculate hash
-    genesisBlock.hash = this.calculateGenesisHash(genesisBlock, config);
+    // Calculate hash using standard block hash calculation for consistency
+    const blockString = JSON.stringify({
+      index: genesisBlock.index,
+      timestamp: genesisBlock.timestamp,
+      transactions: genesisBlock.transactions,
+      previousHash: genesisBlock.previousHash,
+      nonce: genesisBlock.nonce,
+      merkleRoot: genesisBlock.merkleRoot,
+      difficulty: genesisBlock.difficulty,
+      validator: genesisBlock.validator,
+    });
+    genesisBlock.hash = createHash('sha256').update(blockString).digest('hex');
     return genesisBlock;
   }
 
@@ -402,7 +446,6 @@ export class GenesisConfigManager {
       return [];
     }
   }
-
 
   /**
    * Convert network parameters to difficulty configuration

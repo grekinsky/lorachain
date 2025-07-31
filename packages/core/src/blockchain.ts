@@ -85,13 +85,26 @@ export class Blockchain {
     let config: GenesisConfig;
 
     if (typeof genesisConfigParam === 'string') {
-      // Load by chain ID - throw error if not found
-      const loadedConfig = await this.genesisConfigManager!.loadConfigFromDatabase(
-        genesisConfigParam
-      );
+      // Try to load from database first, then from config file
+      let loadedConfig =
+        await this.genesisConfigManager!.loadConfigFromDatabase(
+          genesisConfigParam
+        );
+
       if (!loadedConfig) {
-        throw new Error(`Genesis configuration not found for chain ID: ${genesisConfigParam}`);
+        // Try to load from config file (e.g., mainnet.json)
+        try {
+          loadedConfig =
+            await this.genesisConfigManager!.loadConfigFromFile(
+              genesisConfigParam
+            );
+        } catch (fileError) {
+          throw new Error(
+            `Genesis configuration not found for chain ID: ${genesisConfigParam}. Neither in database nor config file.`
+          );
+        }
       }
+
       config = loadedConfig;
     } else {
       // Use provided config
@@ -114,22 +127,17 @@ export class Blockchain {
     );
   }
 
-
   private applyNetworkParameters(
     networkParams: NetworkParameters,
     difficultyConfigParam?: Partial<DifficultyConfig>
   ): void {
-    // Apply network parameters with override support from difficultyConfig
+    // Apply network parameters from genesis config (genesis config takes precedence)
     this.difficulty = networkParams.initialDifficulty;
     this.miningReward = networkParams.miningReward;
     this.maxBlockSize = networkParams.maxBlockSize;
-    this.targetBlockTime =
-      difficultyConfigParam?.targetBlockTime || networkParams.targetBlockTime;
-    this.adjustmentPeriod =
-      difficultyConfigParam?.adjustmentPeriod || networkParams.adjustmentPeriod;
-    this.maxDifficultyRatio =
-      difficultyConfigParam?.maxDifficultyRatio ||
-      networkParams.maxDifficultyRatio;
+    this.targetBlockTime = networkParams.targetBlockTime;
+    this.adjustmentPeriod = networkParams.adjustmentPeriod;
+    this.maxDifficultyRatio = networkParams.maxDifficultyRatio;
 
     // Initialize difficulty manager with combined config
     const difficultyConfig: DifficultyConfig = {
@@ -210,8 +218,6 @@ export class Blockchain {
       await this.save();
     }
   }
-
-
 
   private initializeUTXOFromGenesisConfig(
     genesisBlock: Block,
@@ -652,7 +658,32 @@ export class Blockchain {
       return;
     }
 
-    await this.initializeBlockchain();
+    try {
+      // Load existing blockchain state
+      const loadedState = await this.persistence.loadBlockchainState();
+      if (loadedState && loadedState.blocks.length > 0) {
+        // Load the blockchain state
+        this.blocks = loadedState.blocks;
+        this.difficulty = loadedState.difficulty;
+        this.miningReward = loadedState.miningReward;
+        this.pendingUTXOTransactions = loadedState.pendingUTXOTransactions;
+
+        // Rebuild UTXO manager from loaded state
+        this.utxoManager = new UTXOManager();
+        for (const [, utxo] of loadedState.utxoSet) {
+          this.utxoManager.addUTXO(utxo);
+        }
+
+        this.logger.debug(
+          `Loaded blockchain state with ${this.blocks.length} blocks`
+        );
+      } else {
+        this.logger.warn('No blockchain state found to load');
+      }
+    } catch (error) {
+      this.logger.error(`Failed to load blockchain state: ${error}`);
+      throw error;
+    }
   }
 
   // UTXO-focused storage queries
