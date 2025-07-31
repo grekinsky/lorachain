@@ -337,3 +337,132 @@ export interface GenesisMetadata {
   creator: string;
   networkType: 'mainnet' | 'testnet' | 'devnet' | 'private';
 }
+
+// Message Fragmentation Types
+
+export interface FragmentHeader {
+  messageId: Uint8Array;    // 16 bytes - Unique message identifier (crypto hash)
+  sequenceNumber: number;   // 2 bytes - Fragment sequence (0-based)
+  totalFragments: number;   // 2 bytes - Total number of fragments
+  fragmentSize: number;     // 2 bytes - Size of this fragment's payload
+  flags: number;           // 1 byte - Control flags (first, last, ack_required)
+  checksum: number;        // 4 bytes - Fragment payload checksum (CRC32)
+  signature: Uint8Array;   // 32 bytes - Ed25519 signature for fragment authenticity
+}
+
+export enum FragmentFlags {
+  FIRST_FRAGMENT = 0x01,    // First fragment of message
+  LAST_FRAGMENT = 0x02,     // Last fragment of message
+  ACK_REQUIRED = 0x04,      // Requires acknowledgment
+  RETRANSMISSION = 0x08,    // This is a retransmitted fragment
+  PRIORITY = 0x10,         // High priority fragment
+  RESERVED = 0xE0          // Reserved for future use
+}
+
+export interface Fragment {
+  header: FragmentHeader;
+  payload: Uint8Array;
+}
+
+export interface ReassemblySession {
+  messageId: string;
+  totalFragments: number;
+  receivedFragments: Map<number, Uint8Array>;
+  lastActivity: number;
+  timeout: number;
+  retryCount: number;
+  requiredAcks: Set<number>;
+}
+
+export enum ReassemblyResult {
+  FRAGMENT_ADDED = 'fragment_added',
+  MESSAGE_COMPLETE = 'message_complete',
+  DUPLICATE_FRAGMENT = 'duplicate_fragment',
+  INVALID_FRAGMENT = 'invalid_fragment',
+  SESSION_TIMEOUT = 'session_timeout'
+}
+
+export interface FragmentationConfig {
+  maxFragmentSize: number;
+  sessionTimeout: number;
+  maxConcurrentSessions: number;
+  retryAttempts: number;
+  ackRequired: boolean;
+}
+
+export interface FragmentationStats {
+  totalMessagesSent: number;
+  totalMessagesReceived: number;
+  totalFragmentsSent: number;
+  totalFragmentsReceived: number;
+  averageFragmentsPerMessage: number;
+  retransmissionRate: number;
+  reassemblySuccessRate: number;
+  averageDeliveryTime: number;
+}
+
+export enum FragmentationEvent {
+  FRAGMENT_SENT = 'fragment_sent',
+  FRAGMENT_RECEIVED = 'fragment_received',
+  MESSAGE_COMPLETE = 'message_complete',
+  MESSAGE_TIMEOUT = 'message_timeout',
+  FRAGMENT_RETRANSMIT = 'fragment_retransmit',
+  BUFFER_FULL = 'buffer_full'
+}
+
+export interface FragmentationEventData {
+  messageId: string;
+  fragmentSequence?: number;
+  totalFragments?: number;
+  retryCount?: number;
+  timestamp: number;
+}
+
+// UTXO Message Types for Fragmentation
+export enum UTXOMessageType {
+  UTXO_TRANSACTION = 'utxo_transaction',
+  BLOCK = 'block',
+  MERKLE_PROOF = 'merkle_proof',
+  SYNC_DATA = 'sync_data'
+}
+
+export interface UTXOFragmentableMessage {
+  type: UTXOMessageType;
+  data: UTXOTransaction | Block | CompressedMerkleProof | unknown;
+  priority: number;
+  ttl: number; // Time to live in milliseconds
+}
+
+export interface EvictionCriteria {
+  maxAge: number;
+  maxSessions: number;
+  memoryThreshold: number;
+}
+
+// Enhanced MeshMessage for fragmentation support
+export interface FragmentedMeshMessage extends MeshMessage {
+  fragmentationId?: string;
+  isFragmented: boolean;
+  fragmentInfo?: {
+    currentFragment: number;
+    totalFragments: number;
+    fragmentSize: number;
+  };
+}
+
+export interface FragmentedMeshProtocol {
+  // Existing methods
+  sendMessage(message: MeshMessage): Promise<boolean>;
+  receiveMessage(data: Uint8Array): MeshMessage | null;
+  
+  // New fragmentation-specific methods
+  setFragmentationConfig(config: FragmentationConfig): void;
+  getFragmentationStats(): FragmentationStats;
+  clearReassemblyBuffers(): void;
+  retransmitMissingFragments(messageId: string): Promise<void>;
+  
+  // UTXO-specific fragmented message methods
+  sendUTXOTransaction(tx: UTXOTransaction): Promise<boolean>;
+  sendBlock(block: Block): Promise<boolean>;
+  sendMerkleProof(proof: CompressedMerkleProof): Promise<boolean>;
+}
