@@ -88,6 +88,9 @@ importers:
 
   packages/core:
     dependencies:
+      '@lorachain/shared':
+        specifier: workspace:*
+        version: link:../shared
       '@msgpack/msgpack':
         specifier: ^3.1.2
         version: 3.1.2

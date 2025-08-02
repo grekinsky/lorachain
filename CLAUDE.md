@@ -99,6 +99,69 @@ cd packages/core && pnpm test    # Test specific package
 - **Hybrid connectivity**: Must work offline with occasional internet synchronization
 - **Proof-of-Work consensus** with adaptive difficulty based on network conditions
 
+## Testing Requirements
+
+### Pre-Testing Checklist
+
+**IMPORTANT**: Before running unit tests in any app or package, ensure all dependent packages are built:
+
+```bash
+# Always build shared packages first (dependency order)
+pnpm --filter "@lorachain/shared" build
+pnpm --filter "@lorachain/core" build
+
+# Then build other packages if needed
+pnpm --filter "@lorachain/mesh-protocol" build
+pnpm --filter "@lorachain/mobile-wallet" build
+pnpm --filter "@lorachain/node" build
+
+# Then run tests
+pnpm --filter "@lorachain/mobile-wallet" test
+pnpm --filter "wallet-app" test
+pnpm --filter "node-server" test
+```
+
+### Why This Matters
+
+- **Shared packages** (`@lorachain/shared`, `@lorachain/core`) are consumed by apps as compiled JavaScript
+- **Source changes** in these packages don't automatically trigger rebuilds
+- **Test failures** may occur if consuming apps use outdated compiled versions
+- **UTXO transaction validation** issues are common when `@lorachain/core` is not rebuilt after changes
+- **Cryptographic signature verification** may fail if core packages aren't properly compiled
+
+### Testing Commands
+
+```bash
+# Build dependencies and run all tests
+pnpm --filter "@lorachain/shared" build && pnpm --filter "@lorachain/core" build && pnpm test
+
+# Individual package testing (after building dependencies)
+pnpm --filter "@lorachain/core" test                    # Run core blockchain tests
+pnpm --filter "@lorachain/core" test:coverage           # Run core tests with coverage
+pnpm --filter "@lorachain/mobile-wallet" test           # Run mobile wallet tests
+pnpm --filter "@lorachain/mesh-protocol" test           # Run mesh protocol tests
+pnpm --filter "@lorachain/node" test                    # Run node tests
+pnpm --filter "wallet-app" test                         # Run wallet app tests
+pnpm --filter "node-server" test                        # Run node server tests
+
+# Watch mode testing (after building dependencies)
+pnpm --filter "@lorachain/core" test:watch              # Watch mode for core package
+pnpm --filter "@lorachain/mobile-wallet" test:watch     # Watch mode for mobile wallet
+```
+
+### Dependency Build Order
+
+The Lorachain monorepo has the following dependency hierarchy:
+
+1. **`@lorachain/shared`** - Base utilities (no dependencies)
+2. **`@lorachain/core`** - Core blockchain logic (depends on shared)
+3. **`@lorachain/mesh-protocol`** - LoRa communication (depends on core, shared)
+4. **`@lorachain/mobile-wallet`** - Mobile wallet (depends on core, mesh-protocol, shared)
+5. **`@lorachain/node`** - Full node (depends on core, mesh-protocol, shared)
+6. **Apps** - wallet-app, node-server (depend on all packages)
+
+Always build in dependency order when testing specific packages that depend on others.
+
 ### Testing Strategy
 
 Each package includes comprehensive unit tests using Vitest:
