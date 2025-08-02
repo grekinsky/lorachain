@@ -899,13 +899,17 @@ export class EnhancedUTXOFragmentReassembler extends UTXOFragmentReassembler {
     const messageId = bytesToHex(ack.messageId);
     const session = this.enhancedSessions.get(messageId);
     if (!session) {
-      this.enhancedLogger.warn(`Received ACK for unknown message: ${messageId}`);
+      this.enhancedLogger.warn(
+        `Received ACK for unknown message: ${messageId}`
+      );
       return;
     }
 
     // Verify acknowledgment signature
     if (!this.verifyAcknowledgmentSignature(ack)) {
-      this.enhancedLogger.warn(`Invalid ACK signature for message: ${messageId}`);
+      this.enhancedLogger.warn(
+        `Invalid ACK signature for message: ${messageId}`
+      );
       return;
     }
 
@@ -970,7 +974,9 @@ export class EnhancedUTXOFragmentReassembler extends UTXOFragmentReassembler {
           `Sent retransmission request for message ${bytesToHex(task.messageId)}, fragments: [${task.missingFragments.join(', ')}]`
         );
       } catch (error) {
-        this.enhancedLogger.error(`Failed to send retransmission request: ${error}`);
+        this.enhancedLogger.error(
+          `Failed to send retransmission request: ${error}`
+        );
       }
     }
   }
@@ -1204,7 +1210,9 @@ export class EnhancedUTXOFragmentReassembler extends UTXOFragmentReassembler {
     // Remove stale tasks (this is simplified - would need proper queue filtering)
     // For now, just clear very old tasks
     if (this.retransmissionQueue.size() > 1000) {
-      this.enhancedLogger.warn('Retransmission queue too large, clearing old tasks');
+      this.enhancedLogger.warn(
+        'Retransmission queue too large, clearing old tasks'
+      );
       this.retransmissionQueue.clear();
     }
   }
