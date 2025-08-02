@@ -8,6 +8,8 @@ Lorachain is a lightweight blockchain network designed for cryptocurrency transa
 
 The blockchain uses a **UTXO (Unspent Transaction Output) model** for transaction management and supports **cryptographic signing** with both ECDSA (secp256k1) and Ed25519 algorithms.
 
+**Current Development Status**: ~25-30% complete toward MVP goal with Milestone 1 (Core Blockchain) fully implemented and Milestone 2 (LoRa/Mesh Protocol) partially complete. See `specs/ROADMAP.md` for detailed progress tracking.
+
 ## Important Development Guidelines
 
 - **NO BACKWARDS COMPATIBILITY**: This project prioritizes clean, modern implementations. Do not maintain backwards compatibility with older versions or deprecated features. When making changes, feel free to break existing APIs and update all dependent code accordingly.
@@ -119,31 +121,50 @@ Each package includes comprehensive unit tests using Vitest:
 - **Node package**: Tests for full node functionality
 - **Mesh protocol**: Tests for LoRa communication protocol
 
-**Total test coverage**: 593+ tests across all packages with 100% passing rate.
+**Total test coverage**: 593+ tests across all packages with 100% passing rate covering all Milestone 1 functionality.
 
 Run package-specific tests with `cd packages/<name> && pnpm test` or use watch mode for development with `pnpm test:watch`.
 
+**Development Progress**: Currently ~25-30% complete toward MVP goal. Estimated 7-10 months total development time with current progress focused on completing Milestone 2 (LoRa/Mesh Protocol) implementation.
+
 ### Key Implementation Details
 
+#### ✅ Milestone 1 - Core Blockchain (COMPLETED)
 - **UTXO Model**: All transactions use inputs/outputs instead of account balances
-- **Difficulty Adjustment**: Bitcoin-style algorithm with 10-block adjustment periods and 4x max change bounds
-- **Network Monitoring**: Real-time hashrate calculation and difficulty state tracking
-- **Block Validation**: Enhanced validation including difficulty requirements and timestamp manipulation protection
+- **Cryptographic Security**: Full ECDSA (secp256k1) and Ed25519 signature implementation
+- **Transaction Validation**: Complete validation including double-spend prevention and signature verification
+- **Merkle Tree System**: UTXO-only merkle tree with proof generation, verification, and compression
+- **SPV Support**: Simplified Payment Verification for light clients without full blockchain data
 - **Persistence Architecture**: Comprehensive blockchain state persistence with LevelDB and memory database support
 - **Database Organization**: Sublevel-based data separation (blocks, UTXOs, transactions, keys, metadata, config)
 - **UTXO Storage**: Efficient UTXO set persistence with address-based indexing and balance calculation
 - **Cryptographic Key Storage**: Secure key pair persistence supporting secp256k1 and Ed25519 algorithms
 - **Data Integrity**: Blockchain state validation, corruption detection, and automatic repair capabilities
 - **Atomic Operations**: Batch database operations ensuring consistency and performance optimization
-- **Merkle Tree System**: UTXO-only merkle tree with proof generation, verification, and compression
-- **SPV Support**: Simplified Payment Verification for light clients without full blockchain data
-- **Proof Compression**: Optimized for LoRa's 256-byte message constraints using bit manipulation
-- **Cryptographic Signatures**: Transactions are signed with either secp256k1 or ed25519
-- **Transaction Structure**: UTXOTransaction with inputs (referencing previous outputs) and outputs
-- **Balance Calculation**: Derived from unspent transaction outputs (UTXOs) for each address
-- **Transaction Validation**: Checks UTXO existence, ownership, and signature validity
+- **Difficulty Adjustment**: Bitcoin-style algorithm with 10-block adjustment periods and 4x max change bounds
+- **Network Monitoring**: Real-time hashrate calculation and difficulty state tracking
+- **Block Validation**: Enhanced validation including difficulty requirements and timestamp manipulation protection
 - **Genesis Configuration**: Configurable genesis blocks with UTXO-based initial allocations and network parameters
 - **Clean Implementation**: No backwards compatibility - modern, clean implementations throughout
+
+#### 🔄 Milestone 2 - LoRa/Mesh Protocol (PARTIALLY COMPLETED)
+- **✅ Message Fragmentation**: Split messages larger than 256 bytes with fragment sequencing and tracking
+- **✅ Message Reassembly**: Reconstruct fragmented messages with timeout handling for incomplete messages
+- **✅ Routing Protocol**: Flood routing for discovery, routing table management, multi-hop forwarding, and loop prevention
+- **🔲 Duty Cycle Management**: Track transmission time and implement queuing for regulatory compliance (PENDING)
+- **🔲 Compression**: Protocol buffer serialization and custom compression for blockchain data (PENDING)
+- **🔲 Message Prioritization**: Priority queues and QoS levels for different message types (PENDING)
+- **🔲 Reliable Delivery**: Acknowledgment mechanism, retry logic, and delivery confirmation (PENDING)
+- **🔲 Node Discovery Protocol**: Periodic beacons, neighbor management, and topology mapping (PENDING)
+
+#### 🔲 Remaining Milestones (PENDING)
+- **Milestone 3**: Network Layer & P2P (HTTP/WebSocket, sync protocol, peer management)
+- **Milestone 4**: Wallet Functionality (HD wallet, transaction building, QR codes)
+- **Milestone 5**: Mining & Consensus (optimized mining, pool support)
+- **Milestone 6**: Security & Validation (rate limiting, encryption)
+- **Milestone 7**: User Applications (CLI wallet, mobile UI)
+- **Milestone 8**: Testing & Documentation (integration tests, API docs)
+- **Milestone 9**: MVP Polish (configuration, Docker images)
 
 ### Merkle Tree System (NO LEGACY SUPPORT)
 
