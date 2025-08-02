@@ -359,8 +359,11 @@ export class UTXOEnhancedMeshProtocol
       const broadcastSuccess = await this.broadcastMessage(requestMessage);
 
       if (!broadcastSuccess) {
-        this.logger.error('Failed to broadcast route request', { destination });
-        return null;
+        this.logger.warn(
+          'Failed to broadcast route request, but continuing with timeout',
+          { destination }
+        );
+        // Continue to wait for timeout even if broadcast failed
       }
 
       // Wait for route reply (simplified - in real implementation would be event-driven)

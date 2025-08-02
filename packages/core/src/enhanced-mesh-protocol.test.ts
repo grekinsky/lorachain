@@ -32,7 +32,7 @@ describe('UTXOEnhancedMeshProtocol', () => {
     nodeKeyPair = CryptographicService.generateKeyPair('ed25519');
 
     routingConfig = {
-      routeDiscoveryTimeout: 30000,
+      routeDiscoveryTimeout: 1000, // Reduced for tests
       maxRouteDiscoveryRetries: 3,
       routeRequestTTL: 10,
       routeExpiryTime: 300000,

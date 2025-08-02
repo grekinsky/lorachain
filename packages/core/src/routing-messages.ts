@@ -697,15 +697,16 @@ export class RoutingMessageHandler {
     }
 
     try {
-      // Check if this is for us
-      if (request.destination === this.nodeId) {
-        // Generate reply
-        const reply = await this.routeRequestHandler(request);
-        if (reply) {
-          return this.messageFactory.toMeshMessage(reply);
-        }
-      } else {
-        // Forward the request (would be handled by forwarding logic)
+      // Always call the handler for all route requests (for forwarding/processing)
+      const reply = await this.routeRequestHandler(request);
+
+      // Only generate response if this is for us and we have a reply
+      if (request.destination === this.nodeId && reply) {
+        return this.messageFactory.toMeshMessage(reply);
+      }
+
+      // For requests not for us, handler is called but no response generated
+      if (request.destination !== this.nodeId) {
         this.logger.debug('Route request is not for us, should be forwarded', {
           destination: request.destination,
           ourNodeId: this.nodeId,
@@ -854,8 +855,8 @@ export class RoutingMessageOptimizer {
    */
   estimateCompressedSize(message: any): number {
     try {
-      const serialized = JSON.stringify(message);
-      return new TextEncoder().encode(serialized).length;
+      const compressed = this.compressRoutingMessage(message);
+      return compressed.length;
     } catch (error) {
       this.logger.error('Failed to estimate compressed size', {
         error: error instanceof Error ? error.message : String(error),

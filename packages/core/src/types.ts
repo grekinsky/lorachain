@@ -764,11 +764,7 @@ export interface FragmentInfo {
 
 // Enhanced MeshMessage for routing support
 export interface UTXORoutingMeshMessage extends MeshMessage {
-  type:
-    | 'transaction'
-    | 'block'
-    | 'sync'
-    | 'discovery';
+  type: 'transaction' | 'block' | 'sync' | 'discovery';
 
   blockchainRoutingInfo?: {
     hopCount: number;
