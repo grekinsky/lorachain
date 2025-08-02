@@ -589,3 +589,309 @@ export interface FragmentedMeshProtocol {
   sendBlock(block: Block): Promise<boolean>;
   sendMerkleProof(proof: CompressedMerkleProof): Promise<boolean>;
 }
+
+// ==========================================
+// ROUTING PROTOCOL TYPES
+// ==========================================
+
+// Node and Route Management Types
+export interface BlockchainRouteEntry {
+  destination: string;
+  nextHop: string;
+  hopCount: number;
+  sequenceNumber: number;
+  timestamp: number;
+  linkQuality: number;
+  nodeType: 'full' | 'light' | 'mining';
+  utxoSetCompleteness: number; // 0-1 score of UTXO set completeness
+  blockchainHeight: number;
+  isActive: boolean;
+  lastUTXOSync: number;
+  signature: string; // Cryptographic signature for route authenticity
+}
+
+export interface UTXORouteTable {
+  routes: Map<string, BlockchainRouteEntry[]>;
+  maxRoutes: number;
+  cleanupInterval: number;
+  priorityNodes: Set<string>; // Full nodes and miners get priority
+}
+
+// Flood Management Types
+export interface BlockchainFloodMessage {
+  id: string;
+  originator: string;
+  sequenceNumber: number;
+  ttl: number;
+  messageType: 'utxo_transaction' | 'block' | 'discovery' | 'spv_proof';
+  payload: UTXOTransaction | Block | unknown;
+  timestamp: number;
+  priority: 'high' | 'medium' | 'low'; // UTXO transactions = high priority
+  signature: string;
+  isFragmented: boolean;
+  fragmentInfo?: {
+    totalFragments: number;
+    fragmentId: number;
+    messageId: string;
+  };
+}
+
+export interface BlockchainFloodEntry {
+  messageId: string;
+  originator: string;
+  sequenceNumber: number;
+  messageType: string;
+  timestamp: number;
+  processed: boolean;
+  signatureValid: boolean;
+}
+
+// Message Forwarding Types
+export interface BlockchainForwardingEntry {
+  messageId: string;
+  destination: string;
+  nextHop: string;
+  messageType: 'utxo_transaction' | 'block' | 'spv_proof' | 'discovery';
+  priority: number;
+  timestamp: number;
+  retryCount: number;
+  acknowledged: boolean;
+  isFragmented: boolean;
+  blockchainHeight?: number; // For prioritizing recent blocks
+}
+
+// Loop Prevention Types
+export interface BlockchainPathVector {
+  destination: string;
+  path: string[];
+  sequenceNumber: number;
+  timestamp: number;
+  blockchainHeight: number; // Prevent loops in blockchain sync
+  pathSignature: string; // Cryptographic proof of path authenticity
+}
+
+export interface CryptoSequenceEntry {
+  nodeId: string;
+  sequenceNumber: number;
+  timestamp: number;
+  publicKey: string;
+  signature: string;
+}
+
+// Protocol Message Types
+export interface UTXORouteRequest {
+  type: 'utxo_route_request';
+  requestId: string;
+  originator: string;
+  destination: string;
+  hopCount: number;
+  sequenceNumber: number;
+  path: string[];
+  requestedNodeType: 'full' | 'light' | 'mining' | 'any';
+  minUTXOCompleteness: number; // 0-1, minimum UTXO set completeness required
+  minBlockchainHeight: number;
+  timestamp: number;
+  signature: string; // Cryptographic signature
+  isFragmented: boolean;
+  fragmentInfo?: FragmentInfo;
+}
+
+export interface UTXORouteReply {
+  type: 'utxo_route_reply';
+  requestId: string;
+  originator: string;
+  destination: string;
+  hopCount: number;
+  sequenceNumber: number;
+  path: string[];
+  nodeType: 'full' | 'light' | 'mining';
+  utxoSetCompleteness: number;
+  currentBlockchainHeight: number;
+  lastUTXOSync: number;
+  availableServices: string[]; // ['mining', 'spv_proofs', 'full_sync']
+  timestamp: number;
+  signature: string;
+  isFragmented: boolean;
+  fragmentInfo?: FragmentInfo;
+}
+
+export interface BlockchainRouteError {
+  type: 'blockchain_route_error';
+  brokenLink: {
+    from: string;
+    to: string;
+  };
+  affectedDestinations: string[];
+  sequenceNumber: number;
+  errorReason:
+    | 'link_failure'
+    | 'node_offline'
+    | 'blockchain_sync_failed'
+    | 'utxo_mismatch';
+  blockchainContext?: {
+    lastKnownHeight: number;
+    utxoSetHash: string;
+  };
+  timestamp: number;
+  signature: string;
+}
+
+export interface BlockchainHelloMessage {
+  type: 'blockchain_hello';
+  nodeId: string;
+  sequenceNumber: number;
+  nodeType: 'full' | 'light' | 'mining';
+  currentBlockchainHeight: number;
+  utxoSetCompleteness: number;
+  lastUTXOSync: number;
+  availableServices: string[];
+  neighbors: {
+    nodeId: string;
+    linkQuality: number;
+    nodeType: 'full' | 'light' | 'mining';
+    blockchainHeight: number;
+  }[];
+  timestamp: number;
+  signature: string;
+  publicKey: string;
+}
+
+export interface FragmentInfo {
+  totalFragments: number;
+  fragmentId: number;
+  messageId: string;
+}
+
+// Enhanced MeshMessage for routing support
+export interface UTXORoutingMeshMessage extends MeshMessage {
+  type: 'transaction' | 'block' | 'sync' | 'discovery';
+
+  blockchainRoutingInfo?: {
+    hopCount: number;
+    path: string[];
+    sequenceNumber: number;
+    nextHop?: string;
+    nodeType: 'full' | 'light' | 'mining';
+    blockchainHeight: number;
+    utxoSetHash?: string;
+    priority: 'high' | 'medium' | 'low';
+    signature: string;
+  };
+
+  // Existing fragmentation support
+  fragmentationInfo?: {
+    messageId: string;
+    fragmentId: number;
+    totalFragments: number;
+    isComplete: boolean;
+  };
+}
+
+// Routing Configuration
+export interface RoutingConfig {
+  // Route discovery
+  routeDiscoveryTimeout: number; // Default: 30000ms
+  maxRouteDiscoveryRetries: number; // Default: 3
+  routeRequestTTL: number; // Default: 10 hops
+
+  // Route maintenance
+  routeExpiryTime: number; // Default: 300000ms (5 minutes)
+  routeCleanupInterval: number; // Default: 60000ms (1 minute)
+  maxRoutesPerDestination: number; // Default: 3
+
+  // Flooding control
+  floodCacheSize: number; // Default: 500 entries
+  floodCacheExpiryTime: number; // Default: 60000ms
+  maxFloodTTL: number; // Default: 15 hops
+
+  // Message forwarding
+  acknowledgmentTimeout: number; // Default: 5000ms
+  maxForwardRetries: number; // Default: 3
+  fragmentSize: number; // Default: 200 bytes
+
+  // Loop prevention
+  maxSequenceNumberAge: number; // Default: 600000ms (10 minutes)
+  holdDownTime: number; // Default: 60000ms
+  maxPathLength: number; // Default: 15 hops
+
+  // Resource limits
+  maxRoutingTableSize: number; // Default: 1000 entries
+  maxPendingForwards: number; // Default: 100 entries
+  memoryCleanupInterval: number; // Default: 300000ms (5 minutes)
+}
+
+// Routing Events
+export interface RoutingEvents {
+  route_discovered: (route: BlockchainRouteEntry) => void;
+  route_lost: (destination: string, reason: string) => void;
+  route_updated: (
+    route: BlockchainRouteEntry,
+    oldRoute: BlockchainRouteEntry
+  ) => void;
+  topology_changed: (changes: TopologyChange[]) => void;
+  loop_detected: (path: string[], message: MeshMessage) => void;
+  flood_suppressed: (messageId: string, reason: string) => void;
+}
+
+export interface TopologyChange {
+  type: 'node_added' | 'node_removed' | 'link_added' | 'link_removed';
+  nodeId?: string;
+  linkFrom?: string;
+  linkTo?: string;
+  timestamp: number;
+}
+
+// Routing Metrics and Statistics
+export interface RoutingMetrics {
+  totalRoutes: number;
+  activeRoutes: number;
+  routeDiscoveryLatency: number;
+  messageDeliveryRate: number;
+  loopDetectionCount: number;
+  floodSuppressionRate: number;
+  memoryUsage: {
+    routingTable: number;
+    floodCache: number;
+    pendingForwards: number;
+  };
+}
+
+// Enhanced MeshProtocol Interface with Routing
+export interface IEnhancedMeshProtocol extends FragmentedMeshProtocol {
+  // Routing-aware messaging
+  sendRoutedMessage(
+    message: MeshMessage,
+    destination: string
+  ): Promise<boolean>;
+  broadcastMessage(
+    message: MeshMessage,
+    excludeNodes?: string[]
+  ): Promise<boolean>;
+
+  // Route management
+  discoverRoute(destination: string): Promise<BlockchainRouteEntry | null>;
+  getRouteToDestination(destination: string): BlockchainRouteEntry | null;
+  invalidateRoute(destination: string, nextHop: string): void;
+
+  // Network topology
+  getNetworkTopology(): NetworkTopology;
+  getNeighbors(): NetworkNode[];
+  getReachableNodes(): string[];
+
+  // Events
+  on(
+    event: 'route_discovered',
+    listener: (route: BlockchainRouteEntry) => void
+  ): void;
+  on(event: 'route_lost', listener: (destination: string) => void): void;
+  on(
+    event: 'topology_changed',
+    listener: (topology: NetworkTopology) => void
+  ): void;
+}
+
+export interface NetworkTopology {
+  nodes: Map<string, NetworkNode>;
+  links: Map<string, Set<string>>;
+  lastUpdated: number;
+}

@@ -8,6 +8,8 @@ Lorachain is a lightweight blockchain network designed for cryptocurrency transa
 
 The blockchain uses a **UTXO (Unspent Transaction Output) model** for transaction management and supports **cryptographic signing** with both ECDSA (secp256k1) and Ed25519 algorithms.
 
+**Current Development Status**: ~25-30% complete toward MVP goal with Milestone 1 (Core Blockchain) fully implemented and Milestone 2 (LoRa/Mesh Protocol) partially complete. See `specs/ROADMAP.md` for detailed progress tracking.
+
 ## Important Development Guidelines
 
 - **NO BACKWARDS COMPATIBILITY**: This project prioritizes clean, modern implementations. Do not maintain backwards compatibility with older versions or deprecated features. When making changes, feel free to break existing APIs and update all dependent code accordingly.
@@ -97,6 +99,69 @@ cd packages/core && pnpm test    # Test specific package
 - **Hybrid connectivity**: Must work offline with occasional internet synchronization
 - **Proof-of-Work consensus** with adaptive difficulty based on network conditions
 
+## Testing Requirements
+
+### Pre-Testing Checklist
+
+**IMPORTANT**: Before running unit tests in any app or package, ensure all dependent packages are built:
+
+```bash
+# Always build shared packages first (dependency order)
+pnpm --filter "@lorachain/shared" build
+pnpm --filter "@lorachain/core" build
+
+# Then build other packages if needed
+pnpm --filter "@lorachain/mesh-protocol" build
+pnpm --filter "@lorachain/mobile-wallet" build
+pnpm --filter "@lorachain/node" build
+
+# Then run tests
+pnpm --filter "@lorachain/mobile-wallet" test
+pnpm --filter "wallet-app" test
+pnpm --filter "node-server" test
+```
+
+### Why This Matters
+
+- **Shared packages** (`@lorachain/shared`, `@lorachain/core`) are consumed by apps as compiled JavaScript
+- **Source changes** in these packages don't automatically trigger rebuilds
+- **Test failures** may occur if consuming apps use outdated compiled versions
+- **UTXO transaction validation** issues are common when `@lorachain/core` is not rebuilt after changes
+- **Cryptographic signature verification** may fail if core packages aren't properly compiled
+
+### Testing Commands
+
+```bash
+# Build dependencies and run all tests
+pnpm --filter "@lorachain/shared" build && pnpm --filter "@lorachain/core" build && pnpm test
+
+# Individual package testing (after building dependencies)
+pnpm --filter "@lorachain/core" test                    # Run core blockchain tests
+pnpm --filter "@lorachain/core" test:coverage           # Run core tests with coverage
+pnpm --filter "@lorachain/mobile-wallet" test           # Run mobile wallet tests
+pnpm --filter "@lorachain/mesh-protocol" test           # Run mesh protocol tests
+pnpm --filter "@lorachain/node" test                    # Run node tests
+pnpm --filter "wallet-app" test                         # Run wallet app tests
+pnpm --filter "node-server" test                        # Run node server tests
+
+# Watch mode testing (after building dependencies)
+pnpm --filter "@lorachain/core" test:watch              # Watch mode for core package
+pnpm --filter "@lorachain/mobile-wallet" test:watch     # Watch mode for mobile wallet
+```
+
+### Dependency Build Order
+
+The Lorachain monorepo has the following dependency hierarchy:
+
+1. **`@lorachain/shared`** - Base utilities (no dependencies)
+2. **`@lorachain/core`** - Core blockchain logic (depends on shared)
+3. **`@lorachain/mesh-protocol`** - LoRa communication (depends on core, shared)
+4. **`@lorachain/mobile-wallet`** - Mobile wallet (depends on core, mesh-protocol, shared)
+5. **`@lorachain/node`** - Full node (depends on core, mesh-protocol, shared)
+6. **Apps** - wallet-app, node-server (depend on all packages)
+
+Always build in dependency order when testing specific packages that depend on others.
+
 ### Testing Strategy
 
 Each package includes comprehensive unit tests using Vitest:
@@ -119,31 +184,50 @@ Each package includes comprehensive unit tests using Vitest:
 - **Node package**: Tests for full node functionality
 - **Mesh protocol**: Tests for LoRa communication protocol
 
-**Total test coverage**: 593+ tests across all packages with 100% passing rate.
+**Total test coverage**: 593+ tests across all packages with 100% passing rate covering all Milestone 1 functionality.
 
 Run package-specific tests with `cd packages/<name> && pnpm test` or use watch mode for development with `pnpm test:watch`.
 
+**Development Progress**: Currently ~25-30% complete toward MVP goal. Estimated 7-10 months total development time with current progress focused on completing Milestone 2 (LoRa/Mesh Protocol) implementation.
+
 ### Key Implementation Details
 
+#### ✅ Milestone 1 - Core Blockchain (COMPLETED)
 - **UTXO Model**: All transactions use inputs/outputs instead of account balances
-- **Difficulty Adjustment**: Bitcoin-style algorithm with 10-block adjustment periods and 4x max change bounds
-- **Network Monitoring**: Real-time hashrate calculation and difficulty state tracking
-- **Block Validation**: Enhanced validation including difficulty requirements and timestamp manipulation protection
+- **Cryptographic Security**: Full ECDSA (secp256k1) and Ed25519 signature implementation
+- **Transaction Validation**: Complete validation including double-spend prevention and signature verification
+- **Merkle Tree System**: UTXO-only merkle tree with proof generation, verification, and compression
+- **SPV Support**: Simplified Payment Verification for light clients without full blockchain data
 - **Persistence Architecture**: Comprehensive blockchain state persistence with LevelDB and memory database support
 - **Database Organization**: Sublevel-based data separation (blocks, UTXOs, transactions, keys, metadata, config)
 - **UTXO Storage**: Efficient UTXO set persistence with address-based indexing and balance calculation
 - **Cryptographic Key Storage**: Secure key pair persistence supporting secp256k1 and Ed25519 algorithms
 - **Data Integrity**: Blockchain state validation, corruption detection, and automatic repair capabilities
 - **Atomic Operations**: Batch database operations ensuring consistency and performance optimization
-- **Merkle Tree System**: UTXO-only merkle tree with proof generation, verification, and compression
-- **SPV Support**: Simplified Payment Verification for light clients without full blockchain data
-- **Proof Compression**: Optimized for LoRa's 256-byte message constraints using bit manipulation
-- **Cryptographic Signatures**: Transactions are signed with either secp256k1 or ed25519
-- **Transaction Structure**: UTXOTransaction with inputs (referencing previous outputs) and outputs
-- **Balance Calculation**: Derived from unspent transaction outputs (UTXOs) for each address
-- **Transaction Validation**: Checks UTXO existence, ownership, and signature validity
+- **Difficulty Adjustment**: Bitcoin-style algorithm with 10-block adjustment periods and 4x max change bounds
+- **Network Monitoring**: Real-time hashrate calculation and difficulty state tracking
+- **Block Validation**: Enhanced validation including difficulty requirements and timestamp manipulation protection
 - **Genesis Configuration**: Configurable genesis blocks with UTXO-based initial allocations and network parameters
 - **Clean Implementation**: No backwards compatibility - modern, clean implementations throughout
+
+#### 🔄 Milestone 2 - LoRa/Mesh Protocol (PARTIALLY COMPLETED)
+- **✅ Message Fragmentation**: Split messages larger than 256 bytes with fragment sequencing and tracking
+- **✅ Message Reassembly**: Reconstruct fragmented messages with timeout handling for incomplete messages
+- **✅ Routing Protocol**: Flood routing for discovery, routing table management, multi-hop forwarding, and loop prevention
+- **🔲 Duty Cycle Management**: Track transmission time and implement queuing for regulatory compliance (PENDING)
+- **🔲 Compression**: Protocol buffer serialization and custom compression for blockchain data (PENDING)
+- **🔲 Message Prioritization**: Priority queues and QoS levels for different message types (PENDING)
+- **🔲 Reliable Delivery**: Acknowledgment mechanism, retry logic, and delivery confirmation (PENDING)
+- **🔲 Node Discovery Protocol**: Periodic beacons, neighbor management, and topology mapping (PENDING)
+
+#### 🔲 Remaining Milestones (PENDING)
+- **Milestone 3**: Network Layer & P2P (HTTP/WebSocket, sync protocol, peer management)
+- **Milestone 4**: Wallet Functionality (HD wallet, transaction building, QR codes)
+- **Milestone 5**: Mining & Consensus (optimized mining, pool support)
+- **Milestone 6**: Security & Validation (rate limiting, encryption)
+- **Milestone 7**: User Applications (CLI wallet, mobile UI)
+- **Milestone 8**: Testing & Documentation (integration tests, API docs)
+- **Milestone 9**: MVP Polish (configuration, Docker images)
 
 ### Merkle Tree System (NO LEGACY SUPPORT)
 

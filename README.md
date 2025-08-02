@@ -298,35 +298,50 @@ For support and questions:
 
 **Note**: This project is in active development. The current implementation provides a foundation for the Lorachain network with:
 
-### Recently Implemented Features
+### Development Progress (MVP Roadmap Status)
 
+#### ✅ Milestone 1: Core Blockchain Enhancement (COMPLETED)
 - **Genesis Configuration System**: Complete configurable genesis block system with UTXO-based initial coin distribution and network parameter management
-- **Comprehensive Test Coverage**: Achieved 593+ tests across all packages with 100% passing rate covering all critical functionality
-- **Dynamic Difficulty Adjustment**: Bitcoin-style difficulty adjustment with 10-block periods and conservative bounds (4x max change)
-- **Network Hashrate Monitoring**: Real-time hashrate calculation and network performance tracking
-- **LoRa-Optimized Consensus**: 5-minute block times and adjustment algorithms optimized for mesh network constraints
-- **Enhanced Block Validation**: Comprehensive difficulty validation and timestamp manipulation protection
-- **Comprehensive Persistence Layer**: Production-ready blockchain state persistence with LevelDB integration
+- **Cryptographic Security**: Full ECDSA (secp256k1) and Ed25519 signature support with proper transaction signing
+- **UTXO Transaction Model**: Complete UTXO implementation with inputs/outputs, double-spend prevention, and validation
+- **Merkle Tree Verification**: Advanced merkle proof generation, compression, and SPV support for light clients
+- **Comprehensive Persistence Layer**: Production-ready blockchain state persistence with LevelDB integration and atomic operations
+- **Dynamic Difficulty Adjustment**: Bitcoin-style difficulty adjustment with 10-block periods and network hashrate monitoring
+- **Enhanced Security**: All transactions use proper cryptographic signatures with signature verification
+
+#### 🔄 Milestone 2: LoRa/Mesh Protocol Implementation (PARTIALLY COMPLETED)
+- **✅ Message Fragmentation**: Split messages larger than 256 bytes with sequencing and tracking
+- **✅ Message Reassembly**: Reconstruct fragmented messages with timeout handling for incomplete messages
+- **✅ Routing Protocol**: Flood routing for discovery, routing tables, multi-hop forwarding, and loop prevention
+- **🔲 Duty Cycle Management**: Track transmission time and implement queuing for regulatory compliance
+- **🔲 Compression**: Protocol buffer serialization and custom compression for blockchain data
+- **🔲 Message Prioritization**: Priority queues and QoS levels for different message types
+- **🔲 Reliable Delivery**: Acknowledgment mechanism, retry logic, and delivery confirmation
+- **🔲 Node Discovery Protocol**: Periodic beacons, neighbor management, and topology mapping
+
+#### 🔲 Upcoming Milestones (PENDING)
+- **Milestone 3**: Network Layer & P2P (HTTP/WebSocket, sync protocol, peer management)
+- **Milestone 4**: Wallet Functionality (HD wallet, transaction building, QR codes)
+- **Milestone 5**: Mining & Consensus (optimized mining, pool support, reward distribution)
+- **Milestone 6**: Security & Validation (malleability fixes, rate limiting, encryption)
+- **Milestone 7**: User Applications (CLI wallet, mobile UI, merchant tools)
+- **Milestone 8**: Testing & Documentation (integration tests, API docs, deployment guides)
+- **Milestone 9**: MVP Polish (configuration, mainnet/testnet, Docker images)
+
+**Current Progress**: ~25-30% complete toward MVP goal
+
+### Technical Foundation
+
+- **Comprehensive Test Coverage**: 593+ tests across all packages with 100% passing rate
 - **Database Infrastructure**: Dual database support (LevelDB for production, Memory for testing) with sublevel organization
 - **UTXO Persistence**: Complete UTXO set storage with address-based queries, balance calculation, and efficient retrieval
 - **Cryptographic Key Storage**: Secure key pair persistence supporting both secp256k1 and Ed25519 algorithms
 - **Data Integrity**: Blockchain state validation, corruption detection, and automatic repair capabilities
 - **Atomic Operations**: Batch database operations ensuring data consistency and performance optimization
-- **Comprehensive Testing**: 593+ tests covering difficulty adjustment, database operations, state management, genesis configuration, and error scenarios
-- **UTXO Transaction Model**: Complete implementation replacing the account-based model
-- **Merkle Tree Verification**: Advanced merkle proof generation and SPV support for light clients
-- **Cryptographic Security**: Full ECDSA (secp256k1) and Ed25519 signature support
-- **Secure Wallets**: Cryptographically secure wallet implementation with key pair generation
-- **UTXO Management**: Efficient UTXO set tracking, selection algorithms, and balance calculation
-- **Enhanced Security**: All transactions now use proper cryptographic signatures
 - **LoRa Optimization**: Proof compression techniques optimized for 256-byte message constraints
+- **Enhanced Block Validation**: Comprehensive difficulty validation and timestamp manipulation protection
+- **Production-Ready Components**: Complete monorepo structure with TypeScript, Vitest testing, and code quality tools
 
-### Foundation Features
+**Estimated Timeline**: 7-10 months total for MVP completion (currently 25-30% complete)
 
-- Complete monorepo structure with all core packages
-- TypeScript configuration with strict type checking
-- Vitest-based testing framework with comprehensive test coverage
-- ESLint and Prettier for code quality
-- Production-ready blockchain, wallet, and mesh protocol components
-
-Additional features and optimizations will be added in future releases.
+For detailed development progress and upcoming features, see `specs/ROADMAP.md`.
