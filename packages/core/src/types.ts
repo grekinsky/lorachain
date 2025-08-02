@@ -382,6 +382,129 @@ export enum ReassemblyResult {
   SESSION_TIMEOUT = 'session_timeout',
 }
 
+// Enhanced Reassembly Types for Advanced Message Reassembly
+
+export enum MessagePriority {
+  CRITICAL = 0, // Blocks and critical consensus messages
+  HIGH = 1, // UTXO transactions
+  NORMAL = 2, // Merkle proofs
+  LOW = 3, // Other messages
+}
+
+export enum SessionState {
+  RECEIVING = 'receiving',
+  WAITING_RETRANSMISSION = 'waiting_retransmission',
+  COMPLETE = 'complete',
+  EXPIRED = 'expired',
+  FAILED = 'failed',
+}
+
+export interface RoutingHint {
+  nodeId: string;
+  hopCount: number;
+  latency: number;
+  reliability: number;
+}
+
+export interface EnhancedReassemblySession extends ReassemblySession {
+  // Existing fields from ReassemblySession
+  messageId: string;
+  totalFragments: number;
+  receivedFragments: Map<number, Uint8Array>;
+  lastActivity: number;
+  timeout: number;
+  retryCount: number;
+  requiredAcks: Set<number>;
+
+  // New fields for enhanced reassembly
+  priority: MessagePriority;
+  messageType: UTXOMessageType;
+  fragmentBitmap: Uint8Array; // Bitmap for received fragments
+  missingFragments: Set<number>;
+  retransmissionAttempts: Map<number, number>; // Per-fragment retry count
+  lastRetransmissionRequest: number;
+  nextRetransmissionTime: number;
+  routingHints: RoutingHint[];
+  sessionState: SessionState;
+  signature: Uint8Array; // Ed25519 signature of session creator
+}
+
+export interface RetransmissionRequest {
+  type: 'retransmission_request';
+  messageId: Uint8Array;
+  missingFragments: number[]; // Array of missing sequence numbers
+  compressedBitmap?: Uint8Array; // Optional compressed bitmap for large fragment sets
+  requestId: string;
+  timestamp: number;
+  nodeId: string;
+  signature: Uint8Array; // Ed25519 signature
+}
+
+export interface FragmentAcknowledgment {
+  type: 'fragment_ack' | 'fragment_nack';
+  messageId: Uint8Array;
+  acknowledgedFragments: number[] | Uint8Array; // Array or bitmap
+  nackFragments?: number[]; // For negative acknowledgments
+  cumulativeAck?: number; // All fragments up to this number
+  timestamp: number;
+  nodeId: string;
+  signature: Uint8Array; // Ed25519 signature
+}
+
+export interface RetransmissionTask {
+  messageId: Uint8Array;
+  scheduledTime: number;
+  priority: MessagePriority;
+  missingFragments: number[];
+}
+
+export interface AckTracker {
+  messageId: string;
+  pendingFragments: Set<number>;
+  completedFragments: Set<number>;
+  lastAckTime: number;
+  retransmissionDeadline: number;
+}
+
+export interface NetworkMetrics {
+  averageLatency: number;
+  packetLossRate: number;
+  congestionLevel: number;
+  throughput: number;
+  nodeCount: number;
+}
+
+export interface NodeQuota {
+  nodeId: string;
+  fragmentsPerMinute: number;
+  memoryUsage: number;
+  activeSessions: number;
+  lastReset: number;
+}
+
+export interface EnhancedFragmentationConfig extends FragmentationConfig {
+  // Existing fields from FragmentationConfig
+  maxFragmentSize: number;
+  sessionTimeout: number;
+  maxConcurrentSessions: number;
+  retryAttempts: number;
+  ackRequired: boolean;
+
+  // New fields for enhanced functionality
+  enableMissingFragmentDetection: boolean;
+  enableRetransmissionRequests: boolean;
+  enableFragmentAcknowledgments: boolean;
+  enablePriorityBasedProcessing: boolean;
+  enableNetworkOptimization: boolean;
+  maxRetransmissionAttempts: number;
+  retransmissionBaseBackoffMs: number;
+  retransmissionMaxBackoffMs: number;
+  retransmissionJitterPercent: number;
+  fragmentsPerMinuteLimit: number;
+  maxMemoryPerNode: number;
+  maxSessionsPerNode: number;
+}
+
 export interface FragmentationConfig {
   maxFragmentSize: number;
   sessionTimeout: number;
