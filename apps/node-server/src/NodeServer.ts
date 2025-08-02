@@ -28,6 +28,13 @@ export class NodeServer {
       bandwidth: 125000,
       spreadingFactor: 7,
       codingRate: 5,
+      fragmentation: {
+        maxFragmentSize: 197,
+        sessionTimeout: 300000,
+        maxConcurrentSessions: 100,
+        retryAttempts: 3,
+        ackRequired: false,
+      },
     });
 
     this.logger.info('Node server initialized', {

@@ -38,6 +38,13 @@ describe('MeshProtocol', () => {
       bandwidth: 125,
       spreadingFactor: 7,
       codingRate: 5,
+      fragmentation: {
+        maxFragmentSize: 197,
+        sessionTimeout: 300000,
+        maxConcurrentSessions: 100,
+        retryAttempts: 3,
+        ackRequired: false,
+      },
     };
   });
 
@@ -50,12 +57,16 @@ describe('MeshProtocol', () => {
       expect(meshProtocol.getConnectedNodes()).toHaveLength(0);
     });
 
-    it('should log initialization', () => {
+    it('should log initialization with fragmentation enabled', () => {
       meshProtocol = new MeshProtocol(meshConfig);
 
       expect(mockLogger.info).toHaveBeenCalledWith(
-        'Mesh protocol initialized',
-        { nodeId: 'test-node-1' }
+        'Fragmented mesh protocol initialized',
+        {
+          nodeId: 'test-node-1',
+          fragmentationEnabled: true,
+          maxFragmentSize: 197,
+        }
       );
     });
   });
@@ -70,7 +81,7 @@ describe('MeshProtocol', () => {
 
       expect(meshProtocol.isConnectedToMesh()).toBe(true);
       expect(mockLogger.info).toHaveBeenCalledWith(
-        'Connecting to mesh network',
+        'Connecting to fragmented mesh network',
         {
           nodeId: 'test-node-1',
           channel: 1,
@@ -130,7 +141,7 @@ describe('MeshProtocol', () => {
       expect(meshProtocol.isConnectedToMesh()).toBe(false);
 
       expect(mockLogger.info).toHaveBeenCalledWith(
-        'Disconnecting from mesh network',
+        'Disconnecting from fragmented mesh network',
         { nodeId: 'test-node-1' }
       );
     });
@@ -187,11 +198,13 @@ describe('MeshProtocol', () => {
       const result = await meshProtocol.sendMessage(meshMessage);
 
       expect(result).toBe(true);
-      expect(mockLogger.debug).toHaveBeenCalledWith('Sending mesh message', {
-        type: 'transaction',
-        from: 'test-node-1',
-        to: 'target-node',
-      });
+      expect(mockLogger.debug).toHaveBeenCalledWith(
+        'Transmitting message via LoRa',
+        {
+          messageType: 'transaction',
+          payloadSize: expect.any(Number),
+        }
+      );
     });
 
     it('should fail to send message when not connected', async () => {
@@ -225,14 +238,8 @@ describe('MeshProtocol', () => {
 
       const result = await meshProtocol.sendMessage(largeMessage);
 
-      expect(result).toBe(true); // Still queued
-      expect(mockLogger.warn).toHaveBeenCalledWith(
-        'Message too large for LoRa transmission',
-        {
-          messageSize: expect.any(Number),
-          messageType: 'transaction',
-        }
-      );
+      expect(result).toBe(true); // Fragmentation handles large messages
+      // Large messages are now fragmented instead of rejected
     });
   });
 
@@ -256,11 +263,14 @@ describe('MeshProtocol', () => {
       const result = meshProtocol.receiveMessage(serializedMessage);
 
       expect(result).toEqual(meshMessage);
-      expect(mockLogger.debug).toHaveBeenCalledWith('Received mesh message', {
-        type: 'transaction',
-        from: 'other-node',
-        to: undefined,
-      });
+      expect(mockLogger.debug).toHaveBeenCalledWith(
+        'Received complete mesh message',
+        {
+          type: 'transaction',
+          from: 'other-node',
+          to: undefined,
+        }
+      );
     });
 
     it('should update node info on message receipt', () => {
@@ -280,7 +290,7 @@ describe('MeshProtocol', () => {
 
       expect(result).toBeNull();
       expect(mockLogger.error).toHaveBeenCalledWith(
-        'Failed to deserialize received message',
+        'Failed to deserialize complete message',
         { error: expect.any(Error) }
       );
     });
@@ -613,6 +623,146 @@ describe('MeshProtocol', () => {
       const result = meshProtocol.receiveMessage(serialized);
 
       expect(result?.type).toBe('discovery');
+    });
+  });
+
+  describe('fragmentation support', () => {
+    beforeEach(() => {
+      meshProtocol = new MeshProtocol(meshConfig);
+    });
+
+    it('should provide fragmentation configuration', () => {
+      meshProtocol.setFragmentationConfig({
+        maxFragmentSize: 150,
+        sessionTimeout: 60000,
+        maxConcurrentSessions: 50,
+        retryAttempts: 2,
+        ackRequired: true,
+      });
+
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        'Updated fragmentation configuration',
+        expect.objectContaining({
+          maxFragmentSize: 150,
+          sessionTimeout: 60000,
+        })
+      );
+    });
+
+    it('should return fragmentation statistics', () => {
+      const stats = meshProtocol.getFragmentationStats();
+
+      expect(stats).toEqual({
+        totalMessagesSent: 0,
+        totalMessagesReceived: 0,
+        totalFragmentsSent: 0,
+        totalFragmentsReceived: 0,
+        averageFragmentsPerMessage: 0,
+        retransmissionRate: 0,
+        reassemblySuccessRate: 0,
+        averageDeliveryTime: 0,
+      });
+    });
+
+    it('should clear reassembly buffers', () => {
+      meshProtocol.clearReassemblyBuffers();
+
+      expect(mockLogger.debug).toHaveBeenCalledWith(
+        'Cleared all reassembly buffers'
+      );
+    });
+
+    it('should handle UTXO transaction sending when connected', async () => {
+      await meshProtocol.connect();
+
+      const mockUTXOTx = {
+        id: 'test-tx-1',
+        inputs: [],
+        outputs: [
+          {
+            value: 100,
+            lockingScript: 'test-address',
+            outputIndex: 0,
+          },
+        ],
+        lockTime: 0,
+        timestamp: Date.now(),
+        fee: 0.001,
+      };
+
+      const result = await meshProtocol.sendUTXOTransaction(mockUTXOTx);
+
+      expect(result).toBe(true);
+      expect(mockLogger.debug).toHaveBeenCalledWith(
+        expect.stringContaining('fragments')
+      );
+    });
+
+    it('should handle block sending when connected', async () => {
+      await meshProtocol.connect();
+
+      const mockBlock = {
+        index: 1,
+        timestamp: Date.now(),
+        transactions: [],
+        previousHash: 'prev-hash',
+        hash: 'block-hash',
+        nonce: 12345,
+        merkleRoot: 'merkle-root',
+        difficulty: 2,
+      };
+
+      const result = await meshProtocol.sendBlock(mockBlock);
+
+      expect(result).toBe(true);
+      expect(mockLogger.debug).toHaveBeenCalledWith(
+        expect.stringContaining('fragments')
+      );
+    });
+
+    it('should handle merkle proof sending when connected', async () => {
+      await meshProtocol.connect();
+
+      const mockProof = {
+        txId: 'test-tx-1',
+        txHash: 'tx-hash',
+        root: 'merkle-root',
+        path: 'compressed-path',
+        index: 0,
+      };
+
+      const result = await meshProtocol.sendMerkleProof(mockProof);
+
+      expect(result).toBe(true);
+      expect(mockLogger.debug).toHaveBeenCalledWith(
+        expect.stringContaining('fragments')
+      );
+    });
+
+    it('should reject UTXO operations when not connected', async () => {
+      const mockUTXOTx = {
+        id: 'test-tx-1',
+        inputs: [],
+        outputs: [],
+        lockTime: 0,
+        timestamp: Date.now(),
+        fee: 0,
+      };
+
+      const result = await meshProtocol.sendUTXOTransaction(mockUTXOTx);
+
+      expect(result).toBe(false);
+      expect(mockLogger.warn).toHaveBeenCalledWith(
+        'Cannot send UTXO transaction: not connected to mesh network'
+      );
+    });
+
+    it('should handle retransmission requests', async () => {
+      await meshProtocol.retransmitMissingFragments('test-message-id');
+
+      expect(mockLogger.debug).toHaveBeenCalledWith(
+        'Retransmission requested for message test-message-id'
+      );
     });
   });
 });

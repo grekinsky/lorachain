@@ -56,3 +56,11 @@ export {
   type NetworkParameters,
   type GenesisMetadata,
 } from './genesis/index.js';
+
+// Message Fragmentation exports
+export * from './fragmentation.js';
+export {
+  UTXOMessageFragmenter,
+  UTXOFragmentReassembler,
+  UTXOFragmentCache,
+} from './fragmentation.js';
