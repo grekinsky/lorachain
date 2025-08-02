@@ -64,3 +64,20 @@ export {
   UTXOFragmentReassembler,
   UTXOFragmentCache,
 } from './fragmentation.js';
+
+// Routing Protocol exports
+export * from './routing.js';
+export {
+  UTXORouteManager,
+  BlockchainFloodManager,
+  UTXOMessageForwarder,
+  CryptoLoopPrevention,
+} from './routing.js';
+export * from './routing-messages.js';
+export {
+  RoutingMessageFactory,
+  RoutingMessageHandler,
+  RoutingMessageOptimizer,
+} from './routing-messages.js';
+export * from './enhanced-mesh-protocol.js';
+export { UTXOEnhancedMeshProtocol } from './enhanced-mesh-protocol.js';
