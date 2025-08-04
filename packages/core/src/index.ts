@@ -81,3 +81,18 @@ export {
 } from './routing-messages.js';
 export * from './enhanced-mesh-protocol.js';
 export { UTXOEnhancedMeshProtocol } from './enhanced-mesh-protocol.js';
+
+// Duty Cycle Management exports
+export * from './duty-cycle.js';
+export * from './duty-cycle-config.js';
+export {
+  DutyCycleManager,
+  RegionalComplianceValidator,
+  MessageSizeEstimator,
+  PriorityMessageQueue,
+} from './duty-cycle.js';
+export {
+  DutyCycleConfigFactory,
+  REGIONAL_PRESETS,
+  DEFAULT_LORA_PARAMS,
+} from './duty-cycle-config.js';
