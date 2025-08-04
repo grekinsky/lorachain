@@ -1148,6 +1148,10 @@ export interface IDutyCycleManager {
   stop(): void;
   pause(): void;
   resume(): void;
+
+  // Event emitter methods
+  on(event: string, listener: (...args: any[]) => void): this;
+  emit(event: string, ...args: any[]): boolean;
 }
 
 // Events Interface for Duty Cycle Management

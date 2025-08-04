@@ -607,8 +607,8 @@ export class DutyCycleManager extends EventEmitter implements IDutyCycleManager 
     if (this.isRunning) return;
     
     this.isRunning = true;
-    this.processingInterval = setInterval(() => {
-      this.processQueue();
+    this.processingInterval = setInterval(async () => {
+      await this.processQueue();
       this.cleanupOldTransmissions();
       this.updateStats();
     }, 1000); // Process queue every second
@@ -639,7 +639,7 @@ export class DutyCycleManager extends EventEmitter implements IDutyCycleManager 
   }
 
   // Private helper methods
-  private processQueue(): void {
+  private async processQueue(): Promise<void> {
     // Process messages from queue based on duty cycle availability
     const nextMessage = this.messageQueue.peek();
     if (!nextMessage) return;
@@ -648,9 +648,9 @@ export class DutyCycleManager extends EventEmitter implements IDutyCycleManager 
     const canTransmit = this.canTransmit(estimatedTime, nextMessage.priority);
     
     if (canTransmit) {
-      const message = this.messageQueue.dequeue();
+      const message = await this.messageQueue.dequeue();
       if (message) {
-        this.scheduleTransmission(message);
+        await this.scheduleTransmission(message);
       }
     }
   }

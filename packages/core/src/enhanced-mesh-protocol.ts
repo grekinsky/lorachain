@@ -18,6 +18,9 @@ import {
   type DutyCycleConfig,
   type IDutyCycleManager,
   type IDatabase,
+  type DutyCycleWarning,
+  type DutyCycleViolation,
+  type TransmissionRecord,
   MessagePriority,
 } from './types.js';
 import {
@@ -813,7 +816,7 @@ export class UTXOEnhancedMeshProtocol
 
   // BREAKING CHANGE: Added duty cycle event handlers
   private setupDutyCycleEventHandlers(): void {
-    this.dutyCycleManager.on('dutyCycleWarning', (warning) => {
+    this.dutyCycleManager.on('dutyCycleWarning', (warning: DutyCycleWarning) => {
       this.logger.warn('Duty cycle approaching limit', {
         currentDutyCycle: `${(warning.currentDutyCycle * 100).toFixed(2)}%`,
         threshold: `${(warning.threshold * 100).toFixed(1)}%`,
@@ -823,7 +826,7 @@ export class UTXOEnhancedMeshProtocol
       this.emit('duty_cycle_warning', warning);
     });
 
-    this.dutyCycleManager.on('dutyCycleViolation', (violation) => {
+    this.dutyCycleManager.on('dutyCycleViolation', (violation: DutyCycleViolation) => {
       this.logger.error('Duty cycle violation detected', {
         region: violation.region,
         frequencyBand: violation.frequencyBand,
@@ -834,7 +837,7 @@ export class UTXOEnhancedMeshProtocol
       this.emit('duty_cycle_violation', violation);
     });
 
-    this.dutyCycleManager.on('queueOverflow', (droppedMessage) => {
+    this.dutyCycleManager.on('queueOverflow', (droppedMessage: any) => {
       this.logger.warn('Message queue overflow, dropping message', {
         messageType: this.getMessageType(droppedMessage),
         priority: droppedMessage.priority
@@ -842,7 +845,7 @@ export class UTXOEnhancedMeshProtocol
       this.emit('message_dropped', droppedMessage);
     });
 
-    this.dutyCycleManager.on('transmissionComplete', (record) => {
+    this.dutyCycleManager.on('transmissionComplete', (record: TransmissionRecord) => {
       this.logger.debug('Transmission completed with duty cycle tracking', {
         messageType: record.messageType,
         duration: `${record.durationMs}ms`,
