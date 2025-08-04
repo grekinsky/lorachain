@@ -15,6 +15,10 @@ import {
   type FragmentationConfig,
   type FragmentationStats,
   type NetworkNode,
+  type DutyCycleConfig,
+  type IDutyCycleManager,
+  type IDatabase,
+  MessagePriority,
 } from './types.js';
 import {
   UTXORouteManager,
@@ -28,14 +32,23 @@ import {
   RoutingMessageOptimizer,
 } from './routing-messages.js';
 import { CryptographicService, type KeyPair } from './cryptographic.js';
+import { DutyCycleManager } from './duty-cycle.js';
+import { DutyCycleConfigFactory } from './duty-cycle-config.js';
 import { Logger } from '@lorachain/shared';
 import { EventEmitter } from 'events';
 
 /**
- * Enhanced MeshProtocol with UTXO-aware routing capabilities
+ * Enhanced MeshProtocol with UTXO-aware routing capabilities and duty cycle management
  *
- * BREAKING CHANGE: Complete enhancement of MeshProtocol with routing support.
- * Integrates with existing fragmentation system while adding blockchain-optimized routing.
+ * BREAKING CHANGE: Complete enhancement of MeshProtocol with routing support and duty cycle compliance.
+ * Integrates with existing fragmentation system while adding blockchain-optimized routing and
+ * regional regulatory compliance for LoRa mesh networking.
+ * 
+ * NEW FEATURES:
+ * - Duty cycle management with multi-regional compliance (EU, US, JP, AU, etc.)
+ * - Priority-based message queuing with UTXO transaction fee prioritization
+ * - Adaptive transmission scheduling to optimize throughput within regulatory limits
+ * - Persistent transmission history tracking for compliance auditing
  */
 export class UTXOEnhancedMeshProtocol
   extends EventEmitter
@@ -48,6 +61,10 @@ export class UTXOEnhancedMeshProtocol
   private routingMessageFactory: RoutingMessageFactory;
   private routingMessageHandler: RoutingMessageHandler;
   private routingMessageOptimizer: RoutingMessageOptimizer;
+
+  // BREAKING CHANGE: Added duty cycle management
+  private dutyCycleManager: IDutyCycleManager;
+  private dutyCycleConfig: DutyCycleConfig;
 
   private cryptoService: CryptographicService;
   private logger: Logger;
@@ -75,6 +92,8 @@ export class UTXOEnhancedMeshProtocol
     nodeKeyPair: KeyPair,
     routingConfig: RoutingConfig,
     fragmentationConfig: FragmentationConfig,
+    dutyCycleConfig: DutyCycleConfig,
+    database?: IDatabase,
     cryptoService?: CryptographicService
   ) {
     super();
@@ -84,8 +103,19 @@ export class UTXOEnhancedMeshProtocol
     this.nodeKeyPair = nodeKeyPair;
     this.routingConfig = routingConfig;
     this.fragmentationConfig = fragmentationConfig;
+    this.dutyCycleConfig = dutyCycleConfig;
     this.cryptoService = cryptoService || new CryptographicService();
     this.logger = Logger.getInstance();
+
+    // BREAKING CHANGE: Initialize duty cycle manager
+    this.dutyCycleManager = new DutyCycleManager(this.dutyCycleConfig, database);
+    
+    this.logger.info('Duty cycle management initialized', {
+      region: this.dutyCycleConfig.region,
+      frequencyBand: this.dutyCycleConfig.activeFrequencyBand,
+      maxDutyCycle: this.dutyCycleConfig.maxDutyCyclePercent ? 
+        `${(this.dutyCycleConfig.maxDutyCyclePercent * 100).toFixed(1)}%` : 'none'
+    });
 
     // Initialize routing components
     this.utxoRouteManager = new UTXORouteManager(
@@ -160,6 +190,12 @@ export class UTXOEnhancedMeshProtocol
 
     // Start periodic operations
     this.startPeriodicOperations();
+    
+    // BREAKING CHANGE: Start duty cycle manager
+    this.dutyCycleManager.start();
+    
+    // Set up duty cycle event handlers
+    this.setupDutyCycleEventHandlers();
   }
 
   // ==========================================
@@ -409,33 +445,39 @@ export class UTXOEnhancedMeshProtocol
   // UTXO-Specific Blockchain Methods
   // ==========================================
 
+  // BREAKING CHANGE: Updated to use duty cycle management
   async sendUTXOTransaction(tx: UTXOTransaction): Promise<boolean> {
     try {
-      // Find best route to a full node for transaction processing
-      const fullNodeRoute = this.utxoRouteManager.getBestRouteForFullNode();
-      if (!fullNodeRoute) {
-        this.logger.warn('No full node available for UTXO transaction');
-        // Broadcast to all neighbors as fallback
-        const message: MeshMessage = {
-          type: 'transaction',
-          payload: tx,
-          timestamp: tx.timestamp,
-          from: this.nodeId,
-          signature: this.signMessage('transaction'),
-        };
-        return this.broadcastMessage(message);
-      }
-
+      // Create message
       const message: MeshMessage = {
         type: 'transaction',
         payload: tx,
         timestamp: tx.timestamp,
         from: this.nodeId,
-        to: fullNodeRoute.destination,
         signature: this.signMessage('transaction'),
       };
 
-      return this.sendRoutedMessage(message, fullNodeRoute.destination);
+      // Calculate priority based on UTXO transaction fee
+      const priority = this.calculateUTXOPriority(tx);
+      
+      this.logger.debug('Queueing UTXO transaction with duty cycle management', {
+        txId: tx.id,
+        priority: MessagePriority[priority],
+        fee: tx.fee,
+        inputCount: tx.inputs.length,
+        outputCount: tx.outputs.length
+      });
+
+      // Queue message with duty cycle manager instead of direct transmission
+      const queued = await this.dutyCycleManager.enqueueMessage(message, priority);
+      
+      if (queued) {
+        // Message was successfully queued for duty cycle compliant transmission
+        return true;
+      } else {
+        this.logger.error('Failed to queue UTXO transaction - queue full', { txId: tx.id });
+        return false;
+      }
     } catch (error) {
       this.logger.error('Failed to send UTXO transaction', {
         txId: tx.id,
@@ -445,6 +487,21 @@ export class UTXOEnhancedMeshProtocol
     }
   }
 
+  // Calculate message priority based on UTXO transaction fee
+  private calculateUTXOPriority(utxoTx: UTXOTransaction): MessagePriority {
+    const messageSize = JSON.stringify(utxoTx).length;
+    const feePerByte = utxoTx.fee / messageSize;
+    
+    // Fee-based priority thresholds (in satoshis per byte equivalent)
+    const HIGH_FEE_THRESHOLD = 10;
+    const NORMAL_FEE_THRESHOLD = 1;
+    
+    if (feePerByte >= HIGH_FEE_THRESHOLD) return MessagePriority.HIGH;
+    if (feePerByte >= NORMAL_FEE_THRESHOLD) return MessagePriority.NORMAL;
+    return MessagePriority.LOW;
+  }
+
+  // BREAKING CHANGE: Updated to use duty cycle management
   async sendBlock(block: Block): Promise<boolean> {
     try {
       const message: MeshMessage = {
@@ -455,8 +512,26 @@ export class UTXOEnhancedMeshProtocol
         signature: this.signMessage('block'),
       };
 
-      // Broadcast blocks to all neighbors for propagation
-      return this.broadcastMessage(message);
+      // Blocks get CRITICAL priority for consensus propagation
+      const priority = MessagePriority.CRITICAL;
+      
+      this.logger.debug('Queueing block with duty cycle management', {
+        blockIndex: block.index,
+        blockHash: block.hash,
+        priority: MessagePriority[priority],
+        transactionCount: block.transactions.length
+      });
+
+      // Queue message with duty cycle manager instead of direct broadcast
+      const queued = await this.dutyCycleManager.enqueueMessage(message, priority);
+      
+      if (queued) {
+        // Block was successfully queued for duty cycle compliant transmission
+        return true;
+      } else {
+        this.logger.error('Failed to queue block - queue full', { blockIndex: block.index });
+        return false;
+      }
     } catch (error) {
       this.logger.error('Failed to send block', {
         blockIndex: block.index,
@@ -466,6 +541,7 @@ export class UTXOEnhancedMeshProtocol
     }
   }
 
+  // BREAKING CHANGE: Updated to use duty cycle management
   async sendMerkleProof(proof: CompressedMerkleProof): Promise<boolean> {
     try {
       const message: MeshMessage = {
@@ -476,8 +552,25 @@ export class UTXOEnhancedMeshProtocol
         signature: this.signMessage('sync'),
       };
 
-      // Send merkle proofs to requesting node (would need destination from context)
-      return this.broadcastMessage(message);
+      // Merkle proofs get HIGH priority for SPV verification
+      const priority = MessagePriority.HIGH;
+      
+      this.logger.debug('Queueing merkle proof with duty cycle management', {
+        txId: proof.txId,
+        priority: MessagePriority[priority],
+        proofIndex: proof.index
+      });
+
+      // Queue message with duty cycle manager instead of direct broadcast
+      const queued = await this.dutyCycleManager.enqueueMessage(message, priority);
+      
+      if (queued) {
+        // Merkle proof was successfully queued for duty cycle compliant transmission
+        return true;
+      } else {
+        this.logger.error('Failed to queue merkle proof - queue full', { txId: proof.txId });
+        return false;
+      }
     } catch (error) {
       this.logger.error('Failed to send merkle proof', {
         txId: proof.txId,
@@ -485,6 +578,52 @@ export class UTXOEnhancedMeshProtocol
       });
       return false;
     }
+  }
+
+  // ==========================================
+  // BREAKING CHANGE: Duty Cycle Management API
+  // ==========================================
+
+  /**
+   * Get current duty cycle statistics
+   */
+  getDutyCycleStats() {
+    return this.dutyCycleManager.getDutyCycleStats();
+  }
+
+  /**
+   * Get message queue status
+   */
+  getQueueStatus() {
+    return this.dutyCycleManager.getQueueStatus();
+  }
+
+  /**
+   * Check if a transmission can be made immediately
+   */
+  canTransmitNow(estimatedTimeMs?: number, priority?: MessagePriority): boolean {
+    return this.dutyCycleManager.canTransmit(estimatedTimeMs || 1000, priority);
+  }
+
+  /**
+   * Get the duty cycle configuration
+   */
+  getDutyCycleConfig(): DutyCycleConfig {
+    return this.dutyCycleManager.getConfig();
+  }
+
+  /**
+   * Update duty cycle configuration
+   */
+  updateDutyCycleConfig(config: Partial<DutyCycleConfig>): void {
+    this.dutyCycleManager.updateConfig(config);
+  }
+
+  /**
+   * Get transmission history for compliance auditing
+   */
+  getTransmissionHistory(hours?: number) {
+    return this.dutyCycleManager.getTransmissionHistory(hours);
   }
 
   // ==========================================
@@ -670,6 +809,56 @@ export class UTXOEnhancedMeshProtocol
         );
       }
     });
+  }
+
+  // BREAKING CHANGE: Added duty cycle event handlers
+  private setupDutyCycleEventHandlers(): void {
+    this.dutyCycleManager.on('dutyCycleWarning', (warning) => {
+      this.logger.warn('Duty cycle approaching limit', {
+        currentDutyCycle: `${(warning.currentDutyCycle * 100).toFixed(2)}%`,
+        threshold: `${(warning.threshold * 100).toFixed(1)}%`,
+        timeToReset: `${Math.ceil(warning.timeToReset / 1000)}s`,
+        affectedMessages: warning.affectedMessages
+      });
+      this.emit('duty_cycle_warning', warning);
+    });
+
+    this.dutyCycleManager.on('dutyCycleViolation', (violation) => {
+      this.logger.error('Duty cycle violation detected', {
+        region: violation.region,
+        frequencyBand: violation.frequencyBand,
+        attemptedDutyCycle: `${(violation.attemptedDutyCycle * 100).toFixed(2)}%`,
+        maxAllowed: `${(violation.maxAllowedDutyCycle * 100).toFixed(1)}%`,
+        severity: violation.severity
+      });
+      this.emit('duty_cycle_violation', violation);
+    });
+
+    this.dutyCycleManager.on('queueOverflow', (droppedMessage) => {
+      this.logger.warn('Message queue overflow, dropping message', {
+        messageType: this.getMessageType(droppedMessage),
+        priority: droppedMessage.priority
+      });  
+      this.emit('message_dropped', droppedMessage);
+    });
+
+    this.dutyCycleManager.on('transmissionComplete', (record) => {
+      this.logger.debug('Transmission completed with duty cycle tracking', {
+        messageType: record.messageType,
+        duration: `${record.durationMs}ms`,
+        frequencyMHz: record.frequencyMHz,
+        powerLevel: `${record.powerLevel_dBm}dBm`
+      });
+      this.fragmentationStats.totalMessagesSent++;
+    });
+  }
+
+  // Helper method to determine message type from message content
+  private getMessageType(message: any): 'UTXO_TRANSACTION' | 'BLOCK' | 'ROUTING' | 'DISCOVERY' {
+    if (message.type === 'transaction' || message.type === 'utxo_transaction') return 'UTXO_TRANSACTION';
+    if (message.type === 'block') return 'BLOCK';
+    if (message.type === 'discovery' || message.type === 'hello') return 'DISCOVERY';
+    return 'ROUTING';
   }
 
   private async handleOutgoingRoutingMessage(
