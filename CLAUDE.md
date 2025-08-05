@@ -136,18 +136,40 @@ pnpm --filter "node-server" test
 pnpm --filter "@lorachain/shared" build && pnpm --filter "@lorachain/core" build && pnpm test
 
 # Individual package testing (after building dependencies)
-pnpm --filter "@lorachain/core" test                    # Run core blockchain tests
+pnpm --filter "@lorachain/core" test:run                # Run core blockchain tests (single run, no watch)
 pnpm --filter "@lorachain/core" test:coverage           # Run core tests with coverage
-pnpm --filter "@lorachain/mobile-wallet" test           # Run mobile wallet tests
-pnpm --filter "@lorachain/mesh-protocol" test           # Run mesh protocol tests
-pnpm --filter "@lorachain/node" test                    # Run node tests
-pnpm --filter "wallet-app" test                         # Run wallet app tests
-pnpm --filter "node-server" test                        # Run node server tests
+pnpm --filter "@lorachain/mobile-wallet" test:run       # Run mobile wallet tests (single run)
+pnpm --filter "@lorachain/mesh-protocol" test:run       # Run mesh protocol tests (single run)
+pnpm --filter "@lorachain/node" test:run                # Run node tests (single run)
+pnpm --filter "wallet-app" test:run                     # Run wallet app tests (single run)
+pnpm --filter "node-server" test:run                    # Run node server tests (single run)
 
 # Watch mode testing (after building dependencies)
 pnpm --filter "@lorachain/core" test:watch              # Watch mode for core package
 pnpm --filter "@lorachain/mobile-wallet" test:watch     # Watch mode for mobile wallet
 ```
+
+### IMPORTANT Testing Best Practices
+
+**⚠️ Critical Testing Guidelines:**
+
+1. **Always use `test:run` for single-run testing**: The default `test` command runs in watch mode and will wait indefinitely for file changes, causing timeouts in automated environments.
+
+2. **Avoid unnecessary directory changes**: When already in the project root, use filter commands instead of `cd` to avoid "no such file or directory" errors:
+   ```bash
+   # ❌ WRONG: Don't change to directories that don't exist relative to current location
+   cd packages/core && pnpm test
+   
+   # ✅ CORRECT: Use filter commands from project root
+   pnpm --filter "@lorachain/core" test:run
+   ```
+
+3. **Build dependencies before testing**: Always build shared packages first to avoid test failures due to outdated compiled versions.
+
+4. **Use appropriate test commands**:
+   - `test:run` - Single test execution (for CI/automated testing)  
+   - `test:watch` - Watch mode for development
+   - `test` - Alias for `test:watch` (avoid in automated contexts)
 
 ### Dependency Build Order
 
