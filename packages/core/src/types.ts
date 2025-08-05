@@ -895,3 +895,304 @@ export interface NetworkTopology {
   links: Map<string, Set<string>>;
   lastUpdated: number;
 }
+
+// ==========================================
+// DUTY CYCLE MANAGEMENT TYPES
+// ==========================================
+
+// Regional Configuration Types
+export interface DutyCycleConfig {
+  // Regional configuration
+  region:
+    | 'EU'
+    | 'US'
+    | 'CA'
+    | 'MX'
+    | 'AU'
+    | 'NZ'
+    | 'JP'
+    | 'IN'
+    | 'CN'
+    | 'KR'
+    | 'BR'
+    | 'AR'
+    | 'RU'
+    | 'ZA'
+    | 'CUSTOM';
+  regulatoryBody:
+    | 'ETSI'
+    | 'FCC'
+    | 'IC'
+    | 'ACMA'
+    | 'ARIB'
+    | 'WPC'
+    | 'SRRC'
+    | 'KC'
+    | 'ANATEL'
+    | 'CUSTOM';
+
+  // Frequency band configuration
+  frequencyBands: FrequencyBandConfig[];
+  activeFrequencyBand: string; // Current band in use (e.g., "EU868", "US915", "AU915")
+
+  // Duty cycle and timing constraints
+  maxDutyCyclePercent?: number; // null for regions without duty cycle (US, AU, BR)
+  trackingWindowHours: number; // Default: 1 hour for duty cycle regions
+  maxTransmissionTimeMs: number; // Maximum single transmission time
+  dwellTimeMs?: number; // For frequency hopping regions (US: <400ms)
+
+  // Frequency hopping configuration (US/CA/MX)
+  frequencyHopping?: {
+    enabled: boolean;
+    numChannels: number; // Must be ≥50 for FCC compliance
+    channelDwellTimeMs: number; // Must be <400ms for FCC
+    hopPattern: 'random' | 'sequential' | 'adaptive';
+  };
+
+  // Power output limits
+  maxEIRP_dBm: number; // Maximum power output for region
+  adaptivePowerControl: boolean; // Adjust power based on link quality
+
+  // Compliance and override settings
+  emergencyOverrideEnabled: boolean;
+  strictComplianceMode: boolean; // Fail-safe mode that prevents any violations
+  autoRegionDetection: boolean; // Use GPS/network to auto-select region
+
+  // Integration with existing Lorachain components
+  persistenceEnabled: boolean; // Use LevelDatabase for transmission history
+  networkType: 'devnet' | 'testnet' | 'mainnet'; // From GenesisConfigManager
+}
+
+export interface FrequencyBandConfig {
+  name: string; // e.g., "EU433", "EU868", "US915"
+  centerFrequencyMHz: number;
+  bandwidthMHz: number;
+  minFrequencyMHz: number;
+  maxFrequencyMHz: number;
+
+  // Sub-band specific duty cycles (for EU)
+  subBands?: {
+    minMHz: number;
+    maxMHz: number;
+    dutyCyclePercent: number;
+    maxEIRP_dBm: number;
+  }[];
+
+  // Channel configuration
+  channels: {
+    number: number;
+    frequencyMHz: number;
+    dataRate: string; // e.g., "SF7BW125", "SF12BW125"
+    enabled: boolean;
+  }[];
+}
+
+export interface TransmissionRecord {
+  timestamp: number;
+  durationMs: number;
+  messageType: 'UTXO_TRANSACTION' | 'BLOCK' | 'ROUTING' | 'DISCOVERY';
+  priority: MessagePriority;
+  frequencyBand: string;
+  frequencyMHz: number;
+  // Enhanced routing integration (from completed routing protocol)
+  sourceNodeId: string;
+  destinationNodeId?: string;
+  hopCount: number;
+  messageSize: number;
+  powerLevel_dBm: number;
+}
+
+export interface QueuedMessage {
+  id: string;
+  message: any; // EnhancedMeshMessage or similar
+  priority: MessagePriority;
+  queuedAt: number;
+  expiresAt: number;
+  estimatedTransmissionTimeMs: number;
+  retryCount: number;
+  // Fragment tracking (from completed fragmentation system)
+  isFragmented: boolean;
+  fragmentInfo?: {
+    totalFragments: number;
+    fragmentsSent: number;
+    remainingFragments: number;
+  };
+  // Regional compliance info
+  frequencyBand: string;
+  regionConfig: DutyCycleConfig;
+}
+
+// Compliance Validation Types
+export interface ComplianceResult {
+  compliant: boolean;
+  reason?: string;
+  waitTimeMs?: number;
+  suggestedFrequencyMHz?: number;
+  powerReduction?: number;
+}
+
+export interface RegionalLimits {
+  maxDutyCyclePercent: number;
+  trackingWindowMs: number;
+  maxSingleTransmissionMs: number;
+  maxPower_dBm: number;
+  frequencyLimits: {
+    minMHz: number;
+    maxMHz: number;
+    allowedChannels: number[];
+  };
+}
+
+// Queue Management Types
+export interface MessageQueue {
+  enqueue(message: any, priority: MessagePriority): Promise<boolean>;
+  dequeue(): Promise<QueuedMessage | null>;
+  peek(): QueuedMessage | null;
+  size(): number;
+  clear(): void;
+  getQueueStats(): QueueStats;
+  removeExpired(): number;
+  getMessagesByPriority(priority: MessagePriority): QueuedMessage[];
+}
+
+export interface QueueStats {
+  totalMessages: number;
+  messagesByPriority: Record<MessagePriority, number>;
+  averageWaitTime: number;
+  oldestMessageAge: number;
+  estimatedProcessingTime: number;
+  queueSizeBytes: number;
+  messagesExpired: number;
+  messagesDropped: number;
+}
+
+// Transmission Scheduling Types
+export interface TransmissionWindow {
+  startTime: number;
+  endTime: number;
+  frequencyMHz: number;
+  maxTransmissionTime: number;
+  priority: MessagePriority;
+}
+
+export interface ScheduledTransmission {
+  messageId: string;
+  scheduledTime: number;
+  estimatedDuration: number;
+  priority: MessagePriority;
+  frequencyMHz: number;
+  retryCount: number;
+}
+
+// Duty Cycle Statistics Types
+export interface DutyCycleStats {
+  currentDutyCycle: number;
+  dailyDutyCycle: number;
+  hourlyDutyCycle: number;
+  transmissionCount: number;
+  totalTransmissionTime: number;
+  averageTransmissionTime: number;
+  queuedMessages: number;
+  violationsCount: number;
+  lastViolation?: number;
+  complianceRate: number;
+}
+
+export interface DutyCycleMetrics {
+  region: string;
+  frequencyBand: string;
+  stats: DutyCycleStats;
+  queueMetrics: QueueStats;
+  performanceMetrics: {
+    processingLatency: number;
+    throughput: number;
+    errorRate: number;
+  };
+  lastUpdated: number;
+}
+
+// Event Types for Duty Cycle Management
+export interface DutyCycleViolation {
+  timestamp: number;
+  region: string;
+  frequencyBand: string;
+  attemptedDutyCycle: number;
+  maxAllowedDutyCycle: number;
+  messageId: string;
+  severity: 'warning' | 'critical';
+}
+
+export interface DutyCycleWarning {
+  timestamp: number;
+  currentDutyCycle: number;
+  threshold: number;
+  timeToReset: number;
+  affectedMessages: number;
+}
+
+// Message Size Estimation Types
+export interface MessageSizeEstimate {
+  payloadBytes: number;
+  headerBytes: number;
+  totalBytes: number;
+  airTimeMs: number;
+  fragmentCount: number;
+  estimatedTransmissionTime: number;
+}
+
+export interface LoRaTransmissionParams {
+  spreadingFactor: number; // 7-12
+  bandwidth: number; // 125, 250, 500 kHz
+  codingRate: number; // 4/5, 4/6, 4/7, 4/8
+  preambleLength: number; // Default: 8
+  headerMode: 'explicit' | 'implicit';
+  crcEnabled: boolean;
+  lowDataRateOptimize: boolean;
+}
+
+// Duty Cycle Manager Interface
+export interface IDutyCycleManager {
+  // Core functionality
+  canTransmit(
+    estimatedTimeMs: number,
+    priority?: MessagePriority,
+    frequencyMHz?: number
+  ): boolean;
+  enqueueMessage(message: any, priority: MessagePriority): Promise<boolean>;
+  getNextTransmissionWindow(frequencyMHz?: number): number;
+
+  // Status and monitoring
+  getCurrentDutyCycle(windowHours?: number, frequencyMHz?: number): number;
+  getQueueStatus(): QueueStats;
+  getTransmissionHistory(hours?: number): TransmissionRecord[];
+  getDutyCycleStats(): DutyCycleStats;
+
+  // Configuration
+  updateConfig(config: Partial<DutyCycleConfig>): void;
+  getConfig(): DutyCycleConfig;
+  validateRegionalCompliance(
+    transmissionTimeMs: number,
+    frequencyMHz: number
+  ): ComplianceResult;
+
+  // Control
+  start(): void;
+  stop(): void;
+  pause(): void;
+  resume(): void;
+
+  // Event emitter methods
+  on(event: string, listener: (...args: any[]) => void): this;
+  emit(event: string, ...args: any[]): boolean;
+}
+
+// Events Interface for Duty Cycle Management
+export interface DutyCycleEvents {
+  onDutyCycleWarning(warning: DutyCycleWarning): void;
+  onDutyCycleViolation(violation: DutyCycleViolation): void;
+  onQueueOverflow(droppedMessage: any): void;
+  onMessageExpired(expiredMessage: QueuedMessage): void;
+  onTransmissionComplete(record: TransmissionRecord): void;
+  onRegionChanged(oldRegion: string, newRegion: string): void;
+  onComplianceCheck(result: ComplianceResult): void;
+}

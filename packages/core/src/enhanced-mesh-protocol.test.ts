@@ -1,8 +1,10 @@
 import { describe, test, expect, beforeEach, vi } from 'vitest';
 import { UTXOEnhancedMeshProtocol } from './enhanced-mesh-protocol.js';
+import { DutyCycleConfigFactory } from './duty-cycle-config.js';
 import {
   type RoutingConfig,
   type FragmentationConfig,
+  type DutyCycleConfig,
   type MeshMessage,
   type UTXOTransaction,
   type Block,
@@ -27,6 +29,7 @@ describe('UTXOEnhancedMeshProtocol', () => {
   let nodeKeyPair: KeyPair;
   let routingConfig: RoutingConfig;
   let fragmentationConfig: FragmentationConfig;
+  let dutyCycleConfig: DutyCycleConfig;
 
   beforeEach(() => {
     nodeKeyPair = CryptographicService.generateKeyPair('ed25519');
@@ -60,12 +63,15 @@ describe('UTXOEnhancedMeshProtocol', () => {
       ackRequired: true,
     };
 
+    dutyCycleConfig = DutyCycleConfigFactory.createForRegion('EU', 'testnet');
+
     meshProtocol = new UTXOEnhancedMeshProtocol(
       'test-node',
       'full',
       nodeKeyPair,
       routingConfig,
-      fragmentationConfig
+      fragmentationConfig,
+      dutyCycleConfig
     );
   });
 
@@ -348,7 +354,8 @@ describe('UTXOEnhancedMeshProtocol', () => {
       'light',
       nodeKeyPair,
       routingConfig,
-      fragmentationConfig
+      fragmentationConfig,
+      dutyCycleConfig
     );
 
     const miningNodeProtocol = new UTXOEnhancedMeshProtocol(
@@ -356,7 +363,8 @@ describe('UTXOEnhancedMeshProtocol', () => {
       'mining',
       nodeKeyPair,
       routingConfig,
-      fragmentationConfig
+      fragmentationConfig,
+      dutyCycleConfig
     );
 
     expect(lightNodeProtocol.getNodeType()).toBe('light');
@@ -377,7 +385,8 @@ describe('UTXOEnhancedMeshProtocol', () => {
       'full',
       nodeKeyPair,
       shortTimeoutConfig,
-      fragmentationConfig
+      fragmentationConfig,
+      dutyCycleConfig
     );
 
     await shortTimeoutProtocol.connect();

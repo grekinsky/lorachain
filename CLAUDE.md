@@ -8,7 +8,7 @@ Lorachain is a lightweight blockchain network designed for cryptocurrency transa
 
 The blockchain uses a **UTXO (Unspent Transaction Output) model** for transaction management and supports **cryptographic signing** with both ECDSA (secp256k1) and Ed25519 algorithms.
 
-**Current Development Status**: ~25-30% complete toward MVP goal with Milestone 1 (Core Blockchain) fully implemented and Milestone 2 (LoRa/Mesh Protocol) partially complete. See `specs/ROADMAP.md` for detailed progress tracking.
+**Current Development Status**: ~35-40% complete toward MVP goal with Milestone 1 (Core Blockchain) fully implemented and Milestone 2 (LoRa/Mesh Protocol) significantly enhanced with advanced routing, duty cycle management, and regional compliance. See `specs/ROADMAP.md` for detailed progress tracking.
 
 ## Important Development Guidelines
 
@@ -89,7 +89,10 @@ cd packages/core && pnpm test    # Test specific package
 - **`GenesisConfigManager`** (core) - Genesis block configuration and UTXO-based initial allocations
 - **`SecureMobileWallet`** (mobile-wallet) - Cryptographically secure wallet with key pairs
 - **`LorachainNode`** (node) - Full node with mining and peer management
-- **`MeshProtocol`** (mesh-protocol) - LoRa mesh communication
+- **`EnhancedMeshProtocol`** (mesh-protocol) - Advanced LoRa mesh communication with UTXO-aware routing and duty cycle compliance
+- **`UTXORouteManager`** (mesh-protocol) - UTXO-optimized routing with blockchain awareness and cryptographic security
+- **`DutyCycleManager`** (mesh-protocol) - Regional compliance for EU/US/Japan/Australia with transmission scheduling
+- **`RegionalComplianceValidator`** (mesh-protocol) - Regulatory compliance validation and enforcement
 - **`Logger`** (shared) - Centralized logging with levels
 
 ### Technical Constraints
@@ -136,18 +139,53 @@ pnpm --filter "node-server" test
 pnpm --filter "@lorachain/shared" build && pnpm --filter "@lorachain/core" build && pnpm test
 
 # Individual package testing (after building dependencies)
-pnpm --filter "@lorachain/core" test                    # Run core blockchain tests
+pnpm --filter "@lorachain/core" test:run                # Run core blockchain tests (single run, no watch)
 pnpm --filter "@lorachain/core" test:coverage           # Run core tests with coverage
-pnpm --filter "@lorachain/mobile-wallet" test           # Run mobile wallet tests
-pnpm --filter "@lorachain/mesh-protocol" test           # Run mesh protocol tests
-pnpm --filter "@lorachain/node" test                    # Run node tests
-pnpm --filter "wallet-app" test                         # Run wallet app tests
-pnpm --filter "node-server" test                        # Run node server tests
+pnpm --filter "@lorachain/mobile-wallet" test:run       # Run mobile wallet tests (single run)
+pnpm --filter "@lorachain/mesh-protocol" test:run       # Run mesh protocol tests (single run)
+pnpm --filter "@lorachain/node" test:run                # Run node tests (single run)
+pnpm --filter "wallet-app" test:run                     # Run wallet app tests (single run)
+pnpm --filter "node-server" test:run                    # Run node server tests (single run)
 
 # Watch mode testing (after building dependencies)
 pnpm --filter "@lorachain/core" test:watch              # Watch mode for core package
 pnpm --filter "@lorachain/mobile-wallet" test:watch     # Watch mode for mobile wallet
 ```
+
+### IMPORTANT Testing Best Practices
+
+**⚠️ Critical Testing Guidelines:**
+
+1. **ALWAYS check current directory with `pwd` before using `cd`**: This prevents "no such file or directory" errors by ensuring you know your current location before attempting navigation:
+
+   ```bash
+   # ✅ CORRECT: Always check where you are first
+   pwd  # Check current directory
+   # Output: /Users/greco/Documents/lorachain/packages/core
+   cd ../..  # Navigate relative to current location
+
+   # ❌ WRONG: Blindly changing directories without checking location
+   cd packages/core  # May fail if already in packages/core!
+   ```
+
+2. **Always use `test:run` for single-run testing**: The default `test` command runs in watch mode and will wait indefinitely for file changes, causing timeouts in automated environments.
+
+3. **Avoid unnecessary directory changes**: When already in the project root, use filter commands instead of `cd` to avoid "no such file or directory" errors:
+
+   ```bash
+   # ❌ WRONG: Don't change to directories that don't exist relative to current location
+   cd packages/core && pnpm test
+
+   # ✅ CORRECT: Use filter commands from project root
+   pnpm --filter "@lorachain/core" test:run
+   ```
+
+4. **Build dependencies before testing**: Always build shared packages first to avoid test failures due to outdated compiled versions.
+
+5. **Use appropriate test commands**:
+   - `test:run` - Single test execution (for CI/automated testing)
+   - `test:watch` - Watch mode for development
+   - `test` - Alias for `test:watch` (avoid in automated contexts)
 
 ### Dependency Build Order
 
@@ -182,17 +220,21 @@ Each package includes comprehensive unit tests using Vitest:
 - **Shared package**: Tests for logger and utility functions
 - **Mobile wallet**: Tests for secure wallet operations with cryptographic key pairs
 - **Node package**: Tests for full node functionality
-- **Mesh protocol**: Tests for LoRa communication protocol
+- **Enhanced mesh protocol**: Tests for advanced LoRa communication with UTXO routing, duty cycle management, and regional compliance
+- **Advanced routing**: Tests for flood routing, cryptographic verification, path optimization, and blockchain awareness
+- **Duty cycle compliance**: Tests for regional regulations (EU/US/Japan/Australia), transmission scheduling, and compliance validation
+- **Fragmentation system**: Tests for enhanced fragmentation with missing fragment detection and retransmission
 
-**Total test coverage**: 593+ tests across all packages with 100% passing rate covering all Milestone 1 functionality.
+**Total test coverage**: 650+ tests across all packages with 100% passing rate covering Milestone 1 and significant portions of Milestone 2.
 
 Run package-specific tests with `cd packages/<name> && pnpm test` or use watch mode for development with `pnpm test:watch`.
 
-**Development Progress**: Currently ~25-30% complete toward MVP goal. Estimated 7-10 months total development time with current progress focused on completing Milestone 2 (LoRa/Mesh Protocol) implementation.
+**Development Progress**: Currently ~35-40% complete toward MVP goal. Estimated 7-10 months total development time with significant progress on Milestone 2 (LoRa/Mesh Protocol) including advanced routing, duty cycle management, and regional compliance.
 
 ### Key Implementation Details
 
 #### ✅ Milestone 1 - Core Blockchain (COMPLETED)
+
 - **UTXO Model**: All transactions use inputs/outputs instead of account balances
 - **Cryptographic Security**: Full ECDSA (secp256k1) and Ed25519 signature implementation
 - **Transaction Validation**: Complete validation including double-spend prevention and signature verification
@@ -210,17 +252,20 @@ Run package-specific tests with `cd packages/<name> && pnpm test` or use watch m
 - **Genesis Configuration**: Configurable genesis blocks with UTXO-based initial allocations and network parameters
 - **Clean Implementation**: No backwards compatibility - modern, clean implementations throughout
 
-#### 🔄 Milestone 2 - LoRa/Mesh Protocol (PARTIALLY COMPLETED)
-- **✅ Message Fragmentation**: Split messages larger than 256 bytes with fragment sequencing and tracking
-- **✅ Message Reassembly**: Reconstruct fragmented messages with timeout handling for incomplete messages
-- **✅ Routing Protocol**: Flood routing for discovery, routing table management, multi-hop forwarding, and loop prevention
-- **🔲 Duty Cycle Management**: Track transmission time and implement queuing for regulatory compliance (PENDING)
+#### 🔄 Milestone 2 - LoRa/Mesh Protocol (SIGNIFICANTLY ENHANCED)
+
+- **✅ Enhanced Message Fragmentation**: Advanced fragmentation with blockchain-aware optimization, fragment sequencing, and tracking
+- **✅ Comprehensive Message Reassembly**: Reconstruct fragmented messages with timeout handling, missing fragment detection, and retransmission
+- **✅ Advanced Routing Protocol**: UTXO-aware flood routing, blockchain-optimized routing tables, multi-hop forwarding, and cryptographic loop prevention
+- **✅ Complete Duty Cycle Management**: Regional compliance validation (EU ETSI, US/CA/MX FCC, Japan ARIB, Australia/NZ ACMA), transmission scheduling, and regulatory enforcement
+- **✅ Enhanced Mesh Protocol**: Comprehensive mesh networking with UTXO routing capabilities, duty cycle compliance, and network topology management
 - **🔲 Compression**: Protocol buffer serialization and custom compression for blockchain data (PENDING)
 - **🔲 Message Prioritization**: Priority queues and QoS levels for different message types (PENDING)
 - **🔲 Reliable Delivery**: Acknowledgment mechanism, retry logic, and delivery confirmation (PENDING)
 - **🔲 Node Discovery Protocol**: Periodic beacons, neighbor management, and topology mapping (PENDING)
 
 #### 🔲 Remaining Milestones (PENDING)
+
 - **Milestone 3**: Network Layer & P2P (HTTP/WebSocket, sync protocol, peer management)
 - **Milestone 4**: Wallet Functionality (HD wallet, transaction building, QR codes)
 - **Milestone 5**: Mining & Consensus (optimized mining, pool support)
