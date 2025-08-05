@@ -96,3 +96,35 @@ export {
   REGIONAL_PRESETS,
   DEFAULT_LORA_PARAMS,
 } from './duty-cycle-config.js';
+
+// Compression System exports
+export * from './compression-types.js';
+export * from './compression-interfaces.js';
+export * from './compression-engines.js';
+export * from './utxo-compression-engines.js';
+export * from './utxo-compression-manager.js';
+export * from './compression-factory.js';
+
+export {
+  UTXOCompressionManager,
+} from './utxo-compression-manager.js';
+
+export {
+  ProtobufCompressionEngine,
+  GzipCompressionEngine,
+  LZ4CompressionEngine,
+} from './compression-engines.js';
+
+export {
+  UTXOCustomCompressionEngine,
+  DictionaryCompressionEngine,
+} from './utxo-compression-engines.js';
+
+export {
+  CompressionFactory,
+  CompressionConfigBuilder,
+  createCompressionManager,
+  createMobileCompressionManager,
+  createNodeCompressionManager,
+  createLoRaCompressionManager,
+} from './compression-factory.js';
