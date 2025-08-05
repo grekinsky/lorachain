@@ -153,9 +153,20 @@ pnpm --filter "@lorachain/mobile-wallet" test:watch     # Watch mode for mobile 
 
 **⚠️ Critical Testing Guidelines:**
 
-1. **Always use `test:run` for single-run testing**: The default `test` command runs in watch mode and will wait indefinitely for file changes, causing timeouts in automated environments.
+1. **ALWAYS check current directory with `pwd` before using `cd`**: This prevents "no such file or directory" errors by ensuring you know your current location before attempting navigation:
+   ```bash
+   # ✅ CORRECT: Always check where you are first
+   pwd  # Check current directory
+   # Output: /Users/greco/Documents/lorachain/packages/core
+   cd ../..  # Navigate relative to current location
+   
+   # ❌ WRONG: Blindly changing directories without checking location
+   cd packages/core  # May fail if already in packages/core!
+   ```
 
-2. **Avoid unnecessary directory changes**: When already in the project root, use filter commands instead of `cd` to avoid "no such file or directory" errors:
+2. **Always use `test:run` for single-run testing**: The default `test` command runs in watch mode and will wait indefinitely for file changes, causing timeouts in automated environments.
+
+3. **Avoid unnecessary directory changes**: When already in the project root, use filter commands instead of `cd` to avoid "no such file or directory" errors:
    ```bash
    # ❌ WRONG: Don't change to directories that don't exist relative to current location
    cd packages/core && pnpm test
@@ -164,9 +175,9 @@ pnpm --filter "@lorachain/mobile-wallet" test:watch     # Watch mode for mobile 
    pnpm --filter "@lorachain/core" test:run
    ```
 
-3. **Build dependencies before testing**: Always build shared packages first to avoid test failures due to outdated compiled versions.
+4. **Build dependencies before testing**: Always build shared packages first to avoid test failures due to outdated compiled versions.
 
-4. **Use appropriate test commands**:
+5. **Use appropriate test commands**:
    - `test:run` - Single test execution (for CI/automated testing)  
    - `test:watch` - Watch mode for development
    - `test` - Alias for `test:watch` (avoid in automated contexts)
