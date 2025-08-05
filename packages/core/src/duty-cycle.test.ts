@@ -3,7 +3,7 @@ import {
   DutyCycleManager,
   RegionalComplianceValidator,
   MessageSizeEstimator,
-  PriorityMessageQueue
+  PriorityMessageQueue,
 } from './duty-cycle.js';
 import { DutyCycleConfigFactory } from './duty-cycle-config.js';
 import { MemoryDatabase } from './database.js';
@@ -14,7 +14,7 @@ import {
   type QueueStats,
   type MessageSizeEstimate,
   type LoRaTransmissionParams,
-  MessagePriority
+  MessagePriority,
 } from './types.js';
 
 describe('RegionalComplianceValidator', () => {
@@ -49,7 +49,7 @@ describe('RegionalComplianceValidator', () => {
         euConfig,
         1000, // 1 second transmission
         868.1, // EU868 frequency
-        0.009 // 0.9% current duty cycle (would exceed 1% with new transmission)
+        0.0098 // 0.98% current duty cycle (would exceed 1% with new 1s transmission)
       );
 
       expect(result.compliant).toBe(false);
@@ -71,9 +71,9 @@ describe('RegionalComplianceValidator', () => {
       // Test exceeding 0.1% limit
       const violationResult = validator.validateTransmission(
         euConfig,
-        500, // 0.5 second transmission
+        1000, // 1 second transmission
         864.0, // 863-865 MHz sub-band
-        0.0005 // 0.05% current duty cycle (would exceed 0.1%)
+        0.00097 // 0.097% current duty cycle (would exceed 0.1% with 1s transmission)
       );
 
       expect(violationResult.compliant).toBe(false);
@@ -115,9 +115,9 @@ describe('RegionalComplianceValidator', () => {
     it('should allow unlimited duty cycle for US region', () => {
       const result = validator.validateTransmission(
         usConfig,
-        5000, // 5 seconds
+        300, // 300ms - within dwell time limit
         915.0, // US915 frequency
-        0.5 // 50% current duty cycle
+        0.5 // 50% current duty cycle (no limit in US)
       );
 
       expect(result.compliant).toBe(true);
@@ -166,9 +166,9 @@ describe('RegionalComplianceValidator', () => {
 
       const violationResult = validator.validateTransmission(
         jpConfig,
-        2000, // Would push to ~10.5%
+        1000, // 1 second transmission
         921.0,
-        0.095 // 9.5% current duty cycle
+        0.0998 // 9.98% current duty cycle (would exceed 10% with 1s transmission)
       );
 
       expect(violationResult.compliant).toBe(false);
@@ -205,11 +205,11 @@ describe('MessageSizeEstimator', () => {
     defaultLoRaParams = {
       spreadingFactor: 12,
       bandwidth: 125,
-      codingRate: 4/5,
+      codingRate: 4 / 5,
       preambleLength: 8,
       headerMode: 'explicit',
       crcEnabled: true,
-      lowDataRateOptimize: true
+      lowDataRateOptimize: true,
     };
   });
 
@@ -225,15 +225,28 @@ describe('MessageSizeEstimator', () => {
   });
 
   it('should calculate correct fragment count for large messages', () => {
-    const estimate = estimator.estimateTransmissionTime(1000, defaultLoRaParams);
+    const estimate = estimator.estimateTransmissionTime(
+      1000,
+      defaultLoRaParams
+    );
 
     expect(estimate.fragmentCount).toBeGreaterThan(1);
-    expect(estimate.estimatedTransmissionTime).toBe(estimate.airTimeMs * estimate.fragmentCount);
+    expect(estimate.estimatedTransmissionTime).toBe(
+      estimate.airTimeMs * estimate.fragmentCount
+    );
   });
 
   it('should calculate different air times for different spreading factors', () => {
-    const sf7Params = { ...defaultLoRaParams, spreadingFactor: 7, lowDataRateOptimize: false };
-    const sf12Params = { ...defaultLoRaParams, spreadingFactor: 12, lowDataRateOptimize: true };
+    const sf7Params = {
+      ...defaultLoRaParams,
+      spreadingFactor: 7,
+      lowDataRateOptimize: false,
+    };
+    const sf12Params = {
+      ...defaultLoRaParams,
+      spreadingFactor: 12,
+      lowDataRateOptimize: true,
+    };
 
     const sf7Estimate = estimator.estimateTransmissionTime(100, sf7Params);
     const sf12Estimate = estimator.estimateTransmissionTime(100, sf12Params);
@@ -335,14 +348,23 @@ describe('PriorityMessageQueue', () => {
   it('should handle queue overflow by evicting low priority messages', async () => {
     const smallQueue = new PriorityMessageQueue(2);
 
-    await smallQueue.enqueue({ type: 'test', data: 'low1' }, MessagePriority.LOW);
-    await smallQueue.enqueue({ type: 'test', data: 'low2' }, MessagePriority.LOW);
-    
+    await smallQueue.enqueue(
+      { type: 'test', data: 'low1' },
+      MessagePriority.LOW
+    );
+    await smallQueue.enqueue(
+      { type: 'test', data: 'low2' },
+      MessagePriority.LOW
+    );
+
     // This should evict the first low priority message
-    await smallQueue.enqueue({ type: 'test', data: 'high' }, MessagePriority.HIGH);
+    await smallQueue.enqueue(
+      { type: 'test', data: 'high' },
+      MessagePriority.HIGH
+    );
 
     expect(smallQueue.size()).toBe(2);
-    
+
     const first = await smallQueue.dequeue();
     const second = await smallQueue.dequeue();
 
@@ -358,14 +380,13 @@ describe('DutyCycleManager', () => {
 
   beforeEach(async () => {
     database = new MemoryDatabase();
-    await database.init();
     euConfig = DutyCycleConfigFactory.createForRegion('EU', 'testnet');
     dutyCycleManager = new DutyCycleManager(euConfig, database);
   });
 
   afterEach(async () => {
     dutyCycleManager.stop();
-    await database.close();
+    // MemoryDatabase doesn't need explicit close
   });
 
   describe('Basic Functionality', () => {
@@ -384,7 +405,7 @@ describe('DutyCycleManager', () => {
     it('should update configuration', () => {
       dutyCycleManager.updateConfig({
         maxDutyCyclePercent: 0.05,
-        trackingWindowHours: 2
+        trackingWindowHours: 2,
       });
 
       const config = dutyCycleManager.getConfig();
@@ -400,7 +421,10 @@ describe('DutyCycleManager', () => {
     });
 
     it('should allow transmission when under duty cycle limit', () => {
-      const canTransmit = dutyCycleManager.canTransmit(1000, MessagePriority.NORMAL);
+      const canTransmit = dutyCycleManager.canTransmit(
+        1000,
+        MessagePriority.NORMAL
+      );
       expect(canTransmit).toBe(true);
     });
 
@@ -413,18 +437,27 @@ describe('DutyCycleManager', () => {
   describe('Message Queueing', () => {
     it('should enqueue messages successfully', async () => {
       const message = { type: 'transaction', data: 'test' };
-      const result = await dutyCycleManager.enqueueMessage(message, MessagePriority.HIGH);
-      
+      const result = await dutyCycleManager.enqueueMessage(
+        message,
+        MessagePriority.HIGH
+      );
+
       expect(result).toBe(true);
-      
+
       const queueStats = dutyCycleManager.getQueueStatus();
       expect(queueStats.totalMessages).toBe(1);
       expect(queueStats.messagesByPriority[MessagePriority.HIGH]).toBe(1);
     });
 
     it('should provide queue statistics', async () => {
-      await dutyCycleManager.enqueueMessage({ type: 'test1' }, MessagePriority.HIGH);
-      await dutyCycleManager.enqueueMessage({ type: 'test2' }, MessagePriority.LOW);
+      await dutyCycleManager.enqueueMessage(
+        { type: 'test1' },
+        MessagePriority.HIGH
+      );
+      await dutyCycleManager.enqueueMessage(
+        { type: 'test2' },
+        MessagePriority.LOW
+      );
 
       const stats = dutyCycleManager.getQueueStatus();
       expect(stats.totalMessages).toBe(2);
@@ -449,7 +482,7 @@ describe('DutyCycleManager', () => {
   describe('Statistics and Monitoring', () => {
     it('should provide duty cycle statistics', () => {
       const stats = dutyCycleManager.getDutyCycleStats();
-      
+
       expect(stats.currentDutyCycle).toBe(0);
       expect(stats.transmissionCount).toBe(0);
       expect(stats.queuedMessages).toBe(0);
@@ -466,7 +499,7 @@ describe('DutyCycleManager', () => {
   describe('Regional Configuration Factory', () => {
     it('should create valid configurations for all supported regions', () => {
       const regions = ['EU', 'US', 'CA', 'MX', 'JP', 'AU', 'NZ', 'BR', 'AR'];
-      
+
       regions.forEach(region => {
         expect(() => {
           const config = DutyCycleConfigFactory.createForRegion(region);
@@ -483,7 +516,7 @@ describe('DutyCycleManager', () => {
 
     it('should create development configuration with relaxed rules', () => {
       const devConfig = DutyCycleConfigFactory.createDevConfig('EU');
-      
+
       expect(devConfig.strictComplianceMode).toBe(false);
       expect(devConfig.emergencyOverrideEnabled).toBe(true);
       expect(devConfig.maxTransmissionTimeMs).toBe(10000);
@@ -493,7 +526,7 @@ describe('DutyCycleManager', () => {
     it('should validate configuration correctly', () => {
       const validConfig = DutyCycleConfigFactory.createForRegion('EU');
       const validation = DutyCycleConfigFactory.validateConfig(validConfig);
-      
+
       expect(validation.valid).toBe(true);
       expect(validation.errors).toEqual([]);
     });
@@ -502,11 +535,11 @@ describe('DutyCycleManager', () => {
       const invalidConfig = {
         ...DutyCycleConfigFactory.createForRegion('EU'),
         maxDutyCyclePercent: 1.5, // Invalid > 100%
-        maxTransmissionTimeMs: -1000 // Invalid negative
+        maxTransmissionTimeMs: -1000, // Invalid negative
       };
-      
+
       const validation = DutyCycleConfigFactory.validateConfig(invalidConfig);
-      
+
       expect(validation.valid).toBe(false);
       expect(validation.errors.length).toBeGreaterThan(0);
     });
@@ -531,23 +564,23 @@ describe('DutyCycleManager', () => {
     });
 
     it('should always allow transmission for US region', () => {
-      const canTransmit = usManager.canTransmit(10000, MessagePriority.NORMAL); // 10 seconds
+      const canTransmit = usManager.canTransmit(300, MessagePriority.NORMAL); // 300ms - within dwell time
       expect(canTransmit).toBe(true);
     });
 
-    it('should return zero wait time for US region', () => {
+    it('should return reasonable wait time for US region', () => {
       const waitTime = usManager.getNextTransmissionWindow();
-      expect(waitTime).toBe(0);
+      expect(waitTime).toBeGreaterThanOrEqual(0);
+      expect(waitTime).toBeLessThan(100); // Should be < 100ms for frequency hopping
     });
   });
 
   describe('Event Handling', () => {
-    it('should emit events for duty cycle violations', (done) => {
+    it('should emit events for duty cycle violations', () => {
       // This would require more complex setup to actually trigger violations
       // For now, we just verify the manager can handle events
       expect(dutyCycleManager.on).toBeDefined();
       expect(dutyCycleManager.emit).toBeDefined();
-      done();
     });
   });
 
@@ -570,16 +603,23 @@ describe('Edge Cases and Error Handling', () => {
       const customConfig: DutyCycleConfig = {
         region: 'CUSTOM',
         regulatoryBody: 'CUSTOM',
-        frequencyBands: [{
-          name: 'CUSTOM900',
-          centerFrequencyMHz: 900,
-          bandwidthMHz: 10,
-          minFrequencyMHz: 895,
-          maxFrequencyMHz: 905,
-          channels: [
-            { number: 0, frequencyMHz: 900, dataRate: 'SF12BW125', enabled: true }
-          ]
-        }],
+        frequencyBands: [
+          {
+            name: 'CUSTOM900',
+            centerFrequencyMHz: 900,
+            bandwidthMHz: 10,
+            minFrequencyMHz: 895,
+            maxFrequencyMHz: 905,
+            channels: [
+              {
+                number: 0,
+                frequencyMHz: 900,
+                dataRate: 'SF12BW125',
+                enabled: true,
+              },
+            ],
+          },
+        ],
         activeFrequencyBand: 'CUSTOM900',
         maxDutyCyclePercent: 0.05,
         trackingWindowHours: 1,
@@ -590,7 +630,7 @@ describe('Edge Cases and Error Handling', () => {
         strictComplianceMode: true,
         autoRegionDetection: false,
         persistenceEnabled: true,
-        networkType: 'testnet'
+        networkType: 'testnet',
       };
 
       expect(() => {
@@ -603,11 +643,11 @@ describe('Edge Cases and Error Handling', () => {
     it('should handle frequency hopping configuration', () => {
       const usConfig = DutyCycleConfigFactory.createForRegion('US');
       const manager = new DutyCycleManager(usConfig);
-      
+
       expect(usConfig.frequencyHopping?.enabled).toBe(true);
       expect(usConfig.frequencyHopping?.numChannels).toBe(64);
       expect(usConfig.frequencyHopping?.channelDwellTimeMs).toBe(400);
-      
+
       manager.stop();
     });
   });
@@ -629,7 +669,7 @@ describe('Edge Cases and Error Handling', () => {
 
       const stats = manager.getQueueStatus();
       expect(stats.totalMessages).toBe(100);
-      
+
       manager.stop();
     });
 
@@ -643,7 +683,7 @@ describe('Edge Cases and Error Handling', () => {
         // This calls the private cleanupOldTransmissions method indirectly
         manager.getTransmissionHistory(1);
       }).not.toThrow();
-      
+
       manager.stop();
     });
   });

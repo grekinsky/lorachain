@@ -2,7 +2,7 @@ import { type DutyCycleConfig, type FrequencyBandConfig } from './types.js';
 
 /**
  * Regional Configuration Presets for Duty Cycle Management
- * 
+ *
  * Provides pre-configured duty cycle settings for major regulatory regions:
  * - EU (ETSI) with sub-band duty cycles
  * - US/CA/MX (FCC/IC) with frequency hopping
@@ -21,7 +21,7 @@ const EU868_BAND: FrequencyBandConfig = {
   subBands: [
     // 863-865 MHz: 0.1% duty cycle
     { minMHz: 863, maxMHz: 865, dutyCyclePercent: 0.001, maxEIRP_dBm: 14 },
-    // 865-868 MHz: 1% duty cycle  
+    // 865-868 MHz: 1% duty cycle
     { minMHz: 865, maxMHz: 868, dutyCyclePercent: 0.01, maxEIRP_dBm: 14 },
     // 868-868.6 MHz: 1% duty cycle
     { minMHz: 868, maxMHz: 868.6, dutyCyclePercent: 0.01, maxEIRP_dBm: 14 },
@@ -30,7 +30,7 @@ const EU868_BAND: FrequencyBandConfig = {
     // 869.4-869.65 MHz: 10% duty cycle
     { minMHz: 869.4, maxMHz: 869.65, dutyCyclePercent: 0.1, maxEIRP_dBm: 27 },
     // 869.7-870 MHz: 1% duty cycle
-    { minMHz: 869.7, maxMHz: 870, dutyCyclePercent: 0.01, maxEIRP_dBm: 14 }
+    { minMHz: 869.7, maxMHz: 870, dutyCyclePercent: 0.01, maxEIRP_dBm: 14 },
   ],
   channels: [
     { number: 0, frequencyMHz: 868.1, dataRate: 'SF12BW125', enabled: true },
@@ -41,7 +41,7 @@ const EU868_BAND: FrequencyBandConfig = {
     { number: 5, frequencyMHz: 867.5, dataRate: 'SF12BW125', enabled: true },
     { number: 6, frequencyMHz: 867.7, dataRate: 'SF12BW125', enabled: true },
     { number: 7, frequencyMHz: 867.9, dataRate: 'SF12BW125', enabled: true },
-  ]
+  ],
 };
 
 // EU433 frequency band configuration
@@ -55,7 +55,7 @@ const EU433_BAND: FrequencyBandConfig = {
     { number: 0, frequencyMHz: 433.175, dataRate: 'SF12BW125', enabled: true },
     { number: 1, frequencyMHz: 433.375, dataRate: 'SF12BW125', enabled: true },
     { number: 2, frequencyMHz: 433.575, dataRate: 'SF12BW125', enabled: true },
-  ]
+  ],
 };
 
 // US915 frequency band configuration
@@ -67,10 +67,10 @@ const US915_BAND: FrequencyBandConfig = {
   maxFrequencyMHz: 928,
   channels: Array.from({ length: 64 }, (_, i) => ({
     number: i,
-    frequencyMHz: 902.3 + (i * 0.2),
+    frequencyMHz: 902.3 + i * 0.2,
     dataRate: 'SF7BW125',
-    enabled: true
-  }))
+    enabled: true,
+  })),
 };
 
 // AU915 frequency band configuration
@@ -82,10 +82,10 @@ const AU915_BAND: FrequencyBandConfig = {
   maxFrequencyMHz: 928,
   channels: Array.from({ length: 64 }, (_, i) => ({
     number: i,
-    frequencyMHz: 915.2 + (i * 0.2),
+    frequencyMHz: 915.2 + i * 0.2,
     dataRate: 'SF7BW125',
-    enabled: true
-  }))
+    enabled: true,
+  })),
 };
 
 // JP920 frequency band configuration
@@ -97,17 +97,17 @@ const JP920_BAND: FrequencyBandConfig = {
   maxFrequencyMHz: 923,
   channels: Array.from({ length: 10 }, (_, i) => ({
     number: i,
-    frequencyMHz: 920.6 + (i * 0.2),
+    frequencyMHz: 920.6 + i * 0.2,
     dataRate: 'SF7BW125',
-    enabled: true
-  }))
+    enabled: true,
+  })),
 };
 
 /**
  * Regional configuration presets
  */
 export const REGIONAL_PRESETS: Record<string, Partial<DutyCycleConfig>> = {
-  'EU': {
+  EU: {
     region: 'EU',
     regulatoryBody: 'ETSI',
     frequencyBands: [EU433_BAND, EU868_BAND],
@@ -120,10 +120,10 @@ export const REGIONAL_PRESETS: Record<string, Partial<DutyCycleConfig>> = {
     emergencyOverrideEnabled: false,
     strictComplianceMode: true,
     autoRegionDetection: false,
-    persistenceEnabled: true
+    persistenceEnabled: true,
   },
-  
-  'US': {
+
+  US: {
     region: 'US',
     regulatoryBody: 'FCC',
     frequencyBands: [US915_BAND],
@@ -136,17 +136,17 @@ export const REGIONAL_PRESETS: Record<string, Partial<DutyCycleConfig>> = {
       enabled: true,
       numChannels: 64,
       channelDwellTimeMs: 400,
-      hopPattern: 'random'
+      hopPattern: 'random',
     },
     maxEIRP_dBm: 30, // 1W for frequency hopping
     adaptivePowerControl: true,
     emergencyOverrideEnabled: true,
     strictComplianceMode: true,
     autoRegionDetection: false,
-    persistenceEnabled: true
+    persistenceEnabled: true,
   },
-  
-  'CA': {
+
+  CA: {
     region: 'CA',
     regulatoryBody: 'IC',
     frequencyBands: [US915_BAND], // Canada follows US band plan
@@ -159,17 +159,17 @@ export const REGIONAL_PRESETS: Record<string, Partial<DutyCycleConfig>> = {
       enabled: true,
       numChannels: 64,
       channelDwellTimeMs: 400,
-      hopPattern: 'random'
+      hopPattern: 'random',
     },
     maxEIRP_dBm: 30,
     adaptivePowerControl: true,
     emergencyOverrideEnabled: true,
     strictComplianceMode: true,
     autoRegionDetection: false,
-    persistenceEnabled: true
+    persistenceEnabled: true,
   },
-  
-  'MX': {
+
+  MX: {
     region: 'MX',
     regulatoryBody: 'FCC', // Mexico follows FCC rules
     frequencyBands: [US915_BAND],
@@ -182,17 +182,17 @@ export const REGIONAL_PRESETS: Record<string, Partial<DutyCycleConfig>> = {
       enabled: true,
       numChannels: 64,
       channelDwellTimeMs: 400,
-      hopPattern: 'random'
+      hopPattern: 'random',
     },
     maxEIRP_dBm: 30,
     adaptivePowerControl: true,
     emergencyOverrideEnabled: true,
     strictComplianceMode: true,
     autoRegionDetection: false,
-    persistenceEnabled: true
+    persistenceEnabled: true,
   },
-  
-  'JP': {
+
+  JP: {
     region: 'JP',
     regulatoryBody: 'ARIB',
     frequencyBands: [JP920_BAND],
@@ -205,10 +205,10 @@ export const REGIONAL_PRESETS: Record<string, Partial<DutyCycleConfig>> = {
     emergencyOverrideEnabled: false,
     strictComplianceMode: true,
     autoRegionDetection: false,
-    persistenceEnabled: true
+    persistenceEnabled: true,
   },
-  
-  'AU': {
+
+  AU: {
     region: 'AU',
     regulatoryBody: 'ACMA',
     frequencyBands: [AU915_BAND],
@@ -221,10 +221,10 @@ export const REGIONAL_PRESETS: Record<string, Partial<DutyCycleConfig>> = {
     emergencyOverrideEnabled: true,
     strictComplianceMode: false, // More relaxed than EU/JP
     autoRegionDetection: false,
-    persistenceEnabled: true
+    persistenceEnabled: true,
   },
-  
-  'NZ': {
+
+  NZ: {
     region: 'NZ',
     regulatoryBody: 'ACMA', // New Zealand follows similar rules to Australia
     frequencyBands: [AU915_BAND],
@@ -237,10 +237,10 @@ export const REGIONAL_PRESETS: Record<string, Partial<DutyCycleConfig>> = {
     emergencyOverrideEnabled: true,
     strictComplianceMode: false,
     autoRegionDetection: false,
-    persistenceEnabled: true
+    persistenceEnabled: true,
   },
-  
-  'BR': {
+
+  BR: {
     region: 'BR',
     regulatoryBody: 'ANATEL',
     frequencyBands: [US915_BAND], // Brazil uses 915MHz band
@@ -253,10 +253,10 @@ export const REGIONAL_PRESETS: Record<string, Partial<DutyCycleConfig>> = {
     emergencyOverrideEnabled: true,
     strictComplianceMode: false,
     autoRegionDetection: false,
-    persistenceEnabled: true
+    persistenceEnabled: true,
   },
-  
-  'AR': {
+
+  AR: {
     region: 'AR',
     regulatoryBody: 'FCC', // Argentina follows US FCC regulations
     frequencyBands: [US915_BAND],
@@ -269,10 +269,10 @@ export const REGIONAL_PRESETS: Record<string, Partial<DutyCycleConfig>> = {
     emergencyOverrideEnabled: true,
     strictComplianceMode: false,
     autoRegionDetection: false,
-    persistenceEnabled: true
+    persistenceEnabled: true,
   },
-  
-  'IN': {
+
+  IN: {
     region: 'IN',
     regulatoryBody: 'WPC',
     frequencyBands: [EU868_BAND], // India uses 865-867 MHz band (subset of EU868)
@@ -285,10 +285,10 @@ export const REGIONAL_PRESETS: Record<string, Partial<DutyCycleConfig>> = {
     emergencyOverrideEnabled: true,
     strictComplianceMode: false,
     autoRegionDetection: false,
-    persistenceEnabled: true
+    persistenceEnabled: true,
   },
-  
-  'RU': {
+
+  RU: {
     region: 'RU',
     regulatoryBody: 'CUSTOM',
     frequencyBands: [EU868_BAND], // Russia uses subset of EU bands
@@ -301,10 +301,10 @@ export const REGIONAL_PRESETS: Record<string, Partial<DutyCycleConfig>> = {
     emergencyOverrideEnabled: false,
     strictComplianceMode: true,
     autoRegionDetection: false,
-    persistenceEnabled: true
+    persistenceEnabled: true,
   },
-  
-  'KR': {
+
+  KR: {
     region: 'KR',
     regulatoryBody: 'KC',
     frequencyBands: [JP920_BAND], // South Korea uses similar band to Japan
@@ -317,10 +317,10 @@ export const REGIONAL_PRESETS: Record<string, Partial<DutyCycleConfig>> = {
     emergencyOverrideEnabled: false,
     strictComplianceMode: true,
     autoRegionDetection: false,
-    persistenceEnabled: true
+    persistenceEnabled: true,
   },
-  
-  'CN': {
+
+  CN: {
     region: 'CN',
     regulatoryBody: 'SRRC',
     frequencyBands: [
@@ -332,11 +332,11 @@ export const REGIONAL_PRESETS: Record<string, Partial<DutyCycleConfig>> = {
         maxFrequencyMHz: 510,
         channels: Array.from({ length: 96 }, (_, i) => ({
           number: i,
-          frequencyMHz: 470.3 + (i * 0.2),
+          frequencyMHz: 470.3 + i * 0.2,
           dataRate: 'SF12BW125',
-          enabled: true
-        }))
-      }
+          enabled: true,
+        })),
+      },
     ],
     activeFrequencyBand: 'CN470',
     maxDutyCyclePercent: 0.01, // 1% duty cycle
@@ -347,10 +347,10 @@ export const REGIONAL_PRESETS: Record<string, Partial<DutyCycleConfig>> = {
     emergencyOverrideEnabled: false,
     strictComplianceMode: true,
     autoRegionDetection: false,
-    persistenceEnabled: true
+    persistenceEnabled: true,
   },
-  
-  'ZA': {
+
+  ZA: {
     region: 'ZA',
     regulatoryBody: 'CUSTOM',
     frequencyBands: [EU868_BAND], // South Africa follows EU regulations
@@ -363,50 +363,50 @@ export const REGIONAL_PRESETS: Record<string, Partial<DutyCycleConfig>> = {
     emergencyOverrideEnabled: false,
     strictComplianceMode: true,
     autoRegionDetection: false,
-    persistenceEnabled: true
-  }
+    persistenceEnabled: true,
+  },
 };
 
 /**
  * Default LoRa transmission parameters by region
  */
 export const DEFAULT_LORA_PARAMS: Record<string, any> = {
-  'EU': {
+  EU: {
     spreadingFactor: 12,
     bandwidth: 125,
-    codingRate: 4/5,
+    codingRate: 4 / 5,
     preambleLength: 8,
     headerMode: 'explicit',
     crcEnabled: true,
-    lowDataRateOptimize: true
+    lowDataRateOptimize: true,
   },
-  'US': {
+  US: {
     spreadingFactor: 7,
     bandwidth: 125,
-    codingRate: 4/5,
+    codingRate: 4 / 5,
     preambleLength: 8,
     headerMode: 'explicit',
     crcEnabled: true,
-    lowDataRateOptimize: false
+    lowDataRateOptimize: false,
   },
-  'JP': {
+  JP: {
     spreadingFactor: 12,
     bandwidth: 125,
-    codingRate: 4/5,
+    codingRate: 4 / 5,
     preambleLength: 8,
     headerMode: 'explicit',
     crcEnabled: true,
-    lowDataRateOptimize: true
+    lowDataRateOptimize: true,
   },
-  'AU': {
+  AU: {
     spreadingFactor: 7,
     bandwidth: 125,
-    codingRate: 4/5,
+    codingRate: 4 / 5,
     preambleLength: 8,
     headerMode: 'explicit',
     crcEnabled: true,
-    lowDataRateOptimize: false
-  }
+    lowDataRateOptimize: false,
+  },
 };
 
 /**
@@ -417,7 +417,7 @@ export class DutyCycleConfigFactory {
    * Creates a duty cycle configuration for the specified region
    */
   static createForRegion(
-    region: string, 
+    region: string,
     networkType: 'devnet' | 'testnet' | 'mainnet' = 'mainnet',
     overrides: Partial<DutyCycleConfig> = {}
   ): DutyCycleConfig {
@@ -425,11 +425,11 @@ export class DutyCycleConfigFactory {
     if (!preset) {
       throw new Error(`No preset configuration for region: ${region}`);
     }
-    
+
     return {
       ...preset,
       networkType,
-      ...overrides
+      ...overrides,
     } as DutyCycleConfig;
   }
 
@@ -460,7 +460,9 @@ export class DutyCycleConfigFactory {
    * Gets default LoRa parameters for a region
    */
   static getDefaultLoRaParams(region: string): any {
-    return DEFAULT_LORA_PARAMS[region.toUpperCase()] || DEFAULT_LORA_PARAMS['EU'];
+    return (
+      DEFAULT_LORA_PARAMS[region.toUpperCase()] || DEFAULT_LORA_PARAMS['EU']
+    );
   }
 
   /**
@@ -468,22 +470,26 @@ export class DutyCycleConfigFactory {
    */
   static createDevConfig(region: string = 'EU'): DutyCycleConfig {
     const baseConfig = this.createForRegion(region, 'devnet');
-    
+
     return {
       ...baseConfig,
       strictComplianceMode: false,
       emergencyOverrideEnabled: true,
       maxTransmissionTimeMs: 10000, // Allow longer transmissions for testing
       trackingWindowHours: 0.1, // Shorter window for faster testing
-      maxDutyCyclePercent: baseConfig.maxDutyCyclePercent ? 
-        baseConfig.maxDutyCyclePercent * 5 : undefined // 5x more lenient
+      maxDutyCyclePercent: baseConfig.maxDutyCyclePercent
+        ? baseConfig.maxDutyCyclePercent * 5
+        : undefined, // 5x more lenient
     };
   }
 
   /**
    * Validates a duty cycle configuration
    */
-  static validateConfig(config: DutyCycleConfig): { valid: boolean; errors: string[] } {
+  static validateConfig(config: DutyCycleConfig): {
+    valid: boolean;
+    errors: string[];
+  } {
     const errors: string[] = [];
 
     // Validate required fields
@@ -492,7 +498,8 @@ export class DutyCycleConfigFactory {
     if (!config.frequencyBands || config.frequencyBands.length === 0) {
       errors.push('At least one frequency band is required');
     }
-    if (!config.activeFrequencyBand) errors.push('Active frequency band is required');
+    if (!config.activeFrequencyBand)
+      errors.push('Active frequency band is required');
 
     // Validate duty cycle settings
     if (config.maxDutyCyclePercent !== undefined) {

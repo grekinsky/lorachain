@@ -903,48 +903,73 @@ export interface NetworkTopology {
 // Regional Configuration Types
 export interface DutyCycleConfig {
   // Regional configuration
-  region: 'EU' | 'US' | 'CA' | 'MX' | 'AU' | 'NZ' | 'JP' | 'IN' | 'CN' | 'KR' | 'BR' | 'AR' | 'RU' | 'ZA' | 'CUSTOM';
-  regulatoryBody: 'ETSI' | 'FCC' | 'IC' | 'ACMA' | 'ARIB' | 'WPC' | 'SRRC' | 'KC' | 'ANATEL' | 'CUSTOM';
-  
+  region:
+    | 'EU'
+    | 'US'
+    | 'CA'
+    | 'MX'
+    | 'AU'
+    | 'NZ'
+    | 'JP'
+    | 'IN'
+    | 'CN'
+    | 'KR'
+    | 'BR'
+    | 'AR'
+    | 'RU'
+    | 'ZA'
+    | 'CUSTOM';
+  regulatoryBody:
+    | 'ETSI'
+    | 'FCC'
+    | 'IC'
+    | 'ACMA'
+    | 'ARIB'
+    | 'WPC'
+    | 'SRRC'
+    | 'KC'
+    | 'ANATEL'
+    | 'CUSTOM';
+
   // Frequency band configuration
   frequencyBands: FrequencyBandConfig[];
-  activeFrequencyBand: string;  // Current band in use (e.g., "EU868", "US915", "AU915")
-  
+  activeFrequencyBand: string; // Current band in use (e.g., "EU868", "US915", "AU915")
+
   // Duty cycle and timing constraints
-  maxDutyCyclePercent?: number;  // null for regions without duty cycle (US, AU, BR)
-  trackingWindowHours: number;   // Default: 1 hour for duty cycle regions
+  maxDutyCyclePercent?: number; // null for regions without duty cycle (US, AU, BR)
+  trackingWindowHours: number; // Default: 1 hour for duty cycle regions
   maxTransmissionTimeMs: number; // Maximum single transmission time
-  dwellTimeMs?: number;          // For frequency hopping regions (US: <400ms)
-  
+  dwellTimeMs?: number; // For frequency hopping regions (US: <400ms)
+
   // Frequency hopping configuration (US/CA/MX)
   frequencyHopping?: {
     enabled: boolean;
-    numChannels: number;        // Must be ≥50 for FCC compliance
+    numChannels: number; // Must be ≥50 for FCC compliance
     channelDwellTimeMs: number; // Must be <400ms for FCC
     hopPattern: 'random' | 'sequential' | 'adaptive';
   };
-  
+
   // Power output limits
-  maxEIRP_dBm: number;           // Maximum power output for region
+  maxEIRP_dBm: number; // Maximum power output for region
   adaptivePowerControl: boolean; // Adjust power based on link quality
-  
+
   // Compliance and override settings
   emergencyOverrideEnabled: boolean;
   strictComplianceMode: boolean; // Fail-safe mode that prevents any violations
-  autoRegionDetection: boolean;  // Use GPS/network to auto-select region
-  
+  autoRegionDetection: boolean; // Use GPS/network to auto-select region
+
   // Integration with existing Lorachain components
-  persistenceEnabled: boolean;   // Use LevelDatabase for transmission history
+  persistenceEnabled: boolean; // Use LevelDatabase for transmission history
   networkType: 'devnet' | 'testnet' | 'mainnet'; // From GenesisConfigManager
 }
 
 export interface FrequencyBandConfig {
-  name: string;                  // e.g., "EU433", "EU868", "US915"
+  name: string; // e.g., "EU433", "EU868", "US915"
   centerFrequencyMHz: number;
   bandwidthMHz: number;
   minFrequencyMHz: number;
   maxFrequencyMHz: number;
-  
+
   // Sub-band specific duty cycles (for EU)
   subBands?: {
     minMHz: number;
@@ -952,12 +977,12 @@ export interface FrequencyBandConfig {
     dutyCyclePercent: number;
     maxEIRP_dBm: number;
   }[];
-  
+
   // Channel configuration
   channels: {
     number: number;
     frequencyMHz: number;
-    dataRate: string;           // e.g., "SF7BW125", "SF12BW125"
+    dataRate: string; // e.g., "SF7BW125", "SF12BW125"
     enabled: boolean;
   }[];
 }
@@ -1116,10 +1141,10 @@ export interface MessageSizeEstimate {
 }
 
 export interface LoRaTransmissionParams {
-  spreadingFactor: number;    // 7-12
-  bandwidth: number;          // 125, 250, 500 kHz
-  codingRate: number;         // 4/5, 4/6, 4/7, 4/8
-  preambleLength: number;     // Default: 8
+  spreadingFactor: number; // 7-12
+  bandwidth: number; // 125, 250, 500 kHz
+  codingRate: number; // 4/5, 4/6, 4/7, 4/8
+  preambleLength: number; // Default: 8
   headerMode: 'explicit' | 'implicit';
   crcEnabled: boolean;
   lowDataRateOptimize: boolean;
@@ -1128,21 +1153,28 @@ export interface LoRaTransmissionParams {
 // Duty Cycle Manager Interface
 export interface IDutyCycleManager {
   // Core functionality
-  canTransmit(estimatedTimeMs: number, priority?: MessagePriority, frequencyMHz?: number): boolean;
+  canTransmit(
+    estimatedTimeMs: number,
+    priority?: MessagePriority,
+    frequencyMHz?: number
+  ): boolean;
   enqueueMessage(message: any, priority: MessagePriority): Promise<boolean>;
   getNextTransmissionWindow(frequencyMHz?: number): number;
-  
+
   // Status and monitoring
   getCurrentDutyCycle(windowHours?: number, frequencyMHz?: number): number;
   getQueueStatus(): QueueStats;
   getTransmissionHistory(hours?: number): TransmissionRecord[];
   getDutyCycleStats(): DutyCycleStats;
-  
+
   // Configuration
   updateConfig(config: Partial<DutyCycleConfig>): void;
   getConfig(): DutyCycleConfig;
-  validateRegionalCompliance(transmissionTimeMs: number, frequencyMHz: number): ComplianceResult;
-  
+  validateRegionalCompliance(
+    transmissionTimeMs: number,
+    frequencyMHz: number
+  ): ComplianceResult;
+
   // Control
   start(): void;
   stop(): void;

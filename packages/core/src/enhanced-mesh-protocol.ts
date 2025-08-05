@@ -46,7 +46,7 @@ import { EventEmitter } from 'events';
  * BREAKING CHANGE: Complete enhancement of MeshProtocol with routing support and duty cycle compliance.
  * Integrates with existing fragmentation system while adding blockchain-optimized routing and
  * regional regulatory compliance for LoRa mesh networking.
- * 
+ *
  * NEW FEATURES:
  * - Duty cycle management with multi-regional compliance (EU, US, JP, AU, etc.)
  * - Priority-based message queuing with UTXO transaction fee prioritization
@@ -111,13 +111,17 @@ export class UTXOEnhancedMeshProtocol
     this.logger = Logger.getInstance();
 
     // BREAKING CHANGE: Initialize duty cycle manager
-    this.dutyCycleManager = new DutyCycleManager(this.dutyCycleConfig, database);
-    
+    this.dutyCycleManager = new DutyCycleManager(
+      this.dutyCycleConfig,
+      database
+    );
+
     this.logger.info('Duty cycle management initialized', {
       region: this.dutyCycleConfig.region,
       frequencyBand: this.dutyCycleConfig.activeFrequencyBand,
-      maxDutyCycle: this.dutyCycleConfig.maxDutyCyclePercent ? 
-        `${(this.dutyCycleConfig.maxDutyCyclePercent * 100).toFixed(1)}%` : 'none'
+      maxDutyCycle: this.dutyCycleConfig.maxDutyCyclePercent
+        ? `${(this.dutyCycleConfig.maxDutyCyclePercent * 100).toFixed(1)}%`
+        : 'none',
     });
 
     // Initialize routing components
@@ -193,10 +197,10 @@ export class UTXOEnhancedMeshProtocol
 
     // Start periodic operations
     this.startPeriodicOperations();
-    
+
     // BREAKING CHANGE: Start duty cycle manager
     this.dutyCycleManager.start();
-    
+
     // Set up duty cycle event handlers
     this.setupDutyCycleEventHandlers();
   }
@@ -462,23 +466,31 @@ export class UTXOEnhancedMeshProtocol
 
       // Calculate priority based on UTXO transaction fee
       const priority = this.calculateUTXOPriority(tx);
-      
-      this.logger.debug('Queueing UTXO transaction with duty cycle management', {
-        txId: tx.id,
-        priority: MessagePriority[priority],
-        fee: tx.fee,
-        inputCount: tx.inputs.length,
-        outputCount: tx.outputs.length
-      });
+
+      this.logger.debug(
+        'Queueing UTXO transaction with duty cycle management',
+        {
+          txId: tx.id,
+          priority: MessagePriority[priority],
+          fee: tx.fee,
+          inputCount: tx.inputs.length,
+          outputCount: tx.outputs.length,
+        }
+      );
 
       // Queue message with duty cycle manager instead of direct transmission
-      const queued = await this.dutyCycleManager.enqueueMessage(message, priority);
-      
+      const queued = await this.dutyCycleManager.enqueueMessage(
+        message,
+        priority
+      );
+
       if (queued) {
         // Message was successfully queued for duty cycle compliant transmission
         return true;
       } else {
-        this.logger.error('Failed to queue UTXO transaction - queue full', { txId: tx.id });
+        this.logger.error('Failed to queue UTXO transaction - queue full', {
+          txId: tx.id,
+        });
         return false;
       }
     } catch (error) {
@@ -494,11 +506,11 @@ export class UTXOEnhancedMeshProtocol
   private calculateUTXOPriority(utxoTx: UTXOTransaction): MessagePriority {
     const messageSize = JSON.stringify(utxoTx).length;
     const feePerByte = utxoTx.fee / messageSize;
-    
+
     // Fee-based priority thresholds (in satoshis per byte equivalent)
     const HIGH_FEE_THRESHOLD = 10;
     const NORMAL_FEE_THRESHOLD = 1;
-    
+
     if (feePerByte >= HIGH_FEE_THRESHOLD) return MessagePriority.HIGH;
     if (feePerByte >= NORMAL_FEE_THRESHOLD) return MessagePriority.NORMAL;
     return MessagePriority.LOW;
@@ -517,22 +529,27 @@ export class UTXOEnhancedMeshProtocol
 
       // Blocks get CRITICAL priority for consensus propagation
       const priority = MessagePriority.CRITICAL;
-      
+
       this.logger.debug('Queueing block with duty cycle management', {
         blockIndex: block.index,
         blockHash: block.hash,
         priority: MessagePriority[priority],
-        transactionCount: block.transactions.length
+        transactionCount: block.transactions.length,
       });
 
       // Queue message with duty cycle manager instead of direct broadcast
-      const queued = await this.dutyCycleManager.enqueueMessage(message, priority);
-      
+      const queued = await this.dutyCycleManager.enqueueMessage(
+        message,
+        priority
+      );
+
       if (queued) {
         // Block was successfully queued for duty cycle compliant transmission
         return true;
       } else {
-        this.logger.error('Failed to queue block - queue full', { blockIndex: block.index });
+        this.logger.error('Failed to queue block - queue full', {
+          blockIndex: block.index,
+        });
         return false;
       }
     } catch (error) {
@@ -557,21 +574,26 @@ export class UTXOEnhancedMeshProtocol
 
       // Merkle proofs get HIGH priority for SPV verification
       const priority = MessagePriority.HIGH;
-      
+
       this.logger.debug('Queueing merkle proof with duty cycle management', {
         txId: proof.txId,
         priority: MessagePriority[priority],
-        proofIndex: proof.index
+        proofIndex: proof.index,
       });
 
       // Queue message with duty cycle manager instead of direct broadcast
-      const queued = await this.dutyCycleManager.enqueueMessage(message, priority);
-      
+      const queued = await this.dutyCycleManager.enqueueMessage(
+        message,
+        priority
+      );
+
       if (queued) {
         // Merkle proof was successfully queued for duty cycle compliant transmission
         return true;
       } else {
-        this.logger.error('Failed to queue merkle proof - queue full', { txId: proof.txId });
+        this.logger.error('Failed to queue merkle proof - queue full', {
+          txId: proof.txId,
+        });
         return false;
       }
     } catch (error) {
@@ -604,7 +626,10 @@ export class UTXOEnhancedMeshProtocol
   /**
    * Check if a transmission can be made immediately
    */
-  canTransmitNow(estimatedTimeMs?: number, priority?: MessagePriority): boolean {
+  canTransmitNow(
+    estimatedTimeMs?: number,
+    priority?: MessagePriority
+  ): boolean {
     return this.dutyCycleManager.canTransmit(estimatedTimeMs || 1000, priority);
   }
 
@@ -816,51 +841,64 @@ export class UTXOEnhancedMeshProtocol
 
   // BREAKING CHANGE: Added duty cycle event handlers
   private setupDutyCycleEventHandlers(): void {
-    this.dutyCycleManager.on('dutyCycleWarning', (warning: DutyCycleWarning) => {
-      this.logger.warn('Duty cycle approaching limit', {
-        currentDutyCycle: `${(warning.currentDutyCycle * 100).toFixed(2)}%`,
-        threshold: `${(warning.threshold * 100).toFixed(1)}%`,
-        timeToReset: `${Math.ceil(warning.timeToReset / 1000)}s`,
-        affectedMessages: warning.affectedMessages
-      });
-      this.emit('duty_cycle_warning', warning);
-    });
+    this.dutyCycleManager.on(
+      'dutyCycleWarning',
+      (warning: DutyCycleWarning) => {
+        this.logger.warn('Duty cycle approaching limit', {
+          currentDutyCycle: `${(warning.currentDutyCycle * 100).toFixed(2)}%`,
+          threshold: `${(warning.threshold * 100).toFixed(1)}%`,
+          timeToReset: `${Math.ceil(warning.timeToReset / 1000)}s`,
+          affectedMessages: warning.affectedMessages,
+        });
+        this.emit('duty_cycle_warning', warning);
+      }
+    );
 
-    this.dutyCycleManager.on('dutyCycleViolation', (violation: DutyCycleViolation) => {
-      this.logger.error('Duty cycle violation detected', {
-        region: violation.region,
-        frequencyBand: violation.frequencyBand,
-        attemptedDutyCycle: `${(violation.attemptedDutyCycle * 100).toFixed(2)}%`,
-        maxAllowed: `${(violation.maxAllowedDutyCycle * 100).toFixed(1)}%`,
-        severity: violation.severity
-      });
-      this.emit('duty_cycle_violation', violation);
-    });
+    this.dutyCycleManager.on(
+      'dutyCycleViolation',
+      (violation: DutyCycleViolation) => {
+        this.logger.error('Duty cycle violation detected', {
+          region: violation.region,
+          frequencyBand: violation.frequencyBand,
+          attemptedDutyCycle: `${(violation.attemptedDutyCycle * 100).toFixed(2)}%`,
+          maxAllowed: `${(violation.maxAllowedDutyCycle * 100).toFixed(1)}%`,
+          severity: violation.severity,
+        });
+        this.emit('duty_cycle_violation', violation);
+      }
+    );
 
     this.dutyCycleManager.on('queueOverflow', (droppedMessage: any) => {
       this.logger.warn('Message queue overflow, dropping message', {
         messageType: this.getMessageType(droppedMessage),
-        priority: droppedMessage.priority
-      });  
+        priority: droppedMessage.priority,
+      });
       this.emit('message_dropped', droppedMessage);
     });
 
-    this.dutyCycleManager.on('transmissionComplete', (record: TransmissionRecord) => {
-      this.logger.debug('Transmission completed with duty cycle tracking', {
-        messageType: record.messageType,
-        duration: `${record.durationMs}ms`,
-        frequencyMHz: record.frequencyMHz,
-        powerLevel: `${record.powerLevel_dBm}dBm`
-      });
-      this.fragmentationStats.totalMessagesSent++;
-    });
+    this.dutyCycleManager.on(
+      'transmissionComplete',
+      (record: TransmissionRecord) => {
+        this.logger.debug('Transmission completed with duty cycle tracking', {
+          messageType: record.messageType,
+          duration: `${record.durationMs}ms`,
+          frequencyMHz: record.frequencyMHz,
+          powerLevel: `${record.powerLevel_dBm}dBm`,
+        });
+        this.fragmentationStats.totalMessagesSent++;
+      }
+    );
   }
 
   // Helper method to determine message type from message content
-  private getMessageType(message: any): 'UTXO_TRANSACTION' | 'BLOCK' | 'ROUTING' | 'DISCOVERY' {
-    if (message.type === 'transaction' || message.type === 'utxo_transaction') return 'UTXO_TRANSACTION';
+  private getMessageType(
+    message: any
+  ): 'UTXO_TRANSACTION' | 'BLOCK' | 'ROUTING' | 'DISCOVERY' {
+    if (message.type === 'transaction' || message.type === 'utxo_transaction')
+      return 'UTXO_TRANSACTION';
     if (message.type === 'block') return 'BLOCK';
-    if (message.type === 'discovery' || message.type === 'hello') return 'DISCOVERY';
+    if (message.type === 'discovery' || message.type === 'hello')
+      return 'DISCOVERY';
     return 'ROUTING';
   }
 

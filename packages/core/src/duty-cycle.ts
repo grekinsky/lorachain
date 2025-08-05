@@ -25,7 +25,7 @@ import { EventEmitter } from 'events';
 
 /**
  * RegionalComplianceValidator - Validates transmissions against regional regulations
- * 
+ *
  * Supports comprehensive regional compliance including:
  * - EU ETSI with sub-band duty cycles (0.1%, 1%, 10%)
  * - US/CA/MX FCC with frequency hopping and dwell time limits
@@ -52,24 +52,30 @@ export class RegionalComplianceValidator {
     // Check frequency band compliance
     const band = this.getFrequencyBand(config, frequencyMHz);
     if (!band) {
-      return { 
-        compliant: false, 
-        reason: `Frequency ${frequencyMHz}MHz not allowed in region ${config.region}` 
+      return {
+        compliant: false,
+        reason: `Frequency ${frequencyMHz}MHz not allowed in region ${config.region}`,
       };
     }
-    
+
     // Check maximum single transmission time
     if (transmissionTimeMs > config.maxTransmissionTimeMs) {
       return {
         compliant: false,
-        reason: `Transmission time ${transmissionTimeMs}ms exceeds limit ${config.maxTransmissionTimeMs}ms`
+        reason: `Transmission time ${transmissionTimeMs}ms exceeds limit ${config.maxTransmissionTimeMs}ms`,
       };
     }
-    
+
     // Region-specific validation
     switch (config.region) {
       case 'EU':
-        return this.validateEU(config, transmissionTimeMs, frequencyMHz, band, currentDutyCycle);
+        return this.validateEU(
+          config,
+          transmissionTimeMs,
+          frequencyMHz,
+          band,
+          currentDutyCycle
+        );
       case 'US':
       case 'CA':
       case 'MX':
@@ -83,7 +89,11 @@ export class RegionalComplianceValidator {
       case 'AR':
         return this.validateSouthAmerica(config, transmissionTimeMs);
       default:
-        return this.validateGeneric(config, transmissionTimeMs, currentDutyCycle);
+        return this.validateGeneric(
+          config,
+          transmissionTimeMs,
+          currentDutyCycle
+        );
     }
   }
 
@@ -95,25 +105,32 @@ export class RegionalComplianceValidator {
     currentDutyCycle: number
   ): ComplianceResult {
     // Find applicable sub-band duty cycle
-    const subBand = band.subBands?.find(sb => 
-      frequencyMHz >= sb.minMHz && frequencyMHz <= sb.maxMHz
+    const subBand = band.subBands?.find(
+      sb => frequencyMHz >= sb.minMHz && frequencyMHz <= sb.maxMHz
     );
-    
-    const dutyCycleLimit = subBand?.dutyCyclePercent || config.maxDutyCyclePercent || 0.01;
-    const newTransmissionDutyCycle = transmissionTimeMs / (config.trackingWindowHours * 60 * 60 * 1000);
-    
+
+    const dutyCycleLimit =
+      subBand?.dutyCyclePercent || config.maxDutyCyclePercent || 0.01;
+    const newTransmissionDutyCycle =
+      transmissionTimeMs / (config.trackingWindowHours * 60 * 60 * 1000);
+
     if (currentDutyCycle + newTransmissionDutyCycle > dutyCycleLimit) {
-      const waitTime = this.calculateWaitTime(dutyCycleLimit, currentDutyCycle, config.trackingWindowHours);
-      return { 
-        compliant: false, 
+      const totalDutyCycle = currentDutyCycle + newTransmissionDutyCycle;
+      const waitTime = this.calculateWaitTime(
+        dutyCycleLimit,
+        totalDutyCycle,
+        config.trackingWindowHours
+      );
+      return {
+        compliant: false,
         reason: `Would exceed ${(dutyCycleLimit * 100).toFixed(1)}% duty cycle limit (current: ${(currentDutyCycle * 100).toFixed(2)}%)`,
-        waitTimeMs: waitTime
+        waitTimeMs: waitTime,
       };
     }
-    
+
     return { compliant: true };
   }
-  
+
   private validateNorthAmerica(
     config: DutyCycleConfig,
     transmissionTimeMs: number
@@ -122,13 +139,13 @@ export class RegionalComplianceValidator {
     if (config.frequencyHopping?.enabled) {
       const maxDwellTime = config.dwellTimeMs || 400; // FCC limit: 400ms
       if (transmissionTimeMs > maxDwellTime) {
-        return { 
-          compliant: false, 
-          reason: `Exceeds ${maxDwellTime}ms dwell time limit for frequency hopping` 
+        return {
+          compliant: false,
+          reason: `Exceeds ${maxDwellTime}ms dwell time limit for frequency hopping`,
         };
       }
     }
-    
+
     // No duty cycle restrictions in North America
     return { compliant: true };
   }
@@ -139,17 +156,23 @@ export class RegionalComplianceValidator {
     currentDutyCycle: number
   ): ComplianceResult {
     const dutyCycleLimit = config.maxDutyCyclePercent || 0.1; // 10% default for Japan
-    const newTransmissionDutyCycle = transmissionTimeMs / (config.trackingWindowHours * 60 * 60 * 1000);
-    
+    const newTransmissionDutyCycle =
+      transmissionTimeMs / (config.trackingWindowHours * 60 * 60 * 1000);
+
     if (currentDutyCycle + newTransmissionDutyCycle > dutyCycleLimit) {
-      const waitTime = this.calculateWaitTime(dutyCycleLimit, currentDutyCycle, config.trackingWindowHours);
-      return { 
-        compliant: false, 
+      const totalDutyCycle = currentDutyCycle + newTransmissionDutyCycle;
+      const waitTime = this.calculateWaitTime(
+        dutyCycleLimit,
+        totalDutyCycle,
+        config.trackingWindowHours
+      );
+      return {
+        compliant: false,
         reason: `Would exceed ${(dutyCycleLimit * 100).toFixed(0)}% duty cycle limit`,
-        waitTimeMs: waitTime
+        waitTimeMs: waitTime,
       };
     }
-    
+
     return { compliant: true };
   }
 
@@ -179,34 +202,54 @@ export class RegionalComplianceValidator {
       return { compliant: true }; // No duty cycle limit
     }
 
-    const newTransmissionDutyCycle = transmissionTimeMs / (config.trackingWindowHours * 60 * 60 * 1000);
-    
-    if (currentDutyCycle + newTransmissionDutyCycle > config.maxDutyCyclePercent) {
-      const waitTime = this.calculateWaitTime(config.maxDutyCyclePercent, currentDutyCycle, config.trackingWindowHours);
-      return { 
-        compliant: false, 
+    const newTransmissionDutyCycle =
+      transmissionTimeMs / (config.trackingWindowHours * 60 * 60 * 1000);
+
+    if (
+      currentDutyCycle + newTransmissionDutyCycle >
+      config.maxDutyCyclePercent
+    ) {
+      const totalDutyCycle = currentDutyCycle + newTransmissionDutyCycle;
+      const waitTime = this.calculateWaitTime(
+        config.maxDutyCyclePercent,
+        totalDutyCycle,
+        config.trackingWindowHours
+      );
+      return {
+        compliant: false,
         reason: `Would exceed ${(config.maxDutyCyclePercent * 100).toFixed(1)}% duty cycle limit`,
-        waitTimeMs: waitTime
+        waitTimeMs: waitTime,
       };
     }
-    
+
     return { compliant: true };
   }
 
-  private getFrequencyBand(config: DutyCycleConfig, frequencyMHz: number): FrequencyBandConfig | null {
-    return config.frequencyBands.find(band => 
-      frequencyMHz >= band.minFrequencyMHz && frequencyMHz <= band.maxFrequencyMHz
-    ) || null;
+  private getFrequencyBand(
+    config: DutyCycleConfig,
+    frequencyMHz: number
+  ): FrequencyBandConfig | null {
+    return (
+      config.frequencyBands.find(
+        band =>
+          frequencyMHz >= band.minFrequencyMHz &&
+          frequencyMHz <= band.maxFrequencyMHz
+      ) || null
+    );
   }
 
-  private calculateWaitTime(dutyCycleLimit: number, currentDutyCycle: number, windowHours: number): number {
+  private calculateWaitTime(
+    dutyCycleLimit: number,
+    currentDutyCycle: number,
+    windowHours: number
+  ): number {
     if (currentDutyCycle <= dutyCycleLimit) return 0;
-    
+
     // Estimate wait time until duty cycle falls below limit
     // This is a simplified calculation - in practice, you'd need to analyze transmission history
     const excessDutyCycle = currentDutyCycle - dutyCycleLimit;
     const windowMs = windowHours * 60 * 60 * 1000;
-    
+
     // Wait for excess duty cycle to "age out" of the sliding window
     return Math.ceil(excessDutyCycle * windowMs);
   }
@@ -214,7 +257,7 @@ export class RegionalComplianceValidator {
 
 /**
  * MessageSizeEstimator - Estimates transmission time for LoRa messages
- * 
+ *
  * Calculates accurate air time based on LoRa parameters including:
  * - Spreading factor, bandwidth, coding rate
  * - Preamble length and header overhead
@@ -238,42 +281,53 @@ export class MessageSizeEstimator {
     const totalBytes = payloadBytes + headerBytes;
     const airTimeMs = this.calculateAirTime(totalBytes, loraParams);
     const fragmentCount = Math.ceil(totalBytes / 255); // LoRa max payload ~255 bytes
-    
+
     return {
       payloadBytes,
       headerBytes,
       totalBytes,
       airTimeMs,
       fragmentCount,
-      estimatedTransmissionTime: airTimeMs * fragmentCount
+      estimatedTransmissionTime: airTimeMs * fragmentCount,
     };
   }
 
   /**
    * Calculates LoRa air time using the standard formula
    */
-  private calculateAirTime(payloadBytes: number, params: LoRaTransmissionParams): number {
+  private calculateAirTime(
+    payloadBytes: number,
+    params: LoRaTransmissionParams
+  ): number {
     const { spreadingFactor, bandwidth, codingRate, preambleLength } = params;
-    
+
     // Symbol time in milliseconds
     const symbolTime = (1 << spreadingFactor) / (bandwidth * 1000);
-    
+
     // Preamble time
     const preambleTime = (preambleLength + 4.25) * symbolTime;
-    
+
     // Payload symbols calculation
     const payloadBits = payloadBytes * 8;
     const headerBits = params.headerMode === 'explicit' ? 20 : 0;
     const crcBits = params.crcEnabled ? 16 : 0;
-    
+
     const numerator = Math.max(
-      Math.ceil((8 * payloadBytes - 4 * spreadingFactor + 28 + crcBits - (params.headerMode === 'implicit' ? 20 : 0)) / (4 * (spreadingFactor - (params.lowDataRateOptimize ? 2 : 0)))) * (codingRate + 4),
+      Math.ceil(
+        (8 * payloadBytes -
+          4 * spreadingFactor +
+          28 +
+          crcBits -
+          (params.headerMode === 'implicit' ? 20 : 0)) /
+          (4 * (spreadingFactor - (params.lowDataRateOptimize ? 2 : 0)))
+      ) *
+        (codingRate + 4),
       0
     );
-    
+
     const payloadSymbols = 8 + numerator;
     const payloadTime = payloadSymbols * symbolTime;
-    
+
     return preambleTime + payloadTime;
   }
 
@@ -294,7 +348,7 @@ export class PriorityMessageQueue implements MessageQueue {
   constructor(maxSize: number = 1000) {
     this.maxSize = maxSize;
     this.logger = Logger.getInstance();
-    
+
     // Initialize priority queues
     Object.values(MessagePriority).forEach(priority => {
       if (typeof priority === 'number') {
@@ -314,7 +368,7 @@ export class PriorityMessageQueue implements MessageQueue {
     if (this.size() >= this.maxSize) {
       // Try to remove expired messages first
       this.removeExpired();
-      
+
       // If still full, remove lowest priority messages
       if (this.size() >= this.maxSize) {
         this.evictLowestPriority();
@@ -326,12 +380,12 @@ export class PriorityMessageQueue implements MessageQueue {
       message,
       priority,
       queuedAt: Date.now(),
-      expiresAt: Date.now() + (5 * 60 * 1000), // 5 minutes TTL
+      expiresAt: Date.now() + 5 * 60 * 1000, // 5 minutes TTL
       estimatedTransmissionTimeMs: 1000, // Default estimate
       retryCount: 0,
       isFragmented: false,
       frequencyBand: 'EU868', // Default
-      regionConfig: {} as DutyCycleConfig // Will be filled by DutyCycleManager
+      regionConfig: {} as DutyCycleConfig, // Will be filled by DutyCycleManager
     };
 
     queue.push(queuedMessage);
@@ -358,17 +412,20 @@ export class PriorityMessageQueue implements MessageQueue {
   }
 
   size(): number {
-    return Array.from(this.queues.values()).reduce((total, queue) => total + queue.length, 0);
+    return Array.from(this.queues.values()).reduce(
+      (total, queue) => total + queue.length,
+      0
+    );
   }
 
   clear(): void {
-    this.queues.forEach(queue => queue.length = 0);
+    this.queues.forEach(queue => (queue.length = 0));
   }
 
   removeExpired(): number {
     const now = Date.now();
     let removedCount = 0;
-    
+
     this.queues.forEach(queue => {
       const originalLength = queue.length;
       const filtered = queue.filter(msg => msg.expiresAt > now);
@@ -376,7 +433,7 @@ export class PriorityMessageQueue implements MessageQueue {
       queue.push(...filtered);
       removedCount += originalLength - queue.length;
     });
-    
+
     return removedCount;
   }
 
@@ -393,7 +450,7 @@ export class PriorityMessageQueue implements MessageQueue {
 
     this.queues.forEach((queue, priority) => {
       messagesByPriority[priority] = queue.length;
-      
+
       queue.forEach(msg => {
         const age = now - msg.queuedAt;
         totalWaitTime += age;
@@ -403,7 +460,7 @@ export class PriorityMessageQueue implements MessageQueue {
     });
 
     const totalMessages = this.size();
-    
+
     return {
       totalMessages,
       messagesByPriority,
@@ -412,19 +469,26 @@ export class PriorityMessageQueue implements MessageQueue {
       estimatedProcessingTime: totalMessages * 1000, // Rough estimate
       queueSizeBytes: totalSizeBytes,
       messagesExpired: 0, // Would be tracked separately
-      messagesDropped: 0  // Would be tracked separately
+      messagesDropped: 0, // Would be tracked separately
     };
   }
 
   private evictLowestPriority(): void {
     // Remove one message from the lowest priority non-empty queue
-    const priorities = [MessagePriority.LOW, MessagePriority.NORMAL, MessagePriority.HIGH, MessagePriority.CRITICAL];
-    
+    const priorities = [
+      MessagePriority.LOW,
+      MessagePriority.NORMAL,
+      MessagePriority.HIGH,
+      MessagePriority.CRITICAL,
+    ];
+
     for (const priority of priorities) {
       const queue = this.queues.get(priority);
       if (queue && queue.length > 0) {
         queue.shift();
-        this.logger.warn(`Evicted message due to queue overflow, priority: ${priority}`);
+        this.logger.warn(
+          `Evicted message due to queue overflow, priority: ${priority}`
+        );
         break;
       }
     }
@@ -433,7 +497,7 @@ export class PriorityMessageQueue implements MessageQueue {
 
 /**
  * DutyCycleManager - Main duty cycle management implementation
- * 
+ *
  * Provides comprehensive duty cycle management including:
  * - Multi-regional compliance (EU, US, JP, AU, etc.)
  * - Priority-based message queuing
@@ -441,7 +505,10 @@ export class PriorityMessageQueue implements MessageQueue {
  * - Persistent transmission history tracking
  * - Real-time duty cycle monitoring
  */
-export class DutyCycleManager extends EventEmitter implements IDutyCycleManager {
+export class DutyCycleManager
+  extends EventEmitter
+  implements IDutyCycleManager
+{
   private config: DutyCycleConfig;
   private messageQueue: PriorityMessageQueue;
   private complianceValidator: RegionalComplianceValidator;
@@ -462,28 +529,37 @@ export class DutyCycleManager extends EventEmitter implements IDutyCycleManager 
     averageTransmissionTime: 0,
     queuedMessages: 0,
     violationsCount: 0,
-    complianceRate: 1.0
+    complianceRate: 1.0,
   };
 
   constructor(config: DutyCycleConfig, database?: IDatabase) {
     super();
-    
+
     this.config = { ...config };
     this.database = database;
     this.logger = Logger.getInstance();
-    
+
     this.messageQueue = new PriorityMessageQueue(1000);
     this.complianceValidator = new RegionalComplianceValidator();
     this.sizeEstimator = new MessageSizeEstimator();
 
-    this.logger.info(`DutyCycleManager initialized for region ${config.region}, band ${config.activeFrequencyBand}`);
+    this.logger.info(
+      `DutyCycleManager initialized for region ${config.region}, band ${config.activeFrequencyBand}`
+    );
   }
 
   // Core functionality
-  canTransmit(estimatedTimeMs: number, priority?: MessagePriority, frequencyMHz?: number): boolean {
+  canTransmit(
+    estimatedTimeMs: number,
+    priority?: MessagePriority,
+    frequencyMHz?: number
+  ): boolean {
     const freq = frequencyMHz || this.getDefaultFrequency();
-    const currentDutyCycle = this.getCurrentDutyCycle(this.config.trackingWindowHours, freq);
-    
+    const currentDutyCycle = this.getCurrentDutyCycle(
+      this.config.trackingWindowHours,
+      freq
+    );
+
     const result = this.complianceValidator.validateTransmission(
       this.config,
       estimatedTimeMs,
@@ -492,73 +568,94 @@ export class DutyCycleManager extends EventEmitter implements IDutyCycleManager 
     );
 
     // Emergency override for critical messages
-    if (!result.compliant && priority === MessagePriority.CRITICAL && this.config.emergencyOverrideEnabled) {
+    if (
+      !result.compliant &&
+      priority === MessagePriority.CRITICAL &&
+      this.config.emergencyOverrideEnabled
+    ) {
       this.logger.warn(`Emergency override activated for critical message`);
-      this.emit('complianceOverride', { estimatedTimeMs, priority, reason: result.reason });
+      this.emit('complianceOverride', {
+        estimatedTimeMs,
+        priority,
+        reason: result.reason,
+      });
       return true;
     }
 
     return result.compliant;
   }
 
-  async enqueueMessage(message: any, priority: MessagePriority): Promise<boolean> {
+  async enqueueMessage(
+    message: any,
+    priority: MessagePriority
+  ): Promise<boolean> {
     const success = await this.messageQueue.enqueue(message, priority);
-    
+
     if (success) {
       this.stats.queuedMessages = this.messageQueue.size();
-      this.logger.debug(`Message queued with priority ${priority}, queue size: ${this.stats.queuedMessages}`);
+      this.logger.debug(
+        `Message queued with priority ${priority}, queue size: ${this.stats.queuedMessages}`
+      );
     } else {
       this.logger.error(`Failed to queue message with priority ${priority}`);
     }
-    
+
     return success;
   }
 
   getNextTransmissionWindow(frequencyMHz?: number): number {
     const freq = frequencyMHz || this.getDefaultFrequency();
-    
+
     // No wait time for regions without duty cycle
-    if (['US', 'CA', 'MX', 'AU', 'NZ', 'BR', 'AR'].includes(this.config.region)) {
+    if (
+      ['US', 'CA', 'MX', 'AU', 'NZ', 'BR', 'AR'].includes(this.config.region)
+    ) {
       // Check frequency hopping dwell time instead
       if (this.config.frequencyHopping?.enabled) {
         return this.calculateNextHopWindow();
       }
       return 0; // Can transmit immediately
     }
-    
-    const currentDutyCycle = this.getCurrentDutyCycle(this.config.trackingWindowHours, freq);
+
+    const currentDutyCycle = this.getCurrentDutyCycle(
+      this.config.trackingWindowHours,
+      freq
+    );
     const dutyCycleLimit = this.getDutyCycleLimitForFrequency(freq);
-    
+
     if (currentDutyCycle >= dutyCycleLimit) {
       return this.calculateDutyCycleResetTime(freq);
     }
-    
+
     return 0; // Can transmit immediately
   }
 
   // Status and monitoring
   getCurrentDutyCycle(windowHours: number = 1, frequencyMHz?: number): number {
     // Skip calculation for regions without duty cycle
-    if (['US', 'CA', 'MX', 'AU', 'NZ', 'BR', 'AR'].includes(this.config.region)) {
+    if (
+      ['US', 'CA', 'MX', 'AU', 'NZ', 'BR', 'AR'].includes(this.config.region)
+    ) {
       return 0; // No duty cycle restrictions
     }
-    
-    const windowStartTime = Date.now() - (windowHours * 60 * 60 * 1000);
+
+    const windowStartTime = Date.now() - windowHours * 60 * 60 * 1000;
     let recentTransmissions = this.transmissionHistory.filter(
       record => record.timestamp >= windowStartTime
     );
-    
+
     // Filter by frequency if specified (for EU sub-band calculations)
     if (frequencyMHz && this.config.region === 'EU') {
-      recentTransmissions = recentTransmissions.filter(
-        record => this.isSameSubBand(record.frequencyMHz, frequencyMHz)
+      recentTransmissions = recentTransmissions.filter(record =>
+        this.isSameSubBand(record.frequencyMHz, frequencyMHz)
       );
     }
-    
+
     const totalTransmissionTime = recentTransmissions.reduce(
-      (sum, record) => sum + record.durationMs, 0
+      (sum, record) => sum + record.durationMs,
+      0
     );
-    
+
     const windowDurationMs = windowHours * 60 * 60 * 1000;
     return totalTransmissionTime / windowDurationMs;
   }
@@ -568,8 +665,10 @@ export class DutyCycleManager extends EventEmitter implements IDutyCycleManager 
   }
 
   getTransmissionHistory(hours: number = 24): TransmissionRecord[] {
-    const cutoffTime = Date.now() - (hours * 60 * 60 * 1000);
-    return this.transmissionHistory.filter(record => record.timestamp >= cutoffTime);
+    const cutoffTime = Date.now() - hours * 60 * 60 * 1000;
+    return this.transmissionHistory.filter(
+      record => record.timestamp >= cutoffTime
+    );
   }
 
   getDutyCycleStats(): DutyCycleStats {
@@ -581,9 +680,11 @@ export class DutyCycleManager extends EventEmitter implements IDutyCycleManager 
   updateConfig(config: Partial<DutyCycleConfig>): void {
     const oldRegion = this.config.region;
     this.config = { ...this.config, ...config };
-    
+
     if (oldRegion !== this.config.region) {
-      this.logger.info(`Region changed from ${oldRegion} to ${this.config.region}`);
+      this.logger.info(
+        `Region changed from ${oldRegion} to ${this.config.region}`
+      );
       this.emit('regionChanged', oldRegion, this.config.region);
     }
   }
@@ -592,8 +693,14 @@ export class DutyCycleManager extends EventEmitter implements IDutyCycleManager 
     return { ...this.config };
   }
 
-  validateRegionalCompliance(transmissionTimeMs: number, frequencyMHz: number): ComplianceResult {
-    const currentDutyCycle = this.getCurrentDutyCycle(this.config.trackingWindowHours, frequencyMHz);
+  validateRegionalCompliance(
+    transmissionTimeMs: number,
+    frequencyMHz: number
+  ): ComplianceResult {
+    const currentDutyCycle = this.getCurrentDutyCycle(
+      this.config.trackingWindowHours,
+      frequencyMHz
+    );
     return this.complianceValidator.validateTransmission(
       this.config,
       transmissionTimeMs,
@@ -605,26 +712,26 @@ export class DutyCycleManager extends EventEmitter implements IDutyCycleManager 
   // Control
   start(): void {
     if (this.isRunning) return;
-    
+
     this.isRunning = true;
     this.processingInterval = setInterval(async () => {
       await this.processQueue();
       this.cleanupOldTransmissions();
       this.updateStats();
     }, 1000); // Process queue every second
-    
+
     this.logger.info('DutyCycleManager started');
   }
 
   stop(): void {
     if (!this.isRunning) return;
-    
+
     this.isRunning = false;
     if (this.processingInterval) {
       clearInterval(this.processingInterval);
       this.processingInterval = undefined;
     }
-    
+
     this.logger.info('DutyCycleManager stopped');
   }
 
@@ -646,7 +753,7 @@ export class DutyCycleManager extends EventEmitter implements IDutyCycleManager 
 
     const estimatedTime = nextMessage.estimatedTransmissionTimeMs;
     const canTransmit = this.canTransmit(estimatedTime, nextMessage.priority);
-    
+
     if (canTransmit) {
       const message = await this.messageQueue.dequeue();
       if (message) {
@@ -667,21 +774,25 @@ export class DutyCycleManager extends EventEmitter implements IDutyCycleManager 
       sourceNodeId: 'local_node', // Would come from node config
       hopCount: 0,
       messageSize: JSON.stringify(message.message).length,
-      powerLevel_dBm: this.config.maxEIRP_dBm
+      powerLevel_dBm: this.config.maxEIRP_dBm,
     };
 
     this.transmissionHistory.push(transmissionRecord);
-    
+
     // Persist to database if available
     if (this.database && this.config.persistenceEnabled) {
       await this.persistTransmissionRecord(transmissionRecord);
     }
 
     this.emit('transmissionComplete', transmissionRecord);
-    this.logger.debug(`Transmission completed: ${transmissionRecord.messageType}, duration: ${transmissionRecord.durationMs}ms`);
+    this.logger.debug(
+      `Transmission completed: ${transmissionRecord.messageType}, duration: ${transmissionRecord.durationMs}ms`
+    );
   }
 
-  private getMessageType(message: any): 'UTXO_TRANSACTION' | 'BLOCK' | 'ROUTING' | 'DISCOVERY' {
+  private getMessageType(
+    message: any
+  ): 'UTXO_TRANSACTION' | 'BLOCK' | 'ROUTING' | 'DISCOVERY' {
     // Simple message type detection - would be more sophisticated in practice
     if (message.type === 'utxo_transaction') return 'UTXO_TRANSACTION';
     if (message.type === 'block') return 'BLOCK';
@@ -690,7 +801,7 @@ export class DutyCycleManager extends EventEmitter implements IDutyCycleManager 
   }
 
   private cleanupOldTransmissions(): void {
-    const cutoffTime = Date.now() - (24 * 60 * 60 * 1000); // Keep 24 hours of history
+    const cutoffTime = Date.now() - 24 * 60 * 60 * 1000; // Keep 24 hours of history
     this.transmissionHistory = this.transmissionHistory.filter(
       record => record.timestamp >= cutoffTime
     );
@@ -702,12 +813,14 @@ export class DutyCycleManager extends EventEmitter implements IDutyCycleManager 
     this.stats.hourlyDutyCycle = this.getCurrentDutyCycle(1);
     this.stats.transmissionCount = this.transmissionHistory.length;
     this.stats.queuedMessages = this.messageQueue.size();
-    
+
     if (this.stats.transmissionCount > 0) {
       this.stats.totalTransmissionTime = this.transmissionHistory.reduce(
-        (sum, record) => sum + record.durationMs, 0
+        (sum, record) => sum + record.durationMs,
+        0
       );
-      this.stats.averageTransmissionTime = this.stats.totalTransmissionTime / this.stats.transmissionCount;
+      this.stats.averageTransmissionTime =
+        this.stats.totalTransmissionTime / this.stats.transmissionCount;
     }
   }
 
@@ -720,31 +833,38 @@ export class DutyCycleManager extends EventEmitter implements IDutyCycleManager 
 
   private getDutyCycleLimitForFrequency(frequencyMHz: number): number {
     if (this.config.region === 'EU') {
-      const band = this.config.frequencyBands.find(b => 
-        frequencyMHz >= b.minFrequencyMHz && frequencyMHz <= b.maxFrequencyMHz
+      const band = this.config.frequencyBands.find(
+        b =>
+          frequencyMHz >= b.minFrequencyMHz && frequencyMHz <= b.maxFrequencyMHz
       );
-      
-      const subBand = band?.subBands?.find(sb => 
-        frequencyMHz >= sb.minMHz && frequencyMHz <= sb.maxMHz
+
+      const subBand = band?.subBands?.find(
+        sb => frequencyMHz >= sb.minMHz && frequencyMHz <= sb.maxMHz
       );
-      
-      return subBand?.dutyCyclePercent || this.config.maxDutyCyclePercent || 0.01;
+
+      return (
+        subBand?.dutyCyclePercent || this.config.maxDutyCyclePercent || 0.01
+      );
     }
-    
+
     return this.config.maxDutyCyclePercent || 0.01;
   }
 
   private isSameSubBand(freq1: number, freq2: number): boolean {
     // Check if two frequencies are in the same EU sub-band
-    const band = this.config.frequencyBands.find(b => 
-      freq1 >= b.minFrequencyMHz && freq1 <= b.maxFrequencyMHz
+    const band = this.config.frequencyBands.find(
+      b => freq1 >= b.minFrequencyMHz && freq1 <= b.maxFrequencyMHz
     );
-    
+
     if (!band?.subBands) return true;
-    
-    const subBand1 = band.subBands.find(sb => freq1 >= sb.minMHz && freq1 <= sb.maxMHz);
-    const subBand2 = band.subBands.find(sb => freq2 >= sb.minMHz && freq2 <= sb.maxMHz);
-    
+
+    const subBand1 = band.subBands.find(
+      sb => freq1 >= sb.minMHz && freq1 <= sb.maxMHz
+    );
+    const subBand2 = band.subBands.find(
+      sb => freq2 >= sb.minMHz && freq2 <= sb.maxMHz
+    );
+
     return subBand1 === subBand2;
   }
 
@@ -756,29 +876,34 @@ export class DutyCycleManager extends EventEmitter implements IDutyCycleManager 
   private calculateDutyCycleResetTime(frequencyMHz: number): number {
     // Calculate time until duty cycle window resets enough to allow transmission
     const windowMs = this.config.trackingWindowHours * 60 * 60 * 1000;
-    const currentDutyCycle = this.getCurrentDutyCycle(this.config.trackingWindowHours, frequencyMHz);
+    const currentDutyCycle = this.getCurrentDutyCycle(
+      this.config.trackingWindowHours,
+      frequencyMHz
+    );
     const limit = this.getDutyCycleLimitForFrequency(frequencyMHz);
-    
+
     if (currentDutyCycle <= limit) return 0;
-    
+
     // Find the oldest transmission that's contributing to the excess
     const cutoffTime = Date.now() - windowMs;
     const relevantTransmissions = this.transmissionHistory
       .filter(record => record.timestamp >= cutoffTime)
       .sort((a, b) => a.timestamp - b.timestamp);
-    
+
     if (relevantTransmissions.length === 0) return 0;
-    
+
     // Estimate when the oldest transmission will age out
     const oldestTransmission = relevantTransmissions[0];
     const ageOutTime = oldestTransmission.timestamp + windowMs;
-    
+
     return Math.max(0, ageOutTime - Date.now());
   }
 
-  private async persistTransmissionRecord(record: TransmissionRecord): Promise<void> {
+  private async persistTransmissionRecord(
+    record: TransmissionRecord
+  ): Promise<void> {
     if (!this.database) return;
-    
+
     try {
       const key = `transmission_${record.timestamp}_${Math.random().toString(36).substr(2, 9)}`;
       await this.database.put(key, record, 'duty_cycle_history');
