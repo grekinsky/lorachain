@@ -11,16 +11,16 @@ import type {
   ICompressionEngineOptions,
   IDictionaryManager
 } from './compression-interfaces.js';
-import type {
+import {
   CompressionAlgorithm,
   CompressionLevel,
   MessageType,
-  CompressedData,
-  CompressionOptions,
-  UTXOContext,
-  CompressionDictionary,
-  DictionaryEntry,
-  CompressionMetadata
+  type CompressedData,
+  type CompressionOptions,
+  type UTXOContext,
+  type CompressionDictionary,
+  type DictionaryEntry,
+  type CompressionMetadata
 } from './compression-types.js';
 
 /**
@@ -29,7 +29,7 @@ import type {
  */
 export class UTXOCustomCompressionEngine implements ICompressionEngine {
   private algorithm = CompressionAlgorithm.UTXO_CUSTOM;
-  private level = CompressionLevel.BALANCED;
+  private level: CompressionLevel = CompressionLevel.BALANCED;
   private supportedTypes: MessageType[] = [
     MessageType.UTXO_TRANSACTION,
     MessageType.UTXO_BLOCK,
@@ -611,7 +611,7 @@ export class UTXOCustomCompressionEngine implements ICompressionEngine {
  */
 export class DictionaryCompressionEngine implements ICompressionEngine, IDictionaryManager {
   private algorithm = CompressionAlgorithm.UTXO_DICTIONARY;
-  private level = CompressionLevel.BALANCED;
+  private level: CompressionLevel = CompressionLevel.BALANCED;
   private supportedTypes: MessageType[] = Object.values(MessageType);
   private options: ICompressionEngineOptions = {};
   
@@ -629,7 +629,7 @@ export class DictionaryCompressionEngine implements ICompressionEngine, IDiction
         throw new Error(`Dictionary not found: ${dictionaryId}`);
       }
       
-      const compressed = this.compressWithDictionary(data, dictionary);
+      const compressed = this.compressWithDictionaryImpl(data, dictionary);
       const compressionTime = performance.now() - startTime;
       
       const metadata: CompressionMetadata = {
@@ -666,10 +666,29 @@ export class DictionaryCompressionEngine implements ICompressionEngine, IDiction
         throw new Error(`Dictionary not found: ${dictionaryId}`);
       }
       
-      return this.decompressWithDictionary(compressedData.data, dictionary);
+      return this.decompressWithDictionaryImpl(compressedData.data, dictionary);
     } catch (error) {
       throw new Error(`Dictionary decompression failed: ${error instanceof Error ? error.message : String(error)}`);
     }
+  }
+
+  // Dictionary operations for IDictionaryManager interface
+  compressWithDictionary(data: Uint8Array, dictionaryId: string): Uint8Array {
+    const dictionary = this.dictionaries.get(dictionaryId);
+    if (!dictionary) {
+      throw new Error(`Dictionary not found: ${dictionaryId}`);
+    }
+    
+    return this.compressWithDictionaryImpl(data, dictionary);
+  }
+
+  decompressWithDictionary(data: Uint8Array, dictionaryId: string): Uint8Array {
+    const dictionary = this.dictionaries.get(dictionaryId);
+    if (!dictionary) {
+      throw new Error(`Dictionary not found: ${dictionaryId}`);
+    }
+    
+    return this.decompressWithDictionaryImpl(data, dictionary);
   }
 
   // IDictionaryManager implementation
@@ -826,7 +845,7 @@ export class DictionaryCompressionEngine implements ICompressionEngine, IDiction
   }
 
   // Dictionary compression implementation
-  private compressWithDictionary(data: Uint8Array, dictionary: CompressionDictionary): Uint8Array {
+  private compressWithDictionaryImpl(data: Uint8Array, dictionary: CompressionDictionary): Uint8Array {
     const text = new TextDecoder().decode(data);
     const result: number[] = [];
     let i = 0;
@@ -858,7 +877,7 @@ export class DictionaryCompressionEngine implements ICompressionEngine, IDiction
     return new Uint8Array(result);
   }
 
-  private decompressWithDictionary(data: Uint8Array, dictionary: CompressionDictionary): Uint8Array {
+  private decompressWithDictionaryImpl(data: Uint8Array, dictionary: CompressionDictionary): Uint8Array {
     const result: string[] = [];
     let i = 0;
 

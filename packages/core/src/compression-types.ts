@@ -8,43 +8,51 @@
 import type { UTXOTransaction, UTXO } from './types.js';
 
 // Compression algorithms supported by the system
-export enum CompressionAlgorithm {
-  NONE = 'none',
-  PROTOBUF = 'protobuf',
-  GZIP = 'gzip',
-  LZ4 = 'lz4',
-  UTXO_CUSTOM = 'utxo_custom',           // UTXO-specific compression (breaking change)
-  UTXO_DICTIONARY = 'utxo_dictionary'    // UTXO dictionary compression (breaking change)
-}
+export const CompressionAlgorithm = {
+  NONE: 'none',
+  PROTOBUF: 'protobuf',
+  GZIP: 'gzip',
+  LZ4: 'lz4',
+  UTXO_CUSTOM: 'utxo_custom',           // UTXO-specific compression (breaking change)
+  UTXO_DICTIONARY: 'utxo_dictionary'    // UTXO dictionary compression (breaking change)
+} as const;
+
+export type CompressionAlgorithm = typeof CompressionAlgorithm[keyof typeof CompressionAlgorithm];
 
 // Compression levels for different use cases
-export enum CompressionLevel {
-  FAST = 'fast',       // Low CPU usage, good for mobile/battery constrained
-  BALANCED = 'balanced', // Balanced performance and compression ratio
-  MAXIMUM = 'maximum'   // Maximum compression, higher CPU usage
-}
+export const CompressionLevel = {
+  FAST: 'fast',       // Low CPU usage, good for mobile/battery constrained
+  BALANCED: 'balanced', // Balanced performance and compression ratio
+  MAXIMUM: 'maximum'   // Maximum compression, higher CPU usage
+} as const;
+
+export type CompressionLevel = typeof CompressionLevel[keyof typeof CompressionLevel];
 
 // Compression priority for message handling
-export enum CompressionPriority {
-  LOW = 'low',
-  NORMAL = 'normal',
-  HIGH = 'high',
-  CRITICAL = 'critical'
-}
+export const CompressionPriority = {
+  LOW: 'low',
+  NORMAL: 'normal',
+  HIGH: 'high',
+  CRITICAL: 'critical'
+} as const;
+
+export type CompressionPriority = typeof CompressionPriority[keyof typeof CompressionPriority];
 
 // Message types for mesh network (UTXO-only)
-export enum MessageType {
-  UTXO_TRANSACTION = 'utxo_transaction',
-  UTXO_BLOCK = 'utxo_block',
-  BLOCKCHAIN_SYNC = 'blockchain_sync',
-  NODE_DISCOVERY = 'node_discovery',
-  ROUTE_REQUEST = 'route_request',
-  ROUTE_REPLY = 'route_reply',
-  ROUTE_ERROR = 'route_error',
-  HELLO = 'hello',
-  FRAGMENT = 'fragment',
-  FRAGMENT_ACK = 'fragment_ack'
-}
+export const MessageType = {
+  UTXO_TRANSACTION: 'utxo_transaction',
+  UTXO_BLOCK: 'utxo_block',
+  BLOCKCHAIN_SYNC: 'blockchain_sync',
+  NODE_DISCOVERY: 'node_discovery',
+  ROUTE_REQUEST: 'route_request',
+  ROUTE_REPLY: 'route_reply',
+  ROUTE_ERROR: 'route_error',
+  HELLO: 'hello',
+  FRAGMENT: 'fragment',
+  FRAGMENT_ACK: 'fragment_ack'
+} as const;
+
+export type MessageType = typeof MessageType[keyof typeof MessageType];
 
 // Compression metadata for integrity and performance tracking
 export interface CompressionMetadata {
@@ -220,17 +228,19 @@ export interface DecompressionResult {
 }
 
 // Error codes for compression operations
-export enum CompressionErrorCode {
-  ALGORITHM_NOT_SUPPORTED = 'ALGORITHM_NOT_SUPPORTED',
-  COMPRESSION_FAILED = 'COMPRESSION_FAILED',
-  DECOMPRESSION_FAILED = 'DECOMPRESSION_FAILED',
-  MEMORY_LIMIT_EXCEEDED = 'MEMORY_LIMIT_EXCEEDED',
-  TIMEOUT_EXCEEDED = 'TIMEOUT_EXCEEDED',
-  INTEGRITY_CHECK_FAILED = 'INTEGRITY_CHECK_FAILED',
-  DICTIONARY_NOT_FOUND = 'DICTIONARY_NOT_FOUND',
-  EXPANSION_RATIO_EXCEEDED = 'EXPANSION_RATIO_EXCEEDED',
-  UTXO_VALIDATION_FAILED = 'UTXO_VALIDATION_FAILED'
-}
+export const CompressionErrorCode = {
+  ALGORITHM_NOT_SUPPORTED: 'ALGORITHM_NOT_SUPPORTED',
+  COMPRESSION_FAILED: 'COMPRESSION_FAILED',
+  DECOMPRESSION_FAILED: 'DECOMPRESSION_FAILED',
+  MEMORY_LIMIT_EXCEEDED: 'MEMORY_LIMIT_EXCEEDED',
+  TIMEOUT_EXCEEDED: 'TIMEOUT_EXCEEDED',
+  INTEGRITY_CHECK_FAILED: 'INTEGRITY_CHECK_FAILED',
+  DICTIONARY_NOT_FOUND: 'DICTIONARY_NOT_FOUND',
+  EXPANSION_RATIO_EXCEEDED: 'EXPANSION_RATIO_EXCEEDED',
+  UTXO_VALIDATION_FAILED: 'UTXO_VALIDATION_FAILED'
+} as const;
+
+export type CompressionErrorCode = typeof CompressionErrorCode[keyof typeof CompressionErrorCode];
 
 // Compression error with detailed information
 export interface CompressionError {

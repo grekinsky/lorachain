@@ -26,14 +26,14 @@ import type {
   ICompressionFactory,
   ICompressionConfigBuilder
 } from './compression-interfaces.js';
-import type {
+import {
   CompressionAlgorithm,
   CompressionLevel,
   MessageType,
-  UTXOCompressionConfig,
-  CompressionDictionary,
-  PerformanceMetrics,
-  CompressionSecurityConfig
+  type UTXOCompressionConfig,
+  type CompressionDictionary,
+  type PerformanceMetrics,
+  type CompressionSecurityConfig
 } from './compression-types.js';
 
 /**
@@ -123,16 +123,16 @@ export class CompressionConfigBuilder implements ICompressionConfigBuilder {
 /**
  * Main compression factory implementation
  */
-export class CompressionFactory implements ICompressionFactory {
-  private static instance: CompressionFactory;
+class CompressionFactoryImpl implements ICompressionFactory {
+  private static instance: CompressionFactoryImpl;
 
   private constructor() {}
 
-  static getInstance(): CompressionFactory {
-    if (!CompressionFactory.instance) {
-      CompressionFactory.instance = new CompressionFactory();
+  static getInstance(): CompressionFactoryImpl {
+    if (!CompressionFactoryImpl.instance) {
+      CompressionFactoryImpl.instance = new CompressionFactoryImpl();
     }
-    return CompressionFactory.instance;
+    return CompressionFactoryImpl.instance;
   }
 
   /**
@@ -232,7 +232,7 @@ export class CompressionFactory implements ICompressionFactory {
   detectBestAlgorithm(samples: Uint8Array[]): CompressionAlgorithm {
     const benchmarkResults = this.benchmarkAlgorithms(samples);
     
-    let bestAlgorithm = CompressionAlgorithm.PROTOBUF;
+    let bestAlgorithm: CompressionAlgorithm = 'protobuf';
     let bestScore = 0;
     
     for (const [algorithm, metrics] of benchmarkResults) {
@@ -445,4 +445,5 @@ export const createLoRaCompressionManager = (region: string = 'EU') =>
     CompressionFactory.createLoRaOptimizedConfig(region)
   );
 
-export { CompressionFactory };
+// Export the factory instance
+export const CompressionFactory = CompressionFactoryImpl;

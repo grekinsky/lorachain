@@ -5,21 +5,21 @@
  * BREAKING CHANGE: UTXO-only support, no backwards compatibility
  */
 
-import { gzip, gunzip } from 'pako';
+import { gzip, inflate } from 'pako';
 import * as protobuf from 'protobufjs';
 import type {
   ICompressionEngine,
   ICompressionEngineOptions,
   IProtobufSerializer
 } from './compression-interfaces.js';
-import type {
+import {
   CompressionAlgorithm,
   CompressionLevel,
   MessageType,
-  CompressedData,
-  CompressionOptions,
-  UTXOContext,
-  CompressionMetadata
+  type CompressedData,
+  type CompressionOptions,
+  type UTXOContext,
+  type CompressionMetadata
 } from './compression-types.js';
 
 /**
@@ -346,6 +346,33 @@ export class ProtobufCompressionEngine extends BaseCompressionEngine implements 
     };
   }
 
+  private restoreUTXOMeshMessage(decoded: any): any {
+    return {
+      type: this.getMessageTypeString(decoded.type),
+      payload: JSON.parse(new TextDecoder().decode(decoded.payload)),
+      timestamp: this.decompressTimestamp(decoded.timestamp),
+      from: this.decompressAddress(decoded.from_id),
+      to: decoded.to_id ? this.decompressAddress(decoded.to_id) : undefined,
+      signature: new TextDecoder().decode(decoded.signature)
+    };
+  }
+
+  private getMessageTypeString(type: number): string {
+    const typeMap: Record<number, string> = {
+      0: 'transaction',
+      1: 'block',
+      2: 'sync',
+      3: 'discovery',
+      4: 'route_request',
+      5: 'route_reply',
+      6: 'route_error',
+      7: 'hello',
+      8: 'fragment',
+      9: 'fragment_ack'
+    };
+    return typeMap[type] || 'sync';
+  }
+
   private restoreFromProtobuf(decoded: any, type?: MessageType): any {
     switch (type) {
       case MessageType.UTXO_TRANSACTION:
@@ -504,7 +531,7 @@ export class GzipCompressionEngine extends BaseCompressionEngine {
       const startTime = performance.now();
       const level = this.getLevelNumber(options?.level || this.level);
       
-      const compressed = gzip(data, { level });
+      const compressed = gzip(data, { level: level as any });
       const compressionTime = performance.now() - startTime;
       
       const metadata = this.createMetadata(data.length, compressed.length);
@@ -524,7 +551,7 @@ export class GzipCompressionEngine extends BaseCompressionEngine {
 
   decompress(compressedData: CompressedData): Uint8Array {
     try {
-      return gunzip(compressedData.data);
+      return inflate(compressedData.data);
     } catch (error) {
       throw new Error(`GZIP decompression failed: ${error instanceof Error ? error.message : String(error)}`);
     }

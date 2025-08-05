@@ -149,8 +149,8 @@ export interface IDictionaryManager {
   deleteDictionary(id: string): boolean;
   
   // Dictionary operations
-  compress(data: Uint8Array, dictionaryId: string): Uint8Array;
-  decompress(data: Uint8Array, dictionaryId: string): Uint8Array;
+  compressWithDictionary(data: Uint8Array, dictionaryId: string): Uint8Array;
+  decompressWithDictionary(data: Uint8Array, dictionaryId: string): Uint8Array;
   
   // Dictionary management
   getDictionary(id: string): CompressionDictionary | null;

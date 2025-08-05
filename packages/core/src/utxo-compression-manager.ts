@@ -14,28 +14,28 @@ import type {
   ICompressionEngine,
   ICompressionEventEmitter
 } from './compression-interfaces.js';
-import type {
+import {
   CompressionAlgorithm,
   CompressionLevel,
   MessageType,
-  CompressedData,
-  CompressionOptions,
-  UTXOCompressionConfig,
-  CompressionStats,
-  CompressionDictionary,
-  UTXOContext,
-  UTXOPatterns,
-  DutyCycleConstraints,
-  DutyCycleEfficiency,
-  PerformanceConstraints,
-  CompressionResult,
-  DecompressionResult,
-  CompressionError,
   CompressionErrorCode,
-  PerformanceMetrics,
-  AlgorithmStats,
-  DataPatterns,
-  CompressionMetadata
+  type CompressedData,
+  type CompressionOptions,
+  type UTXOCompressionConfig,
+  type CompressionStats,
+  type CompressionDictionary,
+  type UTXOContext,
+  type UTXOPatterns,
+  type DutyCycleConstraints,
+  type DutyCycleEfficiency,
+  type PerformanceConstraints,
+  type CompressionResult,
+  type DecompressionResult,
+  type CompressionError,
+  type PerformanceMetrics,
+  type AlgorithmStats,
+  type DataPatterns,
+  type CompressionMetadata
 } from './compression-types.js';
 
 // LRU Cache implementation for algorithm selection
@@ -63,7 +63,9 @@ class LRUCache<K, V> {
     } else if (this.cache.size >= this.maxSize) {
       // Remove least recently used (first item)
       const firstKey = this.cache.keys().next().value;
-      this.cache.delete(firstKey);
+      if (firstKey !== undefined) {
+        this.cache.delete(firstKey);
+      }
     }
     this.cache.set(key, value);
   }
