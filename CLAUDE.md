@@ -8,7 +8,7 @@ Lorachain is a lightweight blockchain network designed for cryptocurrency transa
 
 The blockchain uses a **UTXO (Unspent Transaction Output) model** for transaction management and supports **cryptographic signing** with both ECDSA (secp256k1) and Ed25519 algorithms.
 
-**Current Development Status**: ~25-30% complete toward MVP goal with Milestone 1 (Core Blockchain) fully implemented and Milestone 2 (LoRa/Mesh Protocol) partially complete. See `specs/ROADMAP.md` for detailed progress tracking.
+**Current Development Status**: ~35-40% complete toward MVP goal with Milestone 1 (Core Blockchain) fully implemented and Milestone 2 (LoRa/Mesh Protocol) significantly enhanced with advanced routing, duty cycle management, and regional compliance. See `specs/ROADMAP.md` for detailed progress tracking.
 
 ## Important Development Guidelines
 
@@ -89,7 +89,10 @@ cd packages/core && pnpm test    # Test specific package
 - **`GenesisConfigManager`** (core) - Genesis block configuration and UTXO-based initial allocations
 - **`SecureMobileWallet`** (mobile-wallet) - Cryptographically secure wallet with key pairs
 - **`LorachainNode`** (node) - Full node with mining and peer management
-- **`MeshProtocol`** (mesh-protocol) - LoRa mesh communication
+- **`EnhancedMeshProtocol`** (mesh-protocol) - Advanced LoRa mesh communication with UTXO-aware routing and duty cycle compliance
+- **`UTXORouteManager`** (mesh-protocol) - UTXO-optimized routing with blockchain awareness and cryptographic security
+- **`DutyCycleManager`** (mesh-protocol) - Regional compliance for EU/US/Japan/Australia with transmission scheduling
+- **`RegionalComplianceValidator`** (mesh-protocol) - Regulatory compliance validation and enforcement
 - **`Logger`** (shared) - Centralized logging with levels
 
 ### Technical Constraints
@@ -217,13 +220,16 @@ Each package includes comprehensive unit tests using Vitest:
 - **Shared package**: Tests for logger and utility functions
 - **Mobile wallet**: Tests for secure wallet operations with cryptographic key pairs
 - **Node package**: Tests for full node functionality
-- **Mesh protocol**: Tests for LoRa communication protocol
+- **Enhanced mesh protocol**: Tests for advanced LoRa communication with UTXO routing, duty cycle management, and regional compliance
+- **Advanced routing**: Tests for flood routing, cryptographic verification, path optimization, and blockchain awareness
+- **Duty cycle compliance**: Tests for regional regulations (EU/US/Japan/Australia), transmission scheduling, and compliance validation
+- **Fragmentation system**: Tests for enhanced fragmentation with missing fragment detection and retransmission
 
-**Total test coverage**: 593+ tests across all packages with 100% passing rate covering all Milestone 1 functionality.
+**Total test coverage**: 650+ tests across all packages with 100% passing rate covering Milestone 1 and significant portions of Milestone 2.
 
 Run package-specific tests with `cd packages/<name> && pnpm test` or use watch mode for development with `pnpm test:watch`.
 
-**Development Progress**: Currently ~25-30% complete toward MVP goal. Estimated 7-10 months total development time with current progress focused on completing Milestone 2 (LoRa/Mesh Protocol) implementation.
+**Development Progress**: Currently ~35-40% complete toward MVP goal. Estimated 7-10 months total development time with significant progress on Milestone 2 (LoRa/Mesh Protocol) including advanced routing, duty cycle management, and regional compliance.
 
 ### Key Implementation Details
 
@@ -246,12 +252,13 @@ Run package-specific tests with `cd packages/<name> && pnpm test` or use watch m
 - **Genesis Configuration**: Configurable genesis blocks with UTXO-based initial allocations and network parameters
 - **Clean Implementation**: No backwards compatibility - modern, clean implementations throughout
 
-#### 🔄 Milestone 2 - LoRa/Mesh Protocol (PARTIALLY COMPLETED)
+#### 🔄 Milestone 2 - LoRa/Mesh Protocol (SIGNIFICANTLY ENHANCED)
 
-- **✅ Message Fragmentation**: Split messages larger than 256 bytes with fragment sequencing and tracking
-- **✅ Message Reassembly**: Reconstruct fragmented messages with timeout handling for incomplete messages
-- **✅ Routing Protocol**: Flood routing for discovery, routing table management, multi-hop forwarding, and loop prevention
-- **🔲 Duty Cycle Management**: Track transmission time and implement queuing for regulatory compliance (PENDING)
+- **✅ Enhanced Message Fragmentation**: Advanced fragmentation with blockchain-aware optimization, fragment sequencing, and tracking
+- **✅ Comprehensive Message Reassembly**: Reconstruct fragmented messages with timeout handling, missing fragment detection, and retransmission
+- **✅ Advanced Routing Protocol**: UTXO-aware flood routing, blockchain-optimized routing tables, multi-hop forwarding, and cryptographic loop prevention
+- **✅ Complete Duty Cycle Management**: Regional compliance validation (EU ETSI, US/CA/MX FCC, Japan ARIB, Australia/NZ ACMA), transmission scheduling, and regulatory enforcement
+- **✅ Enhanced Mesh Protocol**: Comprehensive mesh networking with UTXO routing capabilities, duty cycle compliance, and network topology management
 - **🔲 Compression**: Protocol buffer serialization and custom compression for blockchain data (PENDING)
 - **🔲 Message Prioritization**: Priority queues and QoS levels for different message types (PENDING)
 - **🔲 Reliable Delivery**: Acknowledgment mechanism, retry logic, and delivery confirmation (PENDING)

@@ -144,11 +144,14 @@ Full node implementation for synchronized nodes:
 
 ### @lorachain/mesh-protocol
 
-LoRa/Meshtastic communication layer:
+Advanced LoRa/Meshtastic communication layer:
 
-- Mesh network communication
-- Message serialization and validation
-- Node discovery and routing
+- **Enhanced Mesh Protocol**: UTXO-aware routing with blockchain optimization
+- **Comprehensive Duty Cycle Management**: Regional compliance for EU, US, Japan, Australia
+- **Advanced Routing**: Flood routing, cryptographic loop prevention, and path optimization
+- **Message fragmentation and reassembly** with missing fragment detection
+- **Regulatory Compliance**: Automatic duty cycle enforcement and transmission scheduling
+- **Network Topology Management**: Dynamic routing table updates and neighbor discovery
 
 ## Applications
 
@@ -214,12 +217,17 @@ Features:
 - **Batch Verification**: Efficient verification of multiple transactions simultaneously
 - **Block Header Validation**: Chain continuity and proof-of-work validation for SPV clients
 
-### LoRa Network Constraints
+### LoRa Network Constraints & Compliance
 
-- **Bandwidth**: Extremely limited data transmission rates
-- **Message Size**: 256 bytes maximum per packet
-- **Duty Cycle**: Regulatory restrictions on transmission frequency
-- **Range**: Balance between power consumption and communication distance
+- **Bandwidth**: Extremely limited data transmission rates with optimization for blockchain data
+- **Message Size**: 256 bytes maximum per packet with advanced fragmentation support
+- **Regional Duty Cycle Compliance**: 
+  - **EU (ETSI)**: Sub-band duty cycles (0.1%, 1%, 10%) with frequency-specific limits
+  - **US/CA/MX (FCC)**: Frequency hopping with dwell time restrictions
+  - **Japan (ARIB)**: 10% duty cycle limits with power restrictions
+  - **Australia/NZ (ACMA)**: Power limits with flexible duty cycle management
+- **Advanced Scheduling**: Intelligent transmission scheduling with regulatory compliance
+- **Range**: Balance between power consumption and communication distance with topology optimization
 
 ## Testing
 
@@ -310,12 +318,13 @@ For support and questions:
 - **Dynamic Difficulty Adjustment**: Bitcoin-style difficulty adjustment with 10-block periods and network hashrate monitoring
 - **Enhanced Security**: All transactions use proper cryptographic signatures with signature verification
 
-#### 🔄 Milestone 2: LoRa/Mesh Protocol Implementation (PARTIALLY COMPLETED)
+#### 🔄 Milestone 2: LoRa/Mesh Protocol Implementation (SIGNIFICANTLY ENHANCED)
 
-- **✅ Message Fragmentation**: Split messages larger than 256 bytes with sequencing and tracking
-- **✅ Message Reassembly**: Reconstruct fragmented messages with timeout handling for incomplete messages
-- **✅ Routing Protocol**: Flood routing for discovery, routing tables, multi-hop forwarding, and loop prevention
-- **🔲 Duty Cycle Management**: Track transmission time and implement queuing for regulatory compliance
+- **✅ Enhanced Message Fragmentation**: Advanced fragmentation with blockchain-aware optimization and fragment tracking
+- **✅ Comprehensive Message Reassembly**: Reconstruct fragmented messages with timeout handling and missing fragment detection
+- **✅ Advanced Routing Protocol**: UTXO-aware flood routing, blockchain-optimized routing tables, multi-hop forwarding, and cryptographic loop prevention
+- **✅ Complete Duty Cycle Management**: Regional compliance validation (EU/US/Japan/Australia), transmission scheduling, and regulatory compliance
+- **✅ Enhanced Mesh Protocol**: Comprehensive mesh networking with UTXO routing capabilities and duty cycle compliance
 - **🔲 Compression**: Protocol buffer serialization and custom compression for blockchain data
 - **🔲 Message Prioritization**: Priority queues and QoS levels for different message types
 - **🔲 Reliable Delivery**: Acknowledgment mechanism, retry logic, and delivery confirmation
@@ -331,7 +340,7 @@ For support and questions:
 - **Milestone 8**: Testing & Documentation (integration tests, API docs, deployment guides)
 - **Milestone 9**: MVP Polish (configuration, mainnet/testnet, Docker images)
 
-**Current Progress**: ~25-30% complete toward MVP goal
+**Current Progress**: ~35-40% complete toward MVP goal
 
 ### Technical Foundation
 
@@ -345,6 +354,6 @@ For support and questions:
 - **Enhanced Block Validation**: Comprehensive difficulty validation and timestamp manipulation protection
 - **Production-Ready Components**: Complete monorepo structure with TypeScript, Vitest testing, and code quality tools
 
-**Estimated Timeline**: 7-10 months total for MVP completion (currently 25-30% complete)
+**Estimated Timeline**: 7-10 months total for MVP completion (currently 35-40% complete)
 
 For detailed development progress and upcoming features, see `specs/ROADMAP.md`.
