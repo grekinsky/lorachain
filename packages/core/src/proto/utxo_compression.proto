@@ -1,0 +1,117 @@
+// UTXO-only blockchain compression types (NO LEGACY SUPPORT)
+syntax = "proto3";
+package lorachain;
+
+// Core UTXO transaction input
+message UTXOInput {
+  bytes tx_hash = 1;              // 8 bytes (truncated hash reference)
+  uint32 output_index = 2;        // 4 bytes (UTXO output index)
+  bytes script_sig = 3;           // Variable (compressed signature script)
+}
+
+// Core UTXO transaction output
+message UTXOOutput {
+  uint64 amount = 1;              // 8 bytes (variable encoding)
+  uint32 address_id = 2;          // 4 bytes (address lookup via UTXOManager)
+  bytes script_pubkey = 3;        // Variable (compressed public key script)
+}
+
+// Compressed UTXO transaction
+message CompressedUTXOTransaction {
+  bytes id = 1;                    // 16 bytes (transaction hash)
+  repeated UTXOInput inputs = 2;   // UTXO inputs (breaking change from single addresses)
+  repeated UTXOOutput outputs = 3; // UTXO outputs (breaking change from single addresses)
+  uint32 fee = 4;                 // 4 bytes (fee from UTXOTransactionManager)
+  uint32 timestamp = 5;           // 4 bytes (relative timestamp)
+  bytes signature = 6;            // 32-64 bytes (secp256k1/Ed25519 compressed signature)
+  uint32 nonce = 7;               // 4 bytes
+}
+
+// Compressed UTXO block
+message CompressedUTXOBlock {
+  uint32 index = 1;               // 4 bytes
+  uint32 timestamp = 2;           // 4 bytes (delta from previous)
+  repeated CompressedUTXOTransaction transactions = 3; // UTXO transactions only
+  bytes previous_hash = 4;        // 32 bytes (or delta reference)
+  bytes hash = 5;                 // 32 bytes (block hash)
+  uint32 nonce = 6;               // 4 bytes (mining nonce)
+  bytes merkle_root = 7;          // 32 bytes (UTXO merkle root from MerkleTree class)
+  uint32 difficulty = 8;          // 4 bytes (difficulty from DifficultyManager)
+  // No validator field - PoW consensus only
+}
+
+// Compression types enumeration
+enum CompressionType {
+  NONE = 0;
+  PROTOBUF = 1;
+  GZIP = 2;
+  LZ4 = 3;
+  UTXO_CUSTOM = 4;              // Custom UTXO compression
+  UTXO_DICTIONARY = 5;          // UTXO dictionary compression
+}
+
+// Message types for mesh network
+enum MessageType {
+  UTXO_TRANSACTION = 0;         // UTXO transactions only
+  UTXO_BLOCK = 1;               // UTXO blocks only
+  BLOCKCHAIN_SYNC = 2;          // Blockchain synchronization
+  NODE_DISCOVERY = 3;           // Node discovery from Milestone 2
+  ROUTE_REQUEST = 4;            // From enhanced routing system
+  ROUTE_REPLY = 5;              // From enhanced routing system
+  ROUTE_ERROR = 6;              // From enhanced routing system
+  HELLO = 7;                    // Neighbor hello messages
+  FRAGMENT = 8;                 // Message fragments from Milestone 2
+  FRAGMENT_ACK = 9;             // Fragment acknowledgments
+}
+
+// Compressed UTXO mesh message
+message CompressedUTXOMeshMessage {
+  MessageType type = 1;           // 1 byte
+  bytes payload = 2;              // Compressed payload
+  uint32 timestamp = 3;           // 4 bytes (relative, duty cycle aware)
+  uint32 from_id = 4;             // 4 bytes (node lookup from UTXORouteManager)
+  uint32 to_id = 5;               // 4 bytes (optional routing target)
+  bytes signature = 6;            // 32-64 bytes (secp256k1/Ed25519)
+  
+  // Enhanced compression metadata
+  CompressionType compression = 7; // 1 byte
+  uint32 original_size = 8;       // 4 bytes (for verification)
+  bytes compression_dict_id = 9;  // Optional dictionary ID
+  uint32 fragment_id = 10;        // Fragment ID for reassembly integration
+  uint32 total_fragments = 11;    // Total fragments for reassembly
+}
+
+// Compression metadata for integrity and verification
+message CompressionMetadata {
+  uint32 version = 1;             // Schema version
+  CompressionType algorithm = 2;   // Compression algorithm used
+  uint32 original_size = 3;        // Original uncompressed size
+  uint32 compressed_size = 4;      // Compressed size
+  bytes checksum = 5;              // Integrity checksum
+  uint64 timestamp = 6;            // Compression timestamp
+  string dictionary_id = 7;        // Dictionary ID if used
+}
+
+// Compressed data container
+message CompressedData {
+  bytes data = 1;                  // Compressed data payload
+  CompressionMetadata metadata = 2; // Compression metadata
+}
+
+// Dictionary entry for dictionary-based compression
+message DictionaryEntry {
+  string pattern = 1;              // Pattern string
+  uint32 frequency = 2;            // Usage frequency
+  uint32 id = 3;                   // Pattern ID
+}
+
+// Compression dictionary
+message CompressionDictionary {
+  string id = 1;                   // Dictionary unique identifier
+  uint32 version = 2;              // Dictionary version
+  repeated DictionaryEntry entries = 3; // Dictionary entries
+  uint64 created_at = 4;           // Creation timestamp
+  uint64 last_updated = 5;         // Last update timestamp
+  double compression_ratio = 6;     // Expected compression ratio
+  bytes signature = 7;             // Cryptographic signature for integrity
+}
