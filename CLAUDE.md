@@ -154,12 +154,13 @@ pnpm --filter "@lorachain/mobile-wallet" test:watch     # Watch mode for mobile 
 **⚠️ Critical Testing Guidelines:**
 
 1. **ALWAYS check current directory with `pwd` before using `cd`**: This prevents "no such file or directory" errors by ensuring you know your current location before attempting navigation:
+
    ```bash
    # ✅ CORRECT: Always check where you are first
    pwd  # Check current directory
    # Output: /Users/greco/Documents/lorachain/packages/core
    cd ../..  # Navigate relative to current location
-   
+
    # ❌ WRONG: Blindly changing directories without checking location
    cd packages/core  # May fail if already in packages/core!
    ```
@@ -167,10 +168,11 @@ pnpm --filter "@lorachain/mobile-wallet" test:watch     # Watch mode for mobile 
 2. **Always use `test:run` for single-run testing**: The default `test` command runs in watch mode and will wait indefinitely for file changes, causing timeouts in automated environments.
 
 3. **Avoid unnecessary directory changes**: When already in the project root, use filter commands instead of `cd` to avoid "no such file or directory" errors:
+
    ```bash
    # ❌ WRONG: Don't change to directories that don't exist relative to current location
    cd packages/core && pnpm test
-   
+
    # ✅ CORRECT: Use filter commands from project root
    pnpm --filter "@lorachain/core" test:run
    ```
@@ -178,7 +180,7 @@ pnpm --filter "@lorachain/mobile-wallet" test:watch     # Watch mode for mobile 
 4. **Build dependencies before testing**: Always build shared packages first to avoid test failures due to outdated compiled versions.
 
 5. **Use appropriate test commands**:
-   - `test:run` - Single test execution (for CI/automated testing)  
+   - `test:run` - Single test execution (for CI/automated testing)
    - `test:watch` - Watch mode for development
    - `test` - Alias for `test:watch` (avoid in automated contexts)
 
@@ -226,6 +228,7 @@ Run package-specific tests with `cd packages/<name> && pnpm test` or use watch m
 ### Key Implementation Details
 
 #### ✅ Milestone 1 - Core Blockchain (COMPLETED)
+
 - **UTXO Model**: All transactions use inputs/outputs instead of account balances
 - **Cryptographic Security**: Full ECDSA (secp256k1) and Ed25519 signature implementation
 - **Transaction Validation**: Complete validation including double-spend prevention and signature verification
@@ -244,6 +247,7 @@ Run package-specific tests with `cd packages/<name> && pnpm test` or use watch m
 - **Clean Implementation**: No backwards compatibility - modern, clean implementations throughout
 
 #### 🔄 Milestone 2 - LoRa/Mesh Protocol (PARTIALLY COMPLETED)
+
 - **✅ Message Fragmentation**: Split messages larger than 256 bytes with fragment sequencing and tracking
 - **✅ Message Reassembly**: Reconstruct fragmented messages with timeout handling for incomplete messages
 - **✅ Routing Protocol**: Flood routing for discovery, routing table management, multi-hop forwarding, and loop prevention
@@ -254,6 +258,7 @@ Run package-specific tests with `cd packages/<name> && pnpm test` or use watch m
 - **🔲 Node Discovery Protocol**: Periodic beacons, neighbor management, and topology mapping (PENDING)
 
 #### 🔲 Remaining Milestones (PENDING)
+
 - **Milestone 3**: Network Layer & P2P (HTTP/WebSocket, sync protocol, peer management)
 - **Milestone 4**: Wallet Functionality (HD wallet, transaction building, QR codes)
 - **Milestone 5**: Mining & Consensus (optimized mining, pool support)

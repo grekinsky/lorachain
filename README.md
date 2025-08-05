@@ -301,6 +301,7 @@ For support and questions:
 ### Development Progress (MVP Roadmap Status)
 
 #### ✅ Milestone 1: Core Blockchain Enhancement (COMPLETED)
+
 - **Genesis Configuration System**: Complete configurable genesis block system with UTXO-based initial coin distribution and network parameter management
 - **Cryptographic Security**: Full ECDSA (secp256k1) and Ed25519 signature support with proper transaction signing
 - **UTXO Transaction Model**: Complete UTXO implementation with inputs/outputs, double-spend prevention, and validation
@@ -310,6 +311,7 @@ For support and questions:
 - **Enhanced Security**: All transactions use proper cryptographic signatures with signature verification
 
 #### 🔄 Milestone 2: LoRa/Mesh Protocol Implementation (PARTIALLY COMPLETED)
+
 - **✅ Message Fragmentation**: Split messages larger than 256 bytes with sequencing and tracking
 - **✅ Message Reassembly**: Reconstruct fragmented messages with timeout handling for incomplete messages
 - **✅ Routing Protocol**: Flood routing for discovery, routing tables, multi-hop forwarding, and loop prevention
@@ -320,6 +322,7 @@ For support and questions:
 - **🔲 Node Discovery Protocol**: Periodic beacons, neighbor management, and topology mapping
 
 #### 🔲 Upcoming Milestones (PENDING)
+
 - **Milestone 3**: Network Layer & P2P (HTTP/WebSocket, sync protocol, peer management)
 - **Milestone 4**: Wallet Functionality (HD wallet, transaction building, QR codes)
 - **Milestone 5**: Mining & Consensus (optimized mining, pool support, reward distribution)
