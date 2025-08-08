@@ -221,7 +221,7 @@ Features:
 
 - **Bandwidth**: Extremely limited data transmission rates with optimization for blockchain data
 - **Message Size**: 256 bytes maximum per packet with advanced fragmentation support
-- **Regional Duty Cycle Compliance**: 
+- **Regional Duty Cycle Compliance**:
   - **EU (ETSI)**: Sub-band duty cycles (0.1%, 1%, 10%) with frequency-specific limits
   - **US/CA/MX (FCC)**: Frequency hopping with dwell time restrictions
   - **Japan (ARIB)**: 10% duty cycle limits with power restrictions
