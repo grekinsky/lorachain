@@ -68,9 +68,8 @@ export class SPVManager {
    * This allows light clients to maintain transaction history without full blockchain
    */
   static getTransactionHistory(
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     _address: string,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
     _proofs: MerkleProof[]
   ): UTXOTransaction[] {
     // Note: In a real implementation, this would require additional data

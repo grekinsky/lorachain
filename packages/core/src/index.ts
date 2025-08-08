@@ -126,3 +126,46 @@ export {
   createNodeCompressionManager,
   createLoRaCompressionManager,
 } from './compression-factory.js';
+
+// Enhanced Message Prioritization System exports
+export * from './priority-types.js';
+export * from './priority-queue.js';
+export * from './priority-calculator.js';
+export * from './qos-manager.js';
+export * from './enhanced-priority-mesh-protocol.js';
+
+export {
+  UTXOPriorityQueue,
+  type IUTXOPriorityQueue,
+} from './priority-queue.js';
+
+export {
+  UTXOPriorityCalculator,
+  type IPriorityCalculator,
+} from './priority-calculator.js';
+
+export { UTXOQoSManager, type IQoSManager } from './qos-manager.js';
+
+export {
+  UTXOPriorityMeshProtocol,
+  type IUTXOPriorityMeshProtocol,
+} from './enhanced-priority-mesh-protocol.js';
+
+// Priority system type exports
+export type {
+  UTXOPrioritizedMeshMessage,
+  UTXONetworkContext,
+  PriorityFactor,
+  UTXOPriorityThresholds,
+  UTXOQoSPolicy,
+  TransmissionParams,
+  UTXOQoSStatistics,
+  UTXOQueueStatistics,
+  QueueCapacityConfig,
+  UTXOEmergencyOverride,
+  EmergencyModeConfig,
+  UTXORetryPolicy,
+  DeliveryTracker,
+  UTXOPriorityConfig,
+  PriorityEvents,
+} from './priority-types.js';
