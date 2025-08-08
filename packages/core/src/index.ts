@@ -105,9 +105,7 @@ export * from './utxo-compression-engines.js';
 export * from './utxo-compression-manager.js';
 export * from './compression-factory.js';
 
-export {
-  UTXOCompressionManager,
-} from './utxo-compression-manager.js';
+export { UTXOCompressionManager } from './utxo-compression-manager.js';
 
 export {
   ProtobufCompressionEngine,

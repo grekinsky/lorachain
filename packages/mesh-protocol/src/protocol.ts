@@ -599,7 +599,7 @@ export class MeshProtocol implements FragmentedMeshProtocol {
         },
         payload,
       };
-    } catch (error) {
+    } catch {
       return null;
     }
   }

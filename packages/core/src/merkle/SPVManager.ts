@@ -273,7 +273,7 @@ export class SPVManager {
         return false;
 
       return true;
-    } catch (error) {
+    } catch {
       // If any error occurs during validation, return false
       return false;
     }

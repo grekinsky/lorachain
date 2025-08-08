@@ -1,6 +1,6 @@
 /**
  * Compression Types and Interfaces for UTXO-Based Lorachain Network
- * 
+ *
  * This module defines all types and interfaces for the compression system
  * following the "NO BACKWARDS COMPATIBILITY" policy - UTXO-only support.
  */
@@ -13,30 +13,33 @@ export const CompressionAlgorithm = {
   PROTOBUF: 'protobuf',
   GZIP: 'gzip',
   LZ4: 'lz4',
-  UTXO_CUSTOM: 'utxo_custom',           // UTXO-specific compression (breaking change)
-  UTXO_DICTIONARY: 'utxo_dictionary'    // UTXO dictionary compression (breaking change)
+  UTXO_CUSTOM: 'utxo_custom', // UTXO-specific compression (breaking change)
+  UTXO_DICTIONARY: 'utxo_dictionary', // UTXO dictionary compression (breaking change)
 } as const;
 
-export type CompressionAlgorithm = typeof CompressionAlgorithm[keyof typeof CompressionAlgorithm];
+export type CompressionAlgorithm =
+  (typeof CompressionAlgorithm)[keyof typeof CompressionAlgorithm];
 
 // Compression levels for different use cases
 export const CompressionLevel = {
-  FAST: 'fast',       // Low CPU usage, good for mobile/battery constrained
+  FAST: 'fast', // Low CPU usage, good for mobile/battery constrained
   BALANCED: 'balanced', // Balanced performance and compression ratio
-  MAXIMUM: 'maximum'   // Maximum compression, higher CPU usage
+  MAXIMUM: 'maximum', // Maximum compression, higher CPU usage
 } as const;
 
-export type CompressionLevel = typeof CompressionLevel[keyof typeof CompressionLevel];
+export type CompressionLevel =
+  (typeof CompressionLevel)[keyof typeof CompressionLevel];
 
 // Compression priority for message handling
 export const CompressionPriority = {
   LOW: 'low',
   NORMAL: 'normal',
   HIGH: 'high',
-  CRITICAL: 'critical'
+  CRITICAL: 'critical',
 } as const;
 
-export type CompressionPriority = typeof CompressionPriority[keyof typeof CompressionPriority];
+export type CompressionPriority =
+  (typeof CompressionPriority)[keyof typeof CompressionPriority];
 
 // Message types for mesh network (UTXO-only)
 export const MessageType = {
@@ -49,10 +52,10 @@ export const MessageType = {
   ROUTE_ERROR: 'route_error',
   HELLO: 'hello',
   FRAGMENT: 'fragment',
-  FRAGMENT_ACK: 'fragment_ack'
+  FRAGMENT_ACK: 'fragment_ack',
 } as const;
 
-export type MessageType = typeof MessageType[keyof typeof MessageType];
+export type MessageType = (typeof MessageType)[keyof typeof MessageType];
 
 // Compression metadata for integrity and performance tracking
 export interface CompressionMetadata {
@@ -95,12 +98,12 @@ export interface UTXOCompressionConfig {
   algorithmPreferences?: Map<MessageType, CompressionAlgorithm>;
   compressionLevel: CompressionLevel;
   enableDictionary: boolean;
-  maxCompressionMemory: number;        // Reduced to 512KB for LoRa devices
+  maxCompressionMemory: number; // Reduced to 512KB for LoRa devices
   enableAdaptive: boolean;
-  compressionThreshold: number;        // Minimum size to compress
-  dutyCycleIntegration: boolean;       // Integration with DutyCycleManager
-  utxoOptimization: boolean;           // UTXO-specific optimizations
-  regionalCompliance: string;          // EU/US/Japan/Australia from RegionalComplianceValidator
+  compressionThreshold: number; // Minimum size to compress
+  dutyCycleIntegration: boolean; // Integration with DutyCycleManager
+  utxoOptimization: boolean; // UTXO-specific optimizations
+  regionalCompliance: string; // EU/US/Japan/Australia from RegionalComplianceValidator
   maxDictionaries?: number;
   dictionaryUpdateInterval?: number;
   enableIntegrityCheck?: boolean;
@@ -237,10 +240,11 @@ export const CompressionErrorCode = {
   INTEGRITY_CHECK_FAILED: 'INTEGRITY_CHECK_FAILED',
   DICTIONARY_NOT_FOUND: 'DICTIONARY_NOT_FOUND',
   EXPANSION_RATIO_EXCEEDED: 'EXPANSION_RATIO_EXCEEDED',
-  UTXO_VALIDATION_FAILED: 'UTXO_VALIDATION_FAILED'
+  UTXO_VALIDATION_FAILED: 'UTXO_VALIDATION_FAILED',
 } as const;
 
-export type CompressionErrorCode = typeof CompressionErrorCode[keyof typeof CompressionErrorCode];
+export type CompressionErrorCode =
+  (typeof CompressionErrorCode)[keyof typeof CompressionErrorCode];
 
 // Compression error with detailed information
 export interface CompressionError {
@@ -255,10 +259,10 @@ export interface CompressionError {
 
 // Security configuration for compression
 export interface CompressionSecurityConfig {
-  maxExpansionRatio: number;        // Maximum allowed expansion ratio
-  maxDecompressionMemory: number;   // Memory limit for decompression
-  enablePadding: boolean;           // Add random padding to prevent analysis
-  validateIntegrity: boolean;       // Verify integrity of compressed data
+  maxExpansionRatio: number; // Maximum allowed expansion ratio
+  maxDecompressionMemory: number; // Memory limit for decompression
+  enablePadding: boolean; // Add random padding to prevent analysis
+  validateIntegrity: boolean; // Verify integrity of compressed data
   requireSignedDictionaries: boolean; // Require cryptographic signatures on dictionaries
 }
 
@@ -273,11 +277,11 @@ export interface MemoryUsage {
 
 // Performance metrics for monitoring
 export interface PerformanceMetrics {
-  compressionThroughput: number;    // bytes per second
-  decompressionThroughput: number;  // bytes per second
-  averageLatency: number;           // milliseconds
-  memoryEfficiency: number;         // percentage
-  errorRate: number;                // percentage
+  compressionThroughput: number; // bytes per second
+  decompressionThroughput: number; // bytes per second
+  averageLatency: number; // milliseconds
+  memoryEfficiency: number; // percentage
+  errorRate: number; // percentage
   averageCompressionRatio: number;
 }
 

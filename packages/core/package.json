@@ -15,8 +15,8 @@
     "lint:fix": "eslint src/**/*.ts --fix",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
-    "proto:compile": "pbjs -t static-module -w es6 -o src/proto/generated.js src/proto/*.proto",
-    "proto:types": "pbts -o src/proto/generated.d.ts src/proto/generated.js",
+    "proto:compile": "mkdir -p dist/proto && pbjs -t static-module -w es6 -o dist/proto/generated.js src/proto/*.proto",
+    "proto:types": "pbts -o dist/proto/generated.d.ts dist/proto/generated.js",
     "proto:build": "pnpm run proto:compile && pnpm run proto:types"
   },
   "dependencies": {
@@ -36,8 +36,8 @@
     "@types/node": "^20.19.7",
     "@types/pako": "^2.0.3",
     "@types/protobufjs": "^6.0.0",
-    "@typescript-eslint/eslint-plugin": "^6.21.0",
-    "@typescript-eslint/parser": "^6.21.0",
+    "@typescript-eslint/eslint-plugin": "^8.39.0",
+    "@typescript-eslint/parser": "^8.39.0",
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-prettier": "^5.5.1",
     "protobufjs-cli": "^1.1.3",

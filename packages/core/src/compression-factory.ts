@@ -1,19 +1,19 @@
 /**
  * Compression Factory
- * 
+ *
  * Factory for creating and configuring compression system components
  * Provides easy setup for UTXO-optimized compression with proper defaults
  */
 
 import { UTXOCompressionManager } from './utxo-compression-manager.js';
-import { 
-  ProtobufCompressionEngine, 
-  GzipCompressionEngine, 
-  LZ4CompressionEngine 
+import {
+  ProtobufCompressionEngine,
+  GzipCompressionEngine,
+  LZ4CompressionEngine,
 } from './compression-engines.js';
-import { 
-  UTXOCustomCompressionEngine, 
-  DictionaryCompressionEngine 
+import {
+  UTXOCustomCompressionEngine,
+  DictionaryCompressionEngine,
 } from './utxo-compression-engines.js';
 import type {
   ICompressionManager,
@@ -24,7 +24,7 @@ import type {
   IStreamingCompression,
   IAdaptiveCompressionSelector,
   ICompressionFactory,
-  ICompressionConfigBuilder
+  ICompressionConfigBuilder,
 } from './compression-interfaces.js';
 import {
   CompressionAlgorithm,
@@ -33,7 +33,6 @@ import {
   type UTXOCompressionConfig,
   type CompressionDictionary,
   type PerformanceMetrics,
-  type CompressionSecurityConfig
 } from './compression-types.js';
 
 /**
@@ -57,7 +56,7 @@ export class CompressionConfigBuilder implements ICompressionConfigBuilder {
       enableIntegrityCheck: true,
       enablePadding: false, // Disabled by default for LoRa efficiency
       maxExpansionRatio: 100,
-      compressionTimeout: 5000 // 5 seconds
+      compressionTimeout: 5000, // 5 seconds
     };
   }
 
@@ -78,6 +77,11 @@ export class CompressionConfigBuilder implements ICompressionConfigBuilder {
 
   memoryLimit(bytes: number): CompressionConfigBuilder {
     this.config.maxCompressionMemory = bytes;
+    return this;
+  }
+
+  threshold(bytes: number): CompressionConfigBuilder {
+    this.config.compressionThreshold = bytes;
     return this;
   }
 
@@ -107,12 +111,15 @@ export class CompressionConfigBuilder implements ICompressionConfigBuilder {
     if (!this.config.defaultAlgorithm) {
       throw new Error('Default algorithm must be specified');
     }
-    
+
     if (!this.config.compressionLevel) {
       throw new Error('Compression level must be specified');
     }
-    
-    if (!this.config.maxCompressionMemory || this.config.maxCompressionMemory <= 0) {
+
+    if (
+      !this.config.maxCompressionMemory ||
+      this.config.maxCompressionMemory <= 0
+    ) {
       throw new Error('Memory limit must be positive');
     }
 
@@ -140,10 +147,10 @@ class CompressionFactoryImpl implements ICompressionFactory {
    */
   createCompressionManager(config: UTXOCompressionConfig): ICompressionManager {
     const manager = new UTXOCompressionManager(config);
-    
+
     // Register all available compression engines
     this.registerAllEngines(manager);
-    
+
     return manager;
   }
 
@@ -162,7 +169,7 @@ class CompressionFactoryImpl implements ICompressionFactory {
       utxoManager,
       regionalValidator
     );
-    
+
     this.registerAllEngines(manager);
     return manager;
   }
@@ -192,7 +199,7 @@ class CompressionFactoryImpl implements ICompressionFactory {
   /**
    * Create compressed mesh protocol (placeholder for integration)
    */
-  createCompressedMeshProtocol(meshConfig: any, compressionConfig: UTXOCompressionConfig): ICompressedMeshProtocol {
+  createCompressedMeshProtocol(): ICompressedMeshProtocol {
     // This would integrate with the existing EnhancedMeshProtocol
     // For now, return a placeholder
     throw new Error('CompressedMeshProtocol integration pending');
@@ -231,28 +238,32 @@ class CompressionFactoryImpl implements ICompressionFactory {
    */
   detectBestAlgorithm(samples: Uint8Array[]): CompressionAlgorithm {
     const benchmarkResults = this.benchmarkAlgorithms(samples);
-    
+
     let bestAlgorithm: CompressionAlgorithm = 'protobuf';
     let bestScore = 0;
-    
+
     for (const [algorithm, metrics] of benchmarkResults) {
       // Score based on compression ratio and speed
-      const score = (1 - metrics.averageCompressionRatio) * 0.7 + 
-                   (metrics.compressionThroughput / (4 * 1024 * 1024)) * 0.3; // Normalize to 4MB/s
-      
+      const score =
+        (1 - metrics.averageCompressionRatio) * 0.7 +
+        (metrics.compressionThroughput / (4 * 1024 * 1024)) * 0.3; // Normalize to 4MB/s
+
       if (score > bestScore) {
         bestScore = score;
         bestAlgorithm = algorithm;
       }
     }
-    
+
     return bestAlgorithm;
   }
 
   /**
    * Create dictionary from UTXO samples
    */
-  createDictionaryFromUTXOSamples(samples: any[], id: string): CompressionDictionary {
+  createDictionaryFromUTXOSamples(
+    samples: any[],
+    id: string
+  ): CompressionDictionary {
     const dictionaryManager = this.createDictionaryManager();
     return dictionaryManager.createUTXODictionary(samples, id);
   }
@@ -260,16 +271,18 @@ class CompressionFactoryImpl implements ICompressionFactory {
   /**
    * Benchmark compression algorithms
    */
-  benchmarkAlgorithms(testData: Uint8Array[]): Map<CompressionAlgorithm, PerformanceMetrics> {
+  benchmarkAlgorithms(
+    testData: Uint8Array[]
+  ): Map<CompressionAlgorithm, PerformanceMetrics> {
     const results = new Map<CompressionAlgorithm, PerformanceMetrics>();
-    
+
     const algorithms = [
       CompressionAlgorithm.PROTOBUF,
       CompressionAlgorithm.GZIP,
       CompressionAlgorithm.LZ4,
-      CompressionAlgorithm.UTXO_CUSTOM
+      CompressionAlgorithm.UTXO_CUSTOM,
     ];
-    
+
     for (const algorithm of algorithms) {
       try {
         const engine = this.createCompressionEngine(algorithm);
@@ -280,7 +293,7 @@ class CompressionFactoryImpl implements ICompressionFactory {
         console.warn(`Failed to benchmark ${algorithm}:`, error);
       }
     }
-    
+
     return results;
   }
 
@@ -318,7 +331,9 @@ class CompressionFactoryImpl implements ICompressionFactory {
       .build();
   }
 
-  static createLoRaOptimizedConfig(region: string = 'EU'): UTXOCompressionConfig {
+  static createLoRaOptimizedConfig(
+    region: string = 'EU'
+  ): UTXOCompressionConfig {
     return new CompressionConfigBuilder()
       .algorithm(CompressionAlgorithm.PROTOBUF) // Good balance for LoRa
       .level(CompressionLevel.BALANCED)
@@ -339,7 +354,7 @@ class CompressionFactoryImpl implements ICompressionFactory {
       CompressionAlgorithm.GZIP,
       CompressionAlgorithm.LZ4,
       CompressionAlgorithm.UTXO_CUSTOM,
-      CompressionAlgorithm.UTXO_DICTIONARY
+      CompressionAlgorithm.UTXO_DICTIONARY,
     ];
 
     for (const algorithm of algorithms) {
@@ -359,9 +374,9 @@ class CompressionFactoryImpl implements ICompressionFactory {
         data,
         originalSize: data.length,
         metadata: { version: 1, algorithm: CompressionAlgorithm.NONE },
-        timestamp: Date.now()
+        timestamp: Date.now(),
       }),
-      decompress: (compressedData) => compressedData.data,
+      decompress: compressedData => compressedData.data,
       getAlgorithmName: () => CompressionAlgorithm.NONE,
       getSupportedTypes: () => Object.values(MessageType),
       getCompressionLevel: () => CompressionLevel.FAST,
@@ -371,76 +386,89 @@ class CompressionFactoryImpl implements ICompressionFactory {
       configure: () => {},
       getConfiguration: () => ({}),
       optimizeForUTXO: () => {},
-      supportsDutyCyclePlanning: () => true
+      supportsDutyCyclePlanning: () => true,
     };
   }
 
-  private benchmarkEngine(engine: ICompressionEngine, testData: Uint8Array[]): PerformanceMetrics {
+  private benchmarkEngine(
+    engine: ICompressionEngine,
+    testData: Uint8Array[]
+  ): PerformanceMetrics {
     let totalCompressionTime = 0;
     let totalDecompressionTime = 0;
     let totalBytesIn = 0;
     let totalBytesOut = 0;
     let errors = 0;
-    
+
     const startTime = performance.now();
-    
+
     for (const data of testData) {
       try {
         // Compression benchmark
         const compressStart = performance.now();
         const compressed = engine.compress(data);
         const compressTime = performance.now() - compressStart;
-        
+
         totalCompressionTime += compressTime;
         totalBytesIn += data.length;
         totalBytesOut += compressed.data.length;
-        
+
         // Decompression benchmark
         const decompressStart = performance.now();
         const decompressed = engine.decompress(compressed);
         const decompressTime = performance.now() - decompressStart;
-        
+
         totalDecompressionTime += decompressTime;
-        
+
         // Verify integrity
         if (decompressed.length !== data.length) {
           errors++;
         }
-        
       } catch (error) {
         errors++;
       }
     }
-    
+
     const totalTime = performance.now() - startTime;
     const testCount = testData.length;
-    
+
+    // Handle divide-by-zero cases
+    const compressionThroughputTime = totalCompressionTime / 1000;
+    const decompressionThroughputTime = totalDecompressionTime / 1000;
+
     return {
-      compressionThroughput: totalBytesIn / (totalCompressionTime / 1000), // bytes per second
-      decompressionThroughput: totalBytesIn / (totalDecompressionTime / 1000),
-      averageLatency: totalTime / testCount,
+      compressionThroughput:
+        compressionThroughputTime > 0
+          ? totalBytesIn / compressionThroughputTime
+          : 0,
+      decompressionThroughput:
+        decompressionThroughputTime > 0
+          ? totalBytesIn / decompressionThroughputTime
+          : 0,
+      averageLatency: testCount > 0 ? totalTime / testCount : 0,
       memoryEfficiency: 90, // Placeholder
-      errorRate: (errors / testCount) * 100,
-      averageCompressionRatio: totalBytesOut / totalBytesIn
+      errorRate: testCount > 0 ? (errors / testCount) * 100 : 0,
+      averageCompressionRatio:
+        totalBytesIn > 0 ? totalBytesOut / totalBytesIn : 1.0,
     };
   }
 }
 
 // Convenience exports for easy usage
-export const createCompressionManager = (config: UTXOCompressionConfig) => 
+export const createCompressionManager = (config: UTXOCompressionConfig) =>
   CompressionFactory.getInstance().createCompressionManager(config);
 
-export const createMobileCompressionManager = () => 
+export const createMobileCompressionManager = () =>
   CompressionFactory.getInstance().createCompressionManager(
     CompressionFactory.createMobileConfig()
   );
 
-export const createNodeCompressionManager = () => 
+export const createNodeCompressionManager = () =>
   CompressionFactory.getInstance().createCompressionManager(
     CompressionFactory.createNodeConfig()
   );
 
-export const createLoRaCompressionManager = (region: string = 'EU') => 
+export const createLoRaCompressionManager = (region: string = 'EU') =>
   CompressionFactory.getInstance().createCompressionManager(
     CompressionFactory.createLoRaOptimizedConfig(region)
   );
