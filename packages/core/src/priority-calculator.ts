@@ -164,30 +164,44 @@ export class UTXOPriorityCalculator
     tx: UTXOTransaction,
     context: UTXONetworkContext
   ): MessagePriority {
-    // Calculate fee per byte
-    const feePerByte = this.calculateFeePerByte(tx);
+    try {
+      // Validate transaction has required fields
+      if (!tx || !tx.inputs || !tx.outputs) {
+        this.logger.warn('Invalid transaction structure, using default priority');
+        return MessagePriority.NORMAL;
+      }
 
-    // Base priority from fee
-    let basePriority = this.getFeeBasedPriority(feePerByte);
+      // Calculate fee per byte
+      const feePerByte = this.calculateFeePerByte(tx);
 
-    // Apply priority factors
-    const factorScore = this.calculatePriorityFactorScore(
-      { type: 'transaction', payload: tx } as MeshMessage,
-      context
-    );
+      // Base priority from fee
+      let basePriority = this.getFeeBasedPriority(feePerByte);
 
-    // Adjust priority based on factor score
-    basePriority = this.adjustPriorityByScore(basePriority, factorScore);
+      // Apply priority factors
+      const factorScore = this.calculatePriorityFactorScore(
+        { type: 'transaction', payload: tx } as MeshMessage,
+        context
+      );
 
-    this.logger.debug('UTXO transaction priority calculated', {
-      txId: tx.id,
-      feePerByte,
-      basePriority,
-      factorScore,
-      finalPriority: basePriority,
-    });
+      // Adjust priority based on factor score
+      basePriority = this.adjustPriorityByScore(basePriority, factorScore);
 
-    return basePriority;
+      this.logger.debug('UTXO transaction priority calculated', {
+        txId: tx.id,
+        feePerByte,
+        basePriority,
+        factorScore,
+        finalPriority: basePriority,
+      });
+
+      return basePriority;
+    } catch (error) {
+      this.logger.error(
+        'Failed to calculate UTXO transaction priority',
+        error as Record<string, any>
+      );
+      return MessagePriority.NORMAL;
+    }
   }
 
   calculateBlockPriority(
@@ -377,13 +391,28 @@ export class UTXOPriorityCalculator
   }
 
   private calculateFeePerByte(tx: UTXOTransaction): number {
-    // Estimate transaction size
-    const inputSize = tx.inputs.length * 148; // Rough estimate for P2PKH input
-    const outputSize = tx.outputs.length * 34; // Rough estimate for P2PKH output
-    const baseSize = 10; // Transaction overhead
-    const estimatedSize = inputSize + outputSize + baseSize;
+    try {
+      // Validate transaction structure
+      if (!tx || !tx.inputs || !tx.outputs || tx.fee == null) {
+        return 0; // Return 0 fee per byte for invalid transactions
+      }
 
-    return tx.fee / estimatedSize;
+      // Estimate transaction size
+      const inputSize = tx.inputs.length * 148; // Rough estimate for P2PKH input
+      const outputSize = tx.outputs.length * 34; // Rough estimate for P2PKH output
+      const baseSize = 10; // Transaction overhead
+      const estimatedSize = inputSize + outputSize + baseSize;
+
+      // Avoid division by zero
+      if (estimatedSize === 0) {
+        return 0;
+      }
+
+      return tx.fee / estimatedSize;
+    } catch (error) {
+      this.logger.warn('Failed to calculate fee per byte', error as Record<string, any>);
+      return 0;
+    }
   }
 
   private getFeeBasedPriority(feePerByte: number): MessagePriority {

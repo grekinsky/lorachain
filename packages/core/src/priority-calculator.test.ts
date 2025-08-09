@@ -157,10 +157,8 @@ describe('UTXOPriorityCalculator', () => {
         mockNetworkContext
       );
 
-      expect(priority).toBeOneOf([
-        MessagePriority.HIGH,
-        MessagePriority.NORMAL,
-      ]);
+      // Should be HIGH or NORMAL based on fee calculation
+      expect([MessagePriority.HIGH, MessagePriority.NORMAL]).toContain(priority);
     });
   });
 
@@ -232,9 +230,9 @@ describe('UTXOPriorityCalculator', () => {
         transactionMessage,
         mockNetworkContext
       );
-      expect(priority).toBeOneOf(
-        Object.values(MessagePriority).filter(p => typeof p === 'number')
-      );
+      // Should be one of the valid MessagePriority values
+      const validPriorities = Object.values(MessagePriority).filter(p => typeof p === 'number');
+      expect(validPriorities).toContain(priority);
     });
 
     it('should handle block messages', () => {
@@ -392,13 +390,15 @@ describe('UTXOPriorityCalculator', () => {
       expect(updatedContext.networkCongestionLevel).toBe(0.8);
     });
 
-    it('should emit context updated event', done => {
-      priorityCalculator.on('contextUpdated', context => {
-        expect(context.batteryLevel).toBe(0.5);
-        done();
-      });
+    it('should emit context updated event', () => {
+      return new Promise<void>((resolve) => {
+        priorityCalculator.on('contextUpdated', context => {
+          expect(context.batteryLevel).toBe(0.5);
+          resolve();
+        });
 
-      priorityCalculator.updateNetworkContext({ batteryLevel: 0.5 });
+        priorityCalculator.updateNetworkContext({ batteryLevel: 0.5 });
+      });
     });
 
     it('should clear cache on significant context changes', () => {
@@ -473,7 +473,7 @@ describe('UTXOPriorityCalculator', () => {
         outputs: [{ value: 1000, lockingScript: 'script2', outputIndex: 0 }],
         lockTime: 0,
         timestamp: Date.now(),
-        fee: 1000, // This should be HIGH priority with original thresholds
+        fee: 2000, // This should be HIGH priority with original thresholds (>10 sat/byte)
       };
 
       // With original thresholds
@@ -482,6 +482,7 @@ describe('UTXOPriorityCalculator', () => {
           mediumFeeTransaction,
           mockNetworkContext
         );
+      // With fee 2000 and ~192 byte tx, fee/byte ≈ 10.4 which should be HIGH
       expect(originalPriority).toBe(MessagePriority.HIGH);
 
       // Update thresholds to make this transaction NORMAL priority

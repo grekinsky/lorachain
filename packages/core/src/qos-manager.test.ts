@@ -94,7 +94,7 @@ describe('UTXOQoSManager', () => {
     };
 
     mockEmergencyConfig = {
-      enabled: false,
+      enabled: false, // Default disabled, enable per test as needed
       activationThreshold: 0.8,
       maxDutyCycleOverride: 50,
       priorityBoost: 1.5,
@@ -249,6 +249,11 @@ describe('UTXOQoSManager', () => {
     });
 
     it('should boost transmission parameters in emergency mode', () => {
+      // First enable emergency config and then emergency mode
+      qosManager.updateQoSPolicy({
+        ...mockQoSPolicy
+      });
+      qosManager['emergencyConfig'].enabled = true; // Enable emergency config
       qosManager.enableEmergencyMode();
 
       const params = qosManager.getTransmissionParameters(
@@ -261,6 +266,7 @@ describe('UTXOQoSManager', () => {
     });
 
     it('should make CRITICAL messages duty cycle exempt in emergency mode', () => {
+      qosManager['emergencyConfig'].enabled = true; // Enable emergency config
       qosManager.enableEmergencyMode();
 
       const params = qosManager.getTransmissionParameters(
@@ -269,24 +275,26 @@ describe('UTXOQoSManager', () => {
       expect(params.dutyCycleExempt).toBe(true);
     });
 
-    it('should emit events when emergency mode changes', done => {
-      let eventCount = 0;
+    it('should emit events when emergency mode changes', () => {
+      return new Promise<void>((resolve) => {
+        let eventCount = 0;
 
-      qosManager.on('emergencyModeActivated', () => {
-        eventCount++;
-        if (eventCount === 1) {
-          qosManager.disableEmergencyMode();
-        }
+        qosManager.on('emergencyModeActivated', () => {
+          eventCount++;
+          if (eventCount === 1) {
+            qosManager.disableEmergencyMode();
+          }
+        });
+
+        qosManager.on('emergencyModeDeactivated', () => {
+          eventCount++;
+          if (eventCount === 2) {
+            resolve();
+          }
+        });
+
+        qosManager.enableEmergencyMode();
       });
-
-      qosManager.on('emergencyModeDeactivated', () => {
-        eventCount++;
-        if (eventCount === 2) {
-          done();
-        }
-      });
-
-      qosManager.enableEmergencyMode();
     });
   });
 
@@ -313,6 +321,7 @@ describe('UTXOQoSManager', () => {
 
     it('should allow exempt messages in emergency mode', () => {
       mockDutyCycleManager.setCanTransmit(false);
+      qosManager['emergencyConfig'].enabled = true; // Enable emergency config
       qosManager.enableEmergencyMode();
 
       // CRITICAL messages should be exempt from duty cycle in emergency mode
@@ -336,6 +345,7 @@ describe('UTXOQoSManager', () => {
     it('should allow immediate transmission for exempt messages in emergency mode', () => {
       const futureTime = Date.now() + 60000;
       mockDutyCycleManager.setNextTransmissionWindow(futureTime);
+      qosManager['emergencyConfig'].enabled = true; // Enable emergency config
       qosManager.enableEmergencyMode();
 
       const optimalTime = qosManager.getOptimalTransmissionTime(
@@ -366,21 +376,23 @@ describe('UTXOQoSManager', () => {
       expect(policy).toEqual(mockQoSPolicy);
     });
 
-    it('should emit policy updated event', done => {
-      qosManager.on('policyUpdated', policy => {
-        expect(policy).toBeDefined();
-        done();
+    it('should emit policy updated event', () => {
+      return new Promise<void>((resolve) => {
+        qosManager.on('policyUpdated', policy => {
+          expect(policy).toBeDefined();
+          resolve();
+        });
+
+        const newPolicy: UTXOQoSPolicy = {
+          ...mockQoSPolicy,
+          retryAttempts: {
+            ...mockQoSPolicy.retryAttempts,
+            [MessagePriority.NORMAL]: 5,
+          },
+        };
+
+        qosManager.updateQoSPolicy(newPolicy);
       });
-
-      const newPolicy: UTXOQoSPolicy = {
-        ...mockQoSPolicy,
-        retryAttempts: {
-          ...mockQoSPolicy.retryAttempts,
-          [MessagePriority.NORMAL]: 5,
-        },
-      };
-
-      qosManager.updateQoSPolicy(newPolicy);
     });
   });
 
@@ -398,37 +410,82 @@ describe('UTXOQoSManager', () => {
       expect(tracker?.acknowledged).toBe(false);
     });
 
-    it('should confirm message delivery', done => {
+    it('should confirm message delivery', async () => {
       const messageId = 'test-message-2';
 
-      qosManager.on('deliveryConfirmed', (id, deliveryTime) => {
-        expect(id).toBe(messageId);
-        expect(deliveryTime).toBeGreaterThan(0);
-        done();
+      // Set up the event listener before starting the process
+      const deliveryPromise = new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error('Delivery confirmation timeout'));
+        }, 1000);
+
+        qosManager.once('deliveryConfirmed', (id, deliveryTime) => {
+          clearTimeout(timeout);
+          try {
+            expect(id).toBe(messageId);
+            expect(deliveryTime).toBeGreaterThan(0);
+            
+            const trackers = qosManager.getDeliveryTrackers();
+            expect(trackers.has(messageId)).toBe(false); // Should be removed after confirmation
+            resolve();
+          } catch (error) {
+            reject(error);
+          }
+        });
       });
 
+      // Track the message delivery
       qosManager.trackMessageDelivery(messageId, MessagePriority.NORMAL);
+      
+      // Verify tracker was created
+      expect(qosManager.getDeliveryTrackers().has(messageId)).toBe(true);
+      
+      // Add a small delay to ensure delivery time > 0
+      await new Promise(resolve => setTimeout(resolve, 5));
+      
+      // Confirm delivery
       qosManager.confirmMessageDelivery(messageId);
-
-      const trackers = qosManager.getDeliveryTrackers();
-      expect(trackers.has(messageId)).toBe(false); // Should be removed after confirmation
+      
+      // Wait for the event
+      await deliveryPromise;
     });
 
-    it('should report delivery failures', done => {
+    it('should report delivery failures', async () => {
       const messageId = 'test-message-3';
       const failureReason = 'network_timeout';
 
-      qosManager.on('deliveryFailed', (id, reason) => {
-        expect(id).toBe(messageId);
-        expect(reason).toBe(failureReason);
-        done();
+      // Set up the event listener before starting the process
+      const failurePromise = new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error('Delivery failure event timeout'));
+        }, 1000);
+
+        qosManager.once('deliveryFailed', (id, reason) => {
+          clearTimeout(timeout);
+          try {
+            expect(id).toBe(messageId);
+            expect(reason).toBe(failureReason);
+            
+            const trackers = qosManager.getDeliveryTrackers();
+            expect(trackers.has(messageId)).toBe(false); // Should be removed after failure report
+            resolve();
+          } catch (error) {
+            reject(error);
+          }
+        });
       });
 
+      // Track the message delivery
       qosManager.trackMessageDelivery(messageId, MessagePriority.LOW);
+      
+      // Verify tracker was created
+      expect(qosManager.getDeliveryTrackers().has(messageId)).toBe(true);
+      
+      // Report failure immediately
       qosManager.reportDeliveryFailure(messageId, failureReason);
-
-      const trackers = qosManager.getDeliveryTrackers();
-      expect(trackers.has(messageId)).toBe(false); // Should be removed after failure report
+      
+      // Wait for the event
+      await failurePromise;
     });
 
     it('should get pending deliveries count', () => {
@@ -465,6 +522,7 @@ describe('UTXOQoSManager', () => {
 
     it('should reset statistics', () => {
       // Generate some statistics by enabling emergency mode
+      qosManager['emergencyConfig'].enabled = true; // Enable emergency config
       qosManager.enableEmergencyMode();
 
       let stats = qosManager.getQoSStatistics();
@@ -480,6 +538,7 @@ describe('UTXOQoSManager', () => {
       let stats = qosManager.getQoSStatistics();
       const initialOverrides = stats.emergencyOverrides;
 
+      qosManager['emergencyConfig'].enabled = true; // Enable emergency config
       qosManager.enableEmergencyMode();
       qosManager.disableEmergencyMode();
       qosManager.enableEmergencyMode();
@@ -622,6 +681,7 @@ describe('UTXOQoSManager', () => {
     it('should handle rapid emergency mode toggling', () => {
       const toggleCount = 50;
 
+      qosManager['emergencyConfig'].enabled = true; // Enable emergency config
       for (let i = 0; i < toggleCount; i++) {
         qosManager.enableEmergencyMode();
         qosManager.disableEmergencyMode();

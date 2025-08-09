@@ -196,13 +196,23 @@ export class UTXOQoSManager extends EventEmitter implements IQoSManager {
 
   updateQoSPolicy(policy: UTXOQoSPolicy): void {
     const oldPolicy = { ...this.qosPolicy };
-    this.qosPolicy = policy;
+    
+    // Merge partial policy updates with existing policy
+    this.qosPolicy = {
+      transmissionPower: { ...this.qosPolicy.transmissionPower, ...(policy.transmissionPower || {}) },
+      retryAttempts: { ...this.qosPolicy.retryAttempts, ...(policy.retryAttempts || {}) },
+      dutyCycleExemption: { ...this.qosPolicy.dutyCycleExemption, ...(policy.dutyCycleExemption || {}) },
+      deliveryConfirmation: { ...this.qosPolicy.deliveryConfirmation, ...(policy.deliveryConfirmation || {}) },
+      compressionRequired: { ...this.qosPolicy.compressionRequired, ...(policy.compressionRequired || {}) },
+      utxoFeeMultiplier: { ...this.qosPolicy.utxoFeeMultiplier, ...(policy.utxoFeeMultiplier || {}) },
+      timeoutMs: { ...this.qosPolicy.timeoutMs, ...(policy.timeoutMs || {}) },
+    };
 
     this.logger.info('QoS policy updated', {
-      changes: this.compareQoSPolicies(oldPolicy, policy),
+      changes: this.compareQoSPolicies(oldPolicy, this.qosPolicy),
     });
 
-    this.emit('policyUpdated', policy);
+    this.emit('policyUpdated', this.qosPolicy);
   }
 
   getQoSPolicy(): UTXOQoSPolicy {
@@ -439,12 +449,14 @@ export class UTXOQoSManager extends EventEmitter implements IQoSManager {
         priority: tracker.priority,
       });
 
+      // Delete tracker first, then emit event
+      this.deliveryTrackers.delete(messageId);
+      
       this.emit(
         'deliveryConfirmed',
         messageId,
         tracker.actualDeliveryTime - tracker.sentAt
       );
-      this.deliveryTrackers.delete(messageId);
     }
   }
 
@@ -466,8 +478,9 @@ export class UTXOQoSManager extends EventEmitter implements IQoSManager {
         timeSinceTransmission: Date.now() - tracker.sentAt,
       });
 
-      this.emit('deliveryFailed', messageId, reason);
+      // Delete tracker first, then emit event
       this.deliveryTrackers.delete(messageId);
+      this.emit('deliveryFailed', messageId, reason);
     }
   }
 
@@ -537,22 +550,28 @@ export class UTXOQoSManager extends EventEmitter implements IQoSManager {
   ): string[] {
     const changes: string[] = [];
 
-    // Compare power settings
-    for (const priority of Object.values(MessagePriority)) {
-      if (typeof priority === 'number') {
-        if (
-          oldPolicy.transmissionPower[priority] !==
-          newPolicy.transmissionPower[priority]
-        ) {
-          changes.push(`transmissionPower[${priority}]`);
-        }
-        if (
-          oldPolicy.retryAttempts[priority] !==
-          newPolicy.retryAttempts[priority]
-        ) {
-          changes.push(`retryAttempts[${priority}]`);
+    try {
+      // Compare power settings
+      for (const priority of Object.values(MessagePriority)) {
+        if (typeof priority === 'number') {
+          if (
+            newPolicy.transmissionPower &&
+            oldPolicy.transmissionPower[priority] !==
+            newPolicy.transmissionPower[priority]
+          ) {
+            changes.push(`transmissionPower[${priority}]`);
+          }
+          if (
+            newPolicy.retryAttempts &&
+            oldPolicy.retryAttempts[priority] !==
+            newPolicy.retryAttempts[priority]
+          ) {
+            changes.push(`retryAttempts[${priority}]`);
+          }
         }
       }
+    } catch (error) {
+      this.logger.warn('Error comparing QoS policies', error as Record<string, any>);
     }
 
     return changes;
