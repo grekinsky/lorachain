@@ -2,11 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Blockchain } from '../../src/blockchain.js';
 import { UTXOManager } from '../../src/utxo.js';
 import { UTXOPersistenceManager } from '../../src/persistence.js';
-import {
-  DatabaseFactory,
-  LevelDatabase,
-  MemoryDatabase,
-} from '../../src/database.js';
+import { DatabaseFactory } from '../../src/database.js';
 import { CryptographicService } from '../../src/cryptographic.js';
 import type {
   IDatabase,
@@ -81,15 +77,15 @@ describe('Persistence Integration Tests', () => {
     {
       name: 'MemoryDatabase',
       dbType: 'memory' as const,
-      cleanup: async () => {}, // No cleanup needed for memory database
+      cleanup: async (): Promise<void> => {}, // No cleanup needed for memory database
     },
     {
       name: 'LevelDatabase',
       dbType: 'leveldb' as const,
-      cleanup: async (dbPath: string) => {
+      cleanup: async (dbPath: string): Promise<void> => {
         try {
           await fs.rm(dbPath, { recursive: true, force: true });
-        } catch (error) {
+        } catch {
           // Ignore cleanup errors
         }
       },
@@ -136,7 +132,7 @@ describe('Persistence Integration Tests', () => {
           }
           await persistenceManager.close();
           await cleanup(testDbPath);
-        } catch (error) {
+        } catch {
           // Ignore cleanup errors
         }
       });
@@ -168,7 +164,7 @@ describe('Persistence Integration Tests', () => {
           // Step 2: Get current blockchain state
           const originalState = blockchain.getState();
           const originalBlocks = blockchain.getBlocks();
-          const originalBalance = blockchain.getBalance(toAddress);
+          const _originalBalance = blockchain.getBalance(toAddress);
 
           // Step 3: Save state to persistence
           const utxoBlockchainState: UTXOBlockchainState = {

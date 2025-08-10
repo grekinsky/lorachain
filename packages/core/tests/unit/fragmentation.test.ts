@@ -9,12 +9,11 @@ import type {
   UTXOTransaction,
   Block,
   CompressedMerkleProof,
-  Fragment,
 } from '../../src/types.js';
 
 describe('UTXOMessageFragmenter', () => {
   let fragmenter: UTXOMessageFragmenter;
-  let keyPair: any;
+  let keyPair: ReturnType<typeof CryptographicService.generateKeyPair>;
 
   beforeEach(() => {
     const cryptoService = new CryptographicService();

@@ -7,10 +7,7 @@ import { CryptographicService } from '../../src/cryptographic.js';
 import { MemoryDatabase } from '../../src/database.js';
 import type {
   UTXOTransaction,
-  Block,
-  Fragment,
   EnhancedFragmentationConfig,
-  RetransmissionRequest,
   FragmentAcknowledgment,
   NetworkMetrics,
 } from '../../src/types.js';
@@ -25,7 +22,7 @@ describe('EnhancedUTXOFragmentReassembler', () => {
   let enhancedReassembler: EnhancedUTXOFragmentReassembler;
   let fragmenter: UTXOMessageFragmenter;
   let cryptoService: CryptographicService;
-  let keyPair: any;
+  let keyPair: ReturnType<typeof CryptographicService.generateKeyPair>;
   let database: MemoryDatabase;
   let config: EnhancedFragmentationConfig;
 
@@ -871,7 +868,7 @@ describe('EnhancedUTXOFragmentReassembler', () => {
           'reassembly_sessions'
         );
         expect(persistedSession).toBeDefined();
-      } catch (error) {
+      } catch {
         // Session might not be persisted if it's expired, which is also valid
       }
     });

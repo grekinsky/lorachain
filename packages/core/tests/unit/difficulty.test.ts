@@ -232,7 +232,7 @@ describe('DifficultyManager', () => {
       // Create blocks without difficulty field (legacy blocks)
       for (let i = 0; i < 10; i++) {
         const block = createMockBlock(i, timestamp);
-        // @ts-ignore - Simulating legacy block without difficulty
+        // @ts-expect-error - Simulating legacy block without difficulty
         delete block.difficulty;
         blocks.push(block);
         timestamp += 60 * 1000;
@@ -527,7 +527,7 @@ describe('DifficultyManager', () => {
 
     it('should reject blocks without difficulty field', () => {
       const block = createMockBlock(1, Date.now());
-      // @ts-ignore - Simulating block without difficulty
+      // @ts-expect-error - Simulating block without difficulty
       delete block.difficulty;
 
       const validation = BlockManager.validateBlock(block, null);

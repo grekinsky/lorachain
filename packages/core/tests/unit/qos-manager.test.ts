@@ -4,13 +4,11 @@
  * Comprehensive unit tests for the QoS management service
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { UTXOQoSManager } from '../../src/qos-manager.js';
 import type {
   UTXOQoSPolicy,
   EmergencyModeConfig,
-  TransmissionParams,
-  UTXOQoSStatistics,
 } from '../../src/priority-types.js';
 import { MessagePriority } from '../../src/types.js';
 import type { MeshMessage, IDutyCycleManager } from '../../src/types.js';
@@ -21,22 +19,22 @@ class MockDutyCycleManager implements Partial<IDutyCycleManager> {
   private nextTransmissionWindow = Date.now() + 5000;
 
   canTransmit(
-    estimatedTimeMs: number,
-    priority?: MessagePriority,
-    frequencyMHz?: number
+    _estimatedTimeMs: number,
+    _priority?: MessagePriority,
+    _frequencyMHz?: number
   ): boolean {
     return this.canTransmitValue;
   }
 
-  getNextTransmissionWindow(frequencyMHz?: number): number {
+  getNextTransmissionWindow(_frequencyMHz?: number): number {
     return this.nextTransmissionWindow;
   }
 
-  setCanTransmit(value: boolean) {
+  setCanTransmit(value: boolean): void {
     this.canTransmitValue = value;
   }
 
-  setNextTransmissionWindow(time: number) {
+  setNextTransmissionWindow(time: number): void {
     this.nextTransmissionWindow = time;
   }
 }

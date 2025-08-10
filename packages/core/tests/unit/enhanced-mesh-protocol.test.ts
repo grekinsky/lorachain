@@ -15,7 +15,7 @@ import { CryptographicService, type KeyPair } from '../../src/cryptographic.js';
 // Mock Logger
 vi.mock('@lorachain/shared', () => ({
   Logger: {
-    getInstance: () => ({
+    getInstance: (): Record<string, unknown> => ({
       info: vi.fn(),
       debug: vi.fn(),
       warn: vi.fn(),
@@ -404,7 +404,7 @@ describe('UTXOEnhancedMeshProtocol', () => {
     await meshProtocol.connect();
 
     // Add some mock neighbors
-    const neighbors = meshProtocol.getNeighbors();
+    const _neighbors = meshProtocol.getNeighbors();
     // Since we start with no neighbors, broadcast should handle empty neighbor list
 
     const message: MeshMessage = {

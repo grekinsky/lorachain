@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
   DutyCycleManager,
   RegionalComplianceValidator,
@@ -9,10 +9,6 @@ import { DutyCycleConfigFactory } from '../../src/duty-cycle-config.js';
 import { MemoryDatabase } from '../../src/database.js';
 import {
   type DutyCycleConfig,
-  type DutyCycleStats,
-  type ComplianceResult,
-  type QueueStats,
-  type MessageSizeEstimate,
   type LoRaTransmissionParams,
   MessagePriority,
 } from '../../src/types.js';

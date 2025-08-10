@@ -45,7 +45,7 @@ describe('DatabaseFactory', () => {
     expect(() => {
       DatabaseFactory.create({
         ...testConfig,
-        dbType: 'unsupported' as any,
+        dbType: 'unsupported' as never,
       });
     }).toThrow('Unsupported database type: unsupported');
   });
@@ -304,7 +304,7 @@ describe('LevelDatabase', () => {
       await db.close();
       // Clean up test database files
       await fs.rm(testDbPath, { recursive: true, force: true });
-    } catch (error) {
+    } catch {
       // Ignore cleanup errors
     }
   });
@@ -631,13 +631,13 @@ describe('Database Integration with UTXO Types', () => {
     }
 
     // Query UTXOs for specific address
-    const addressUtxos: any[] = [];
-    for await (const { key, value } of db.iterator({
+    const addressUtxos: unknown[] = [];
+    for await (const { value } of db.iterator({
       sublevel: SubLevels.UTXO_SET,
       start: KeyPrefixes.UTXO,
       end: KeyPrefixes.UTXO + '\xff',
     })) {
-      const utxo = value as any;
+      const utxo = value as { lockingScript: string; isSpent: boolean };
       if (utxo.lockingScript === address && !utxo.isSpent) {
         addressUtxos.push(utxo);
       }

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { UTXOEnhancedMeshProtocol } from '../../src/enhanced-mesh-protocol.js';
 import { DutyCycleConfigFactory } from '../../src/duty-cycle-config.js';
 import { MemoryDatabase } from '../../src/database.js';
@@ -17,7 +17,7 @@ describe('Duty Cycle Integration Tests', () => {
   let meshProtocol: UTXOEnhancedMeshProtocol;
   let database: MemoryDatabase;
   let cryptoService: CryptographicService;
-  let nodeKeyPair: any;
+  let nodeKeyPair: ReturnType<typeof CryptographicService.generateKeyPair>;
   let dutyCycleConfig: DutyCycleConfig;
   let routingConfig: RoutingConfig;
   let fragmentationConfig: FragmentationConfig;
@@ -76,9 +76,6 @@ describe('Duty Cycle Integration Tests', () => {
 
   afterEach(async () => {
     // Cleanup
-    if (meshProtocol) {
-      await meshProtocol.shutdown();
-    }
     if (database) {
       await database.close(); // Proper cleanup
     }
@@ -414,7 +411,7 @@ describe('Duty Cycle Integration Tests', () => {
   describe('Error Handling and Edge Cases', () => {
     it('should handle queue overflow gracefully', async () => {
       // Create a protocol with a very small queue for testing
-      const smallQueueConfig = {
+      const _smallQueueConfig = {
         ...dutyCycleConfig,
         // This would need to be supported by the queue implementation
       };

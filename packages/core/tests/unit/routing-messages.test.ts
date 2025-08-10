@@ -418,7 +418,7 @@ describe('RoutingMessageHandler', () => {
   test('should ignore route requests not for our node', async () => {
     let handlerCalled = false;
 
-    messageHandler.setRouteRequestHandler(async request => {
+    messageHandler.setRouteRequestHandler(async _request => {
       handlerCalled = true;
       return null;
     });
@@ -469,7 +469,7 @@ describe('RoutingMessageOptimizer', () => {
 
   test('should check LoRa constraints correctly', () => {
     const smallRequest = messageFactory.createUTXORouteRequest('dest');
-    const actualSize = optimizer.estimateCompressedSize(smallRequest);
+    const _actualSize = optimizer.estimateCompressedSize(smallRequest);
     // Route requests with signatures are typically larger than 256 bytes
     // Use a more realistic size limit for testing
     const fitsSmall = optimizer.fitsLoRaConstraints(smallRequest, 1024);

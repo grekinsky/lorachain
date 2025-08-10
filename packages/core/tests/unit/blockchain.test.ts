@@ -2,13 +2,9 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Blockchain } from '../../src/blockchain.js';
 import { UTXOManager } from '../../src/utxo.js';
 import { UTXOPersistenceManager } from '../../src/persistence.js';
-import { CryptographicService } from '../../src/cryptographic.js';
 import { DatabaseFactory } from '../../src/database.js';
 import { BlockManager } from '../../src/block.js';
-import {
-  DifficultyManager,
-  type DifficultyConfig,
-} from '../../src/difficulty.js';
+import type { DifficultyConfig } from '../../src/difficulty.js';
 import type {
   Transaction,
   Block,
@@ -21,7 +17,6 @@ describe('Blockchain (NO BACKWARDS COMPATIBILITY)', () => {
   let blockchain: Blockchain;
   let persistence: UTXOPersistenceManager;
   let utxoManager: UTXOManager;
-  let cryptoService: CryptographicService;
   let mockUTXOTransaction: UTXOTransaction;
   let minerAddress: string;
 
@@ -68,7 +63,7 @@ describe('Blockchain (NO BACKWARDS COMPATIBILITY)', () => {
 
   beforeEach(async () => {
     const database = DatabaseFactory.create(testConfig);
-    cryptoService = new CryptographicService();
+    // cryptoService = new CryptographicService();
     persistence = new UTXOPersistenceManager(database, {
       compressionType: 'none',
       cryptographicAlgorithm: 'secp256k1',
@@ -683,7 +678,7 @@ describe('Blockchain (NO BACKWARDS COMPATIBILITY)', () => {
 
     it('should reject blocks without difficulty field', () => {
       const block = BlockManager.createGenesisBlock(testGenesisConfig);
-      // @ts-ignore - Simulating legacy block without difficulty
+      // @ts-expect-error - Simulating legacy block without difficulty
       delete block.difficulty;
 
       const validation = BlockManager.validateBlock(block, null);
@@ -694,7 +689,7 @@ describe('Blockchain (NO BACKWARDS COMPATIBILITY)', () => {
     });
 
     it('should maintain target block times over multiple adjustments', () => {
-      const targetTime = blockchainWithFastAdjustment.getTargetBlockTime();
+      const _targetTime = blockchainWithFastAdjustment.getTargetBlockTime();
 
       // Mine fewer blocks to prevent difficulty from getting too high
       for (let i = 0; i < 3; i++) {

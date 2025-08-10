@@ -5,6 +5,7 @@
  */
 
 import { describe, test, expect, beforeEach } from 'vitest';
+import type { UTXOTransaction, Block } from '../../src/types.js';
 import { UTXOCompressionManager } from '../../src/utxo-compression-manager.js';
 import {
   ProtobufCompressionEngine,
@@ -28,7 +29,7 @@ import {
 } from '../../src/compression-types.js';
 
 // Test data helpers
-function createTestUTXOTransaction() {
+function createTestUTXOTransaction(): UTXOTransaction {
   return {
     id: '550e8400-e29b-41d4-a716-446655440000',
     inputs: [
@@ -60,7 +61,7 @@ function createTestUTXOTransaction() {
   };
 }
 
-function createTestUTXOBlock() {
+function createTestUTXOBlock(): Block {
   return {
     index: 12345,
     timestamp: Date.now(),

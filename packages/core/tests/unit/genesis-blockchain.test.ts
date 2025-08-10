@@ -2,20 +2,14 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Blockchain } from '../../src/blockchain.js';
 import { UTXOManager } from '../../src/utxo.js';
 import { UTXOPersistenceManager } from '../../src/persistence.js';
-import { CryptographicService } from '../../src/cryptographic.js';
 import { DatabaseFactory } from '../../src/database.js';
 import { GenesisConfigManager } from '../../src/genesis/index.js';
-import type {
-  GenesisConfig,
-  UTXOPersistenceConfig,
-  InitialAllocation,
-} from '../../src/types.js';
+import type { GenesisConfig, UTXOPersistenceConfig } from '../../src/types.js';
 
 describe('Blockchain with Genesis Configuration (NO BACKWARDS COMPATIBILITY)', () => {
   let blockchain: Blockchain;
   let persistence: UTXOPersistenceManager;
   let utxoManager: UTXOManager;
-  let cryptoService: CryptographicService;
 
   const testConfig: UTXOPersistenceConfig = {
     enabled: true,
@@ -65,7 +59,6 @@ describe('Blockchain with Genesis Configuration (NO BACKWARDS COMPATIBILITY)', (
 
   beforeEach(async () => {
     const database = DatabaseFactory.create(testConfig);
-    cryptoService = new CryptographicService();
     persistence = new UTXOPersistenceManager(database, {
       compressionType: 'none',
       cryptographicAlgorithm: 'secp256k1',

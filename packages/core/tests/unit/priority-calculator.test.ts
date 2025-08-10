@@ -4,7 +4,7 @@
  * Comprehensive unit tests for the priority calculation service
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { UTXOPriorityCalculator } from '../../src/priority-calculator.js';
 import type {
   UTXOPriorityThresholds,
