@@ -76,7 +76,9 @@ pnpm build
 
 - `pnpm build` - Build all packages
 - `pnpm dev` - Start development mode for all packages
-- `pnpm test` - Run tests for all packages (uses vitest)
+- `pnpm test` - Run full test suite (unit + integration tests)
+- `pnpm test:unit` - Run unit tests for all packages
+- `pnpm test:integration` - Run integration tests for all packages
 - `pnpm lint` - Run ESLint for all packages
 - `pnpm lint:fix` - Run ESLint with auto-fix for all packages
 - `pnpm format` - Format code with Prettier
@@ -89,10 +91,13 @@ Navigate to any package directory and run commands specific to that package:
 
 ```bash
 cd packages/core
-pnpm dev          # Watch mode for core package
-pnpm test         # Run tests for specific package
-pnpm test:watch   # Watch mode for tests
-pnpm test:run     # Run tests once (no watch mode)
+pnpm dev                  # Watch mode for core package
+pnpm test                 # Run full test suite for package
+pnpm test:unit            # Run unit tests only
+pnpm test:unit:watch      # Unit tests in watch mode
+pnpm test:integration     # Run integration tests only (core package only)
+pnpm test:integration:watch # Integration tests in watch mode (core package only)
+pnpm test:run             # Run tests once (no watch mode)
 ```
 
 ## Packages
@@ -114,6 +119,8 @@ Core blockchain functionality including:
 - **Network hashrate calculation and monitoring**
 - **Proof-of-Work consensus mechanism with adaptive difficulty**
 - **Genesis configuration system with UTXO-based initial allocations and network parameter management**
+- **UTXO compression system with multiple compression engines (gzip, zlib, brotli, lz4)**
+- **Message prioritization system with fee-based priority calculation**
 - **Complete backwards compatibility removal with modern, clean implementations**
 
 ### @lorachain/shared
@@ -150,6 +157,8 @@ Advanced LoRa/Meshtastic communication layer:
 - **Comprehensive Duty Cycle Management**: Regional compliance for EU, US, Japan, Australia
 - **Advanced Routing**: Flood routing, cryptographic loop prevention, and path optimization
 - **Message fragmentation and reassembly** with missing fragment detection
+- **Priority-based message handling**: QoS levels, emergency mode, fee-based prioritization
+- **UTXO compression integration**: Optimized compression for LoRa 256-byte constraints
 - **Regulatory Compliance**: Automatic duty cycle enforcement and transmission scheduling
 - **Network Topology Management**: Dynamic routing table updates and neighbor discovery
 
@@ -231,29 +240,36 @@ Features:
 
 ## Testing
 
-The project includes comprehensive unit tests for all packages using Vitest.
+The project includes comprehensive unit and integration tests for all packages using Vitest. Tests are separated into unit tests (fast, isolated) and integration tests (comprehensive, system-level).
 
-Run the test suite:
+Run the full test suite:
 
 ```bash
-pnpm test
+pnpm test                # Run all tests (unit + integration)
+pnpm test:unit           # Run only unit tests
+pnpm test:integration    # Run only integration tests
 ```
 
 Run tests in watch mode for development:
 
 ```bash
-# For all packages
-pnpm test:watch
-
 # For specific package
-cd packages/core && pnpm test:watch
+cd packages/core && pnpm test:unit:watch        # Unit tests in watch mode
+cd packages/core && pnpm test:integration:watch # Integration tests in watch mode
 ```
 
 Run tests once (no watch mode):
 
 ```bash
-pnpm test:run
+pnpm test:run            # Run all tests once
+pnpm test:unit           # Run unit tests once
+pnpm test:integration    # Run integration tests once
 ```
+
+**Test Coverage**: 660+ tests across all packages
+- ~594 unit tests for fast feedback during development
+- 66 integration tests for comprehensive system validation
+- 100% pass rate with separated test configurations
 
 ## Code Quality
 
@@ -325,8 +341,8 @@ For support and questions:
 - **✅ Advanced Routing Protocol**: UTXO-aware flood routing, blockchain-optimized routing tables, multi-hop forwarding, and cryptographic loop prevention
 - **✅ Complete Duty Cycle Management**: Regional compliance validation (EU/US/Japan/Australia), transmission scheduling, and regulatory compliance
 - **✅ Enhanced Mesh Protocol**: Comprehensive mesh networking with UTXO routing capabilities and duty cycle compliance
-- **🔲 Compression**: Protocol buffer serialization and custom compression for blockchain data
-- **🔲 Message Prioritization**: Priority queues and QoS levels for different message types
+- **✅ Compression**: Multiple compression engines (gzip, zlib, brotli, lz4) with UTXO-specific optimization
+- **✅ Message Prioritization**: Priority queues with fee-based calculation, QoS levels, and emergency mode support
 - **🔲 Reliable Delivery**: Acknowledgment mechanism, retry logic, and delivery confirmation
 - **🔲 Node Discovery Protocol**: Periodic beacons, neighbor management, and topology mapping
 
@@ -340,11 +356,11 @@ For support and questions:
 - **Milestone 8**: Testing & Documentation (integration tests, API docs, deployment guides)
 - **Milestone 9**: MVP Polish (configuration, mainnet/testnet, Docker images)
 
-**Current Progress**: ~35-40% complete toward MVP goal
+**Current Progress**: ~40-45% complete toward MVP goal
 
 ### Technical Foundation
 
-- **Comprehensive Test Coverage**: 593+ tests across all packages with 100% passing rate
+- **Comprehensive Test Coverage**: 660+ tests across all packages with 100% passing rate (594 unit tests, 66 integration tests)
 - **Database Infrastructure**: Dual database support (LevelDB for production, Memory for testing) with sublevel organization
 - **UTXO Persistence**: Complete UTXO set storage with address-based queries, balance calculation, and efficient retrieval
 - **Cryptographic Key Storage**: Secure key pair persistence supporting both secp256k1 and Ed25519 algorithms
@@ -354,6 +370,6 @@ For support and questions:
 - **Enhanced Block Validation**: Comprehensive difficulty validation and timestamp manipulation protection
 - **Production-Ready Components**: Complete monorepo structure with TypeScript, Vitest testing, and code quality tools
 
-**Estimated Timeline**: 7-10 months total for MVP completion (currently 35-40% complete)
+**Estimated Timeline**: 7-10 months total for MVP completion (currently 40-45% complete)
 
 For detailed development progress and upcoming features, see `specs/ROADMAP.md`.

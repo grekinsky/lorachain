@@ -7,7 +7,9 @@
   "scripts": {
     "build": "pnpm --recursive build",
     "dev": "pnpm --recursive dev",
-    "test": "pnpm --recursive test:run",
+    "test:unit": "pnpm --recursive test:unit",
+    "test:integration": "pnpm --recursive test:integration",
+    "test": "pnpm --recursive test",
     "lint": "pnpm --recursive lint",
     "lint:fix": "pnpm --recursive lint:fix",
     "format": "prettier --write \"**/*.{js,ts,tsx,json,md}\"",

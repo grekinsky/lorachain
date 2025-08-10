@@ -8,7 +8,7 @@ Lorachain is a lightweight blockchain network designed for cryptocurrency transa
 
 The blockchain uses a **UTXO (Unspent Transaction Output) model** for transaction management and supports **cryptographic signing** with both ECDSA (secp256k1) and Ed25519 algorithms.
 
-**Current Development Status**: ~35-40% complete toward MVP goal with Milestone 1 (Core Blockchain) fully implemented and Milestone 2 (LoRa/Mesh Protocol) significantly enhanced with advanced routing, duty cycle management, and regional compliance. See `specs/ROADMAP.md` for detailed progress tracking.
+**Current Development Status**: ~40-45% complete toward MVP goal with Milestone 1 (Core Blockchain) fully implemented and Milestone 2 (LoRa/Mesh Protocol) significantly enhanced with compression, prioritization, advanced routing, duty cycle management, and regional compliance. See `specs/ROADMAP.md` for detailed progress tracking.
 
 ## Important Development Guidelines
 
@@ -26,11 +26,15 @@ The blockchain uses a **UTXO (Unspent Transaction Output) model** for transactio
 
 ### Testing
 
-- `pnpm test` - Run tests for all packages (uses vitest)
-- `pnpm test:watch` - Run tests in watch mode for all packages
+- `pnpm test` - Run full test suite for all packages (unit + integration)
+- `pnpm test:unit` - Run unit tests for all packages
+- `pnpm test:integration` - Run integration tests for all packages (core package only has integration tests)
 - Package-specific testing:
-  - `cd packages/core && pnpm test` - Run tests for specific package
-  - `cd packages/core && pnpm test:watch` - Watch mode for specific package
+  - `cd packages/core && pnpm test` - Run full test suite for package
+  - `cd packages/core && pnpm test:unit` - Run unit tests only
+  - `cd packages/core && pnpm test:unit:watch` - Unit tests in watch mode
+  - `cd packages/core && pnpm test:integration` - Run integration tests only (core package only)
+  - `cd packages/core && pnpm test:integration:watch` - Integration tests in watch mode (core package only)
   - `cd packages/core && pnpm test:run` - Run tests once (no watch mode)
 
 ### Code Quality
@@ -67,7 +71,7 @@ cd packages/core && pnpm test    # Test specific package
 - **Path mapping** configured for `@lorachain/*` packages in tsconfig.json
 - **LevelDB** for production database persistence with sublevel organization
 - **MessagePack** for efficient data serialization with optional gzip compression
-- **Vitest** for testing framework with comprehensive coverage (593+ tests)
+- **Vitest** for testing framework with comprehensive coverage (660+ tests: 594 unit, 66 integration)
 - **ESLint + Prettier** for code quality
 - **LoRa constraints**: 256-byte message limit, duty cycle restrictions
 
@@ -83,7 +87,7 @@ cd packages/core && pnpm test    # Test specific package
 - **`DatabaseFactory`** (core) - Factory for creating database instances based on configuration
 - **`MerkleTree`** (core) - UTXO merkle tree operations, proof generation, and compression
 - **`SPVManager`** (core) - Simplified Payment Verification for light clients
-- **`CryptographicService`** (core) - Key generation, signing, and verification (ECDSA/Ed25519)
+- **`CryptographicService`** (core) - Key generation, signing, and verification (ECDSA/Ed25519) - Note: `generateKeyPair()` is a static method
 - **`SecureTransactionManager`** (core) - Cryptographically secure transaction creation
 - **`BlockManager`** (core) - Block creation, mining, validation, and merkle proof generation
 - **`GenesisConfigManager`** (core) - Genesis block configuration and UTXO-based initial allocations
@@ -93,6 +97,12 @@ cd packages/core && pnpm test    # Test specific package
 - **`UTXORouteManager`** (mesh-protocol) - UTXO-optimized routing with blockchain awareness and cryptographic security
 - **`DutyCycleManager`** (mesh-protocol) - Regional compliance for EU/US/Japan/Australia with transmission scheduling
 - **`RegionalComplianceValidator`** (mesh-protocol) - Regulatory compliance validation and enforcement
+- **`UTXOPriorityMeshProtocol`** (core) - Priority-based message handling with QoS and emergency mode
+- **`UTXOPriorityQueue`** (core) - Message queue management with priority levels and memory limits
+- **`UTXOPriorityCalculator`** (core) - Fee-based priority calculation with multiple factors
+- **`UTXOQoSManager`** (core) - Quality of Service management with duty cycle integration
+- **`CompressionFactory`** (core) - Factory for creating compression engines (gzip, zlib, brotli, lz4)
+- **`UTXOCompressionManager`** (core) - UTXO-specific compression with engine selection
 - **`Logger`** (shared) - Centralized logging with levels
 
 ### Technical Constraints
@@ -138,18 +148,24 @@ pnpm --filter "node-server" test
 # Build dependencies and run all tests
 pnpm --filter "@lorachain/shared" build && pnpm --filter "@lorachain/core" build && pnpm test
 
+# Run specific test suites
+pnpm test:unit                                          # Run all unit tests
+pnpm test:integration                                   # Run all integration tests
+
 # Individual package testing (after building dependencies)
-pnpm --filter "@lorachain/core" test:run                # Run core blockchain tests (single run, no watch)
+pnpm --filter "@lorachain/core" test:unit               # Run core unit tests
+pnpm --filter "@lorachain/core" test:integration        # Run core integration tests
 pnpm --filter "@lorachain/core" test:coverage           # Run core tests with coverage
-pnpm --filter "@lorachain/mobile-wallet" test:run       # Run mobile wallet tests (single run)
-pnpm --filter "@lorachain/mesh-protocol" test:run       # Run mesh protocol tests (single run)
-pnpm --filter "@lorachain/node" test:run                # Run node tests (single run)
-pnpm --filter "wallet-app" test:run                     # Run wallet app tests (single run)
-pnpm --filter "node-server" test:run                    # Run node server tests (single run)
+pnpm --filter "@lorachain/mobile-wallet" test:unit      # Run mobile wallet unit tests
+pnpm --filter "@lorachain/mesh-protocol" test:unit      # Run mesh protocol unit tests
+pnpm --filter "@lorachain/node" test:unit               # Run node unit tests
+pnpm --filter "wallet-app" test:unit                    # Run wallet app unit tests
+pnpm --filter "node-server" test:unit                   # Run node server unit tests
 
 # Watch mode testing (after building dependencies)
-pnpm --filter "@lorachain/core" test:watch              # Watch mode for core package
-pnpm --filter "@lorachain/mobile-wallet" test:watch     # Watch mode for mobile wallet
+pnpm --filter "@lorachain/core" test:unit:watch         # Unit tests watch mode
+pnpm --filter "@lorachain/core" test:integration:watch  # Integration tests watch mode
+pnpm --filter "@lorachain/mobile-wallet" test:unit:watch # Mobile wallet watch mode
 ```
 
 ### IMPORTANT Testing Best Practices
@@ -183,9 +199,12 @@ pnpm --filter "@lorachain/mobile-wallet" test:watch     # Watch mode for mobile 
 4. **Build dependencies before testing**: Always build shared packages first to avoid test failures due to outdated compiled versions.
 
 5. **Use appropriate test commands**:
-   - `test:run` - Single test execution (for CI/automated testing)
-   - `test:watch` - Watch mode for development
-   - `test` - Alias for `test:watch` (avoid in automated contexts)
+   - `test` - Run full test suite (unit + integration)
+   - `test:unit` - Run unit tests only
+   - `test:unit:watch` - Unit tests in watch mode
+   - `test:integration` - Run integration tests only (core package)
+   - `test:integration:watch` - Integration tests in watch mode (core package)
+   - `test:run` - Single test execution (deprecated, use test:unit or test:integration)
 
 ### Dependency Build Order
 
@@ -225,11 +244,14 @@ Each package includes comprehensive unit tests using Vitest:
 - **Duty cycle compliance**: Tests for regional regulations (EU/US/Japan/Australia), transmission scheduling, and compliance validation
 - **Fragmentation system**: Tests for enhanced fragmentation with missing fragment detection and retransmission
 
-**Total test coverage**: 650+ tests across all packages with 100% passing rate covering Milestone 1 and significant portions of Milestone 2.
+**Total test coverage**: 660+ tests across all packages with 100% passing rate covering Milestone 1 and significant portions of Milestone 2.
+- **594 unit tests**: Fast, isolated tests for individual components
+- **66 integration tests**: Comprehensive system-level tests (core package)
+- **Separated configurations**: vitest.config.unit.ts and vitest.config.integration.ts for optimized test execution
 
 Run package-specific tests with `cd packages/<name> && pnpm test` or use watch mode for development with `pnpm test:watch`.
 
-**Development Progress**: Currently ~35-40% complete toward MVP goal. Estimated 7-10 months total development time with significant progress on Milestone 2 (LoRa/Mesh Protocol) including advanced routing, duty cycle management, and regional compliance.
+**Development Progress**: Currently ~40-45% complete toward MVP goal. Estimated 7-10 months total development time with significant progress on Milestone 2 (LoRa/Mesh Protocol) including compression, prioritization, advanced routing, duty cycle management, and regional compliance.
 
 ### Key Implementation Details
 
@@ -259,8 +281,8 @@ Run package-specific tests with `cd packages/<name> && pnpm test` or use watch m
 - **✅ Advanced Routing Protocol**: UTXO-aware flood routing, blockchain-optimized routing tables, multi-hop forwarding, and cryptographic loop prevention
 - **✅ Complete Duty Cycle Management**: Regional compliance validation (EU ETSI, US/CA/MX FCC, Japan ARIB, Australia/NZ ACMA), transmission scheduling, and regulatory enforcement
 - **✅ Enhanced Mesh Protocol**: Comprehensive mesh networking with UTXO routing capabilities, duty cycle compliance, and network topology management
-- **🔲 Compression**: Protocol buffer serialization and custom compression for blockchain data (PENDING)
-- **🔲 Message Prioritization**: Priority queues and QoS levels for different message types (PENDING)
+- **✅ Compression**: Multiple compression engines (gzip, zlib, brotli, lz4) with UTXO-specific optimization for 256-byte LoRa constraints
+- **✅ Message Prioritization**: Priority queues with fee-based calculation, QoS levels, emergency mode, and duty cycle integration
 - **🔲 Reliable Delivery**: Acknowledgment mechanism, retry logic, and delivery confirmation (PENDING)
 - **🔲 Node Discovery Protocol**: Periodic beacons, neighbor management, and topology mapping (PENDING)
 

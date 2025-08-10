@@ -391,11 +391,32 @@ export class MemoryDatabase implements IDatabase {
   private storage: Map<string, Map<string, unknown>> = new Map();
   private snapshots: Map<string, Snapshot> = new Map();
   private logger = new SimpleLogger('MemoryDatabase');
+  private isOpen = false;
+  private initPromise?: Promise<void>;
 
   constructor() {
     // Initialize sublevels
     for (const sublevelName of Object.values(SubLevels)) {
       this.storage.set(sublevelName, new Map());
+    }
+    // Auto-open like LevelDatabase
+    this.initPromise = this.open();
+  }
+
+  async open(): Promise<void> {
+    this.isOpen = true;
+    this.logger.debug('Memory database opened');
+  }
+
+  private async ensureOpen(): Promise<void> {
+    if (this.initPromise) {
+      await this.initPromise;
+    }
+  }
+
+  private checkOpen(): void {
+    if (!this.isOpen) {
+      throw new Error('Database not open');
     }
   }
 
@@ -408,12 +429,14 @@ export class MemoryDatabase implements IDatabase {
   }
 
   async get<T>(key: string, sublevel?: string): Promise<T | null> {
+    await this.ensureOpen();
     const storage = this.getSublevelStorage(sublevel);
     const value = storage.get(key);
     return value !== undefined ? (value as T) : null;
   }
 
   async put<T>(key: string, value: T, sublevel?: string): Promise<void> {
+    await this.ensureOpen();
     const storage = this.getSublevelStorage(sublevel);
     storage.set(key, value);
     this.logger.debug(
@@ -422,6 +445,7 @@ export class MemoryDatabase implements IDatabase {
   }
 
   async del(key: string, sublevel?: string): Promise<void> {
+    await this.ensureOpen();
     const storage = this.getSublevelStorage(sublevel);
     storage.delete(key);
     this.logger.debug(
@@ -430,6 +454,7 @@ export class MemoryDatabase implements IDatabase {
   }
 
   async batch(operations: BatchOperation[]): Promise<void> {
+    await this.ensureOpen();
     for (const op of operations) {
       if (op.type === 'put' && op.value !== undefined) {
         await this.put(op.key, op.value, op.sublevel);
@@ -504,9 +529,60 @@ export class MemoryDatabase implements IDatabase {
   }
 
   async close(): Promise<void> {
+    this.isOpen = false;
     this.storage.clear();
     this.snapshots.clear();
     this.logger.debug('Memory database closed');
+  }
+
+  // Sublevel support for compatibility
+  sublevel(name: string): IDatabase {
+    // Return a wrapper that prefixes keys with the sublevel name
+    const parent = this;
+    return {
+      async open(): Promise<void> {
+        // Sublevel uses parent's open state
+      },
+      async get<T>(key: string): Promise<T | null> {
+        return parent.get<T>(key, name);
+      },
+      async put<T>(key: string, value: T): Promise<void> {
+        return parent.put(key, value, name);
+      },
+      async del(key: string): Promise<void> {
+        return parent.del(key, name);
+      },
+      async batch(operations: BatchOperation[]): Promise<void> {
+        const prefixedOps = operations.map(op => ({
+          ...op,
+          sublevel: name,
+        }));
+        return parent.batch(prefixedOps);
+      },
+      async *iterator(options: IteratorOptions): AsyncIterable<KeyValue> {
+        yield* parent.iterator({ ...options, sublevel: name });
+      },
+      async multiGet(
+        keys: Array<{ key: string; sublevel?: string }>
+      ): Promise<Array<unknown | null>> {
+        return parent.multiGet(keys.map(k => ({ ...k, sublevel: name })));
+      },
+      async createSnapshot(): Promise<Snapshot> {
+        return parent.createSnapshot();
+      },
+      async releaseSnapshot(snapshot: Snapshot): Promise<void> {
+        return parent.releaseSnapshot(snapshot);
+      },
+      async compact(): Promise<void> {
+        return parent.compact(name);
+      },
+      async close(): Promise<void> {
+        // Sublevel doesn't close parent
+      },
+      sublevel(subName: string): IDatabase {
+        return parent.sublevel(`${name}!${subName}`);
+      },
+    } as IDatabase;
   }
 
   // Memory-specific utility methods
