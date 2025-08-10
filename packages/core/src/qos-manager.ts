@@ -196,15 +196,33 @@ export class UTXOQoSManager extends EventEmitter implements IQoSManager {
 
   updateQoSPolicy(policy: UTXOQoSPolicy): void {
     const oldPolicy = { ...this.qosPolicy };
-    
+
     // Merge partial policy updates with existing policy
     this.qosPolicy = {
-      transmissionPower: { ...this.qosPolicy.transmissionPower, ...(policy.transmissionPower || {}) },
-      retryAttempts: { ...this.qosPolicy.retryAttempts, ...(policy.retryAttempts || {}) },
-      dutyCycleExemption: { ...this.qosPolicy.dutyCycleExemption, ...(policy.dutyCycleExemption || {}) },
-      deliveryConfirmation: { ...this.qosPolicy.deliveryConfirmation, ...(policy.deliveryConfirmation || {}) },
-      compressionRequired: { ...this.qosPolicy.compressionRequired, ...(policy.compressionRequired || {}) },
-      utxoFeeMultiplier: { ...this.qosPolicy.utxoFeeMultiplier, ...(policy.utxoFeeMultiplier || {}) },
+      transmissionPower: {
+        ...this.qosPolicy.transmissionPower,
+        ...(policy.transmissionPower || {}),
+      },
+      retryAttempts: {
+        ...this.qosPolicy.retryAttempts,
+        ...(policy.retryAttempts || {}),
+      },
+      dutyCycleExemption: {
+        ...this.qosPolicy.dutyCycleExemption,
+        ...(policy.dutyCycleExemption || {}),
+      },
+      deliveryConfirmation: {
+        ...this.qosPolicy.deliveryConfirmation,
+        ...(policy.deliveryConfirmation || {}),
+      },
+      compressionRequired: {
+        ...this.qosPolicy.compressionRequired,
+        ...(policy.compressionRequired || {}),
+      },
+      utxoFeeMultiplier: {
+        ...this.qosPolicy.utxoFeeMultiplier,
+        ...(policy.utxoFeeMultiplier || {}),
+      },
       timeoutMs: { ...this.qosPolicy.timeoutMs, ...(policy.timeoutMs || {}) },
     };
 
@@ -451,7 +469,7 @@ export class UTXOQoSManager extends EventEmitter implements IQoSManager {
 
       // Delete tracker first, then emit event
       this.deliveryTrackers.delete(messageId);
-      
+
       this.emit(
         'deliveryConfirmed',
         messageId,
@@ -557,21 +575,24 @@ export class UTXOQoSManager extends EventEmitter implements IQoSManager {
           if (
             newPolicy.transmissionPower &&
             oldPolicy.transmissionPower[priority] !==
-            newPolicy.transmissionPower[priority]
+              newPolicy.transmissionPower[priority]
           ) {
             changes.push(`transmissionPower[${priority}]`);
           }
           if (
             newPolicy.retryAttempts &&
             oldPolicy.retryAttempts[priority] !==
-            newPolicy.retryAttempts[priority]
+              newPolicy.retryAttempts[priority]
           ) {
             changes.push(`retryAttempts[${priority}]`);
           }
         }
       }
     } catch (error) {
-      this.logger.warn('Error comparing QoS policies', error as Record<string, any>);
+      this.logger.warn(
+        'Error comparing QoS policies',
+        error as Record<string, any>
+      );
     }
 
     return changes;

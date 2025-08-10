@@ -167,7 +167,9 @@ export class UTXOPriorityCalculator
     try {
       // Validate transaction has required fields
       if (!tx || !tx.inputs || !tx.outputs) {
-        this.logger.warn('Invalid transaction structure, using default priority');
+        this.logger.warn(
+          'Invalid transaction structure, using default priority'
+        );
         return MessagePriority.NORMAL;
       }
 
@@ -410,7 +412,10 @@ export class UTXOPriorityCalculator
 
       return tx.fee / estimatedSize;
     } catch (error) {
-      this.logger.warn('Failed to calculate fee per byte', error as Record<string, any>);
+      this.logger.warn(
+        'Failed to calculate fee per byte',
+        error as Record<string, any>
+      );
       return 0;
     }
   }
