@@ -251,6 +251,49 @@ export class CryptographicService {
 
     return new Uint8Array([...new Uint8Array(leadingZeros), ...bytes]);
   }
+
+  // Instance methods for node discovery protocol
+  async generateKeyPair(
+    algorithm: SignatureAlgorithm = 'secp256k1'
+  ): Promise<KeyPair> {
+    return CryptographicService.generateKeyPair(algorithm);
+  }
+
+  async signMessage(message: string): Promise<string> {
+    const messageHash = CryptographicService.hashMessage(message);
+    // For node discovery, we'll use a default secp256k1 key pair
+    // In a real implementation, this would use the node's key pair
+    const keyPair = CryptographicService.generateKeyPair('secp256k1');
+    const signature = CryptographicService.sign(
+      messageHash,
+      keyPair.privateKey,
+      keyPair.algorithm
+    );
+    return bytesToHex(signature.signature);
+  }
+
+  async verifySignature(
+    signature: string,
+    message: string,
+    nodeId: string
+  ): Promise<boolean> {
+    try {
+      const messageHash = CryptographicService.hashMessage(message);
+      const signatureBytes = hexToBytes(signature);
+
+      // For node discovery, we'll assume nodeId contains the public key
+      // In a real implementation, this would look up the public key for the nodeId
+      const publicKeyBytes = hexToBytes(nodeId.padStart(66, '0'));
+
+      return CryptographicService.verify(
+        { signature: signatureBytes, algorithm: 'secp256k1' },
+        messageHash,
+        publicKeyBytes
+      );
+    } catch {
+      return false;
+    }
+  }
 }
 
 export class SecureTransactionManager {

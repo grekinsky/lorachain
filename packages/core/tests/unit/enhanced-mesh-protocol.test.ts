@@ -65,13 +65,36 @@ describe('UTXOEnhancedMeshProtocol', () => {
 
     dutyCycleConfig = DutyCycleConfigFactory.createForRegion('EU', 'testnet');
 
+    const discoveryConfig = {
+      beaconInterval: 30000,
+      neighborTimeout: 120000,
+      maxNeighbors: 50,
+      enableTopologySharing: true,
+      securityConfig: {
+        enableBeaconSigning: false, // Disable for unit tests
+        maxBeaconRate: 2,
+        requireIdentityProof: false,
+        allowAnonymousNodes: true,
+        topologyValidationStrict: false,
+      },
+      performanceConfig: {
+        maxBeaconProcessingTime: 100,
+        maxNeighborLookupTime: 10,
+        maxTopologyUpdateTime: 200,
+        maxMemoryUsageMB: 10,
+        enableAdaptiveBeaconInterval: false,
+      },
+    };
+
     meshProtocol = new UTXOEnhancedMeshProtocol(
       'test-node',
       'full',
       nodeKeyPair,
       routingConfig,
       fragmentationConfig,
-      dutyCycleConfig
+      dutyCycleConfig,
+      undefined, // reliableDeliveryConfig
+      discoveryConfig
     );
   });
 
@@ -349,13 +372,36 @@ describe('UTXOEnhancedMeshProtocol', () => {
   });
 
   test('should handle different node types', () => {
+    const discoveryConfig = {
+      beaconInterval: 30000,
+      neighborTimeout: 120000,
+      maxNeighbors: 50,
+      enableTopologySharing: true,
+      securityConfig: {
+        enableBeaconSigning: false,
+        maxBeaconRate: 2,
+        requireIdentityProof: false,
+        allowAnonymousNodes: true,
+        topologyValidationStrict: false,
+      },
+      performanceConfig: {
+        maxBeaconProcessingTime: 100,
+        maxNeighborLookupTime: 10,
+        maxTopologyUpdateTime: 200,
+        maxMemoryUsageMB: 10,
+        enableAdaptiveBeaconInterval: false,
+      },
+    };
+
     const lightNodeProtocol = new UTXOEnhancedMeshProtocol(
       'light-node',
       'light',
       nodeKeyPair,
       routingConfig,
       fragmentationConfig,
-      dutyCycleConfig
+      dutyCycleConfig,
+      undefined, // reliableDeliveryConfig
+      discoveryConfig
     );
 
     const miningNodeProtocol = new UTXOEnhancedMeshProtocol(
@@ -364,7 +410,9 @@ describe('UTXOEnhancedMeshProtocol', () => {
       nodeKeyPair,
       routingConfig,
       fragmentationConfig,
-      dutyCycleConfig
+      dutyCycleConfig,
+      undefined, // reliableDeliveryConfig
+      discoveryConfig
     );
 
     expect(lightNodeProtocol.getNodeType()).toBe('light');
@@ -380,13 +428,36 @@ describe('UTXOEnhancedMeshProtocol', () => {
       routeDiscoveryTimeout: 100, // 100ms
     };
 
+    const discoveryConfig = {
+      beaconInterval: 30000,
+      neighborTimeout: 120000,
+      maxNeighbors: 50,
+      enableTopologySharing: true,
+      securityConfig: {
+        enableBeaconSigning: false,
+        maxBeaconRate: 2,
+        requireIdentityProof: false,
+        allowAnonymousNodes: true,
+        topologyValidationStrict: false,
+      },
+      performanceConfig: {
+        maxBeaconProcessingTime: 100,
+        maxNeighborLookupTime: 10,
+        maxTopologyUpdateTime: 200,
+        maxMemoryUsageMB: 10,
+        enableAdaptiveBeaconInterval: false,
+      },
+    };
+
     const shortTimeoutProtocol = new UTXOEnhancedMeshProtocol(
       'test-node-2',
       'full',
       nodeKeyPair,
       shortTimeoutConfig,
       fragmentationConfig,
-      dutyCycleConfig
+      dutyCycleConfig,
+      undefined, // reliableDeliveryConfig
+      discoveryConfig
     );
 
     await shortTimeoutProtocol.connect();

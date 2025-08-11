@@ -982,4 +982,48 @@ export class UTXOCompressionManager
 
     return totalCompressedSize / totalOriginalSize;
   }
+
+  /**
+   * Get supported compression engines
+   */
+  getSupportedEngines(): string[] {
+    return Array.from(this.engines.keys()).filter(
+      algo => algo !== CompressionAlgorithm.NONE
+    );
+  }
+
+  /**
+   * Compress data only if it will provide benefit
+   */
+  async compressIfBeneficial(
+    data: string,
+    type: string
+  ): Promise<{ data: Uint8Array | string; isCompressed: boolean }> {
+    const dataBytes = new TextEncoder().encode(data);
+
+    // Skip compression for small data
+    if (dataBytes.length < this.config.compressionThreshold) {
+      return { data, isCompressed: false };
+    }
+
+    try {
+      // Get optimal algorithm
+      const algorithm = this.selectOptimalAlgorithm(dataBytes);
+      if (algorithm === CompressionAlgorithm.NONE) {
+        return { data, isCompressed: false };
+      }
+
+      // Compress data
+      const compressedResult = await this.compress(dataBytes);
+
+      // Only return compressed data if it's actually smaller
+      if (compressedResult.data.length < dataBytes.length) {
+        return { data: compressedResult.data, isCompressed: true };
+      } else {
+        return { data, isCompressed: false };
+      }
+    } catch {
+      return { data, isCompressed: false };
+    }
+  }
 }

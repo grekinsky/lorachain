@@ -28,6 +28,24 @@ import {
   type DeliveryStatus,
   type DeliveryMetrics,
   type IReliableDeliveryManager,
+  // Node Discovery Protocol types
+  type DiscoveryBeacon,
+  type NodeCapabilities,
+  type NeighborNode,
+  type RouteInfo,
+  type CompressionCompatibility,
+  type DutyCycleStatus,
+  type QueueStatus,
+  type EnhancedNetworkTopology,
+  type TopologyNode,
+  type TopologyEdge,
+  type DiscoveryConfig,
+  type DiscoverySecurityConfig,
+  type DiscoveryPerformanceConfig,
+  type DiscoveryEvents,
+  type DiscoveryError,
+  type DiscoveryMetrics,
+  type INodeDiscoveryProtocol,
 } from './types.js';
 import {
   UTXORouteManager,
@@ -44,6 +62,7 @@ import { CryptographicService, type KeyPair } from './cryptographic.js';
 import { DutyCycleManager } from './duty-cycle.js';
 import { DutyCycleConfigFactory } from './duty-cycle-config.js';
 import { UTXOReliableDeliveryManager } from './utxo-reliable-delivery-manager.js';
+import { NodeDiscoveryProtocol } from './node-discovery-protocol.js';
 import { Logger } from '@lorachain/shared';
 import { EventEmitter } from 'events';
 
@@ -80,6 +99,10 @@ export class UTXOEnhancedMeshProtocol
   private reliableDeliveryManager: IReliableDeliveryManager;
   private reliableDeliveryConfig: ReliableDeliveryConfig;
 
+  // BREAKING CHANGE: Added node discovery protocol
+  private nodeDiscoveryProtocol: NodeDiscoveryProtocol;
+  private discoveryConfig: DiscoveryConfig;
+
   private cryptoService: CryptographicService;
   private logger: Logger;
   private nodeId: string;
@@ -108,6 +131,7 @@ export class UTXOEnhancedMeshProtocol
     fragmentationConfig: FragmentationConfig,
     dutyCycleConfig: DutyCycleConfig,
     reliableDeliveryConfig?: ReliableDeliveryConfig,
+    discoveryConfig?: DiscoveryConfig,
     database?: IDatabase,
     cryptoService?: CryptographicService
   ) {
@@ -154,6 +178,28 @@ export class UTXOEnhancedMeshProtocol
       enablePriorityCalculation: true,
     };
 
+    // BREAKING CHANGE: Initialize node discovery configuration
+    this.discoveryConfig = discoveryConfig || {
+      beaconInterval: 30000, // 30 seconds
+      neighborTimeout: 120000, // 2 minutes
+      maxNeighbors: 100,
+      enableTopologySharing: true,
+      securityConfig: {
+        enableBeaconSigning: true,
+        maxBeaconRate: 2, // 2 beacons per minute max
+        requireIdentityProof: true,
+        allowAnonymousNodes: false,
+        topologyValidationStrict: true,
+      },
+      performanceConfig: {
+        maxBeaconProcessingTime: 100, // 100ms
+        maxNeighborLookupTime: 10, // 10ms
+        maxTopologyUpdateTime: 200, // 200ms
+        maxMemoryUsageMB: 10,
+        enableAdaptiveBeaconInterval: true,
+      },
+    };
+
     this.reliableDeliveryManager = new UTXOReliableDeliveryManager(
       nodeId,
       nodeKeyPair,
@@ -168,6 +214,21 @@ export class UTXOEnhancedMeshProtocol
       enableCompression: this.reliableDeliveryConfig.enableCompression,
       enableDutyCycleIntegration:
         this.reliableDeliveryConfig.enableDutyCycleIntegration,
+    });
+
+    // BREAKING CHANGE: Initialize node discovery protocol
+    this.nodeDiscoveryProtocol = new NodeDiscoveryProtocol(
+      nodeId,
+      nodeKeyPair,
+      nodeType === 'mining' ? 'full' : nodeType,
+      this.discoveryConfig,
+      this.cryptoService
+    );
+
+    this.logger.info('Node discovery protocol initialized', {
+      beaconInterval: this.discoveryConfig.beaconInterval,
+      maxNeighbors: this.discoveryConfig.maxNeighbors,
+      securityEnabled: this.discoveryConfig.securityConfig.enableBeaconSigning,
     });
 
     // Initialize routing components
@@ -255,6 +316,12 @@ export class UTXOEnhancedMeshProtocol
 
     // Set up reliable delivery event handlers
     this.setupReliableDeliveryEventHandlers();
+
+    // BREAKING CHANGE: Set up node discovery integration
+    this.setupNodeDiscoveryIntegration();
+
+    // Set up node discovery event handlers
+    this.setupNodeDiscoveryEventHandlers();
   }
 
   // ==========================================
@@ -728,11 +795,6 @@ export class UTXOEnhancedMeshProtocol
     return Array.from(this.neighbors.values());
   }
 
-  getReachableNodes(): string[] {
-    const routes = this.utxoRouteManager.getAllRoutes();
-    return Array.from(routes.keys());
-  }
-
   // ==========================================
   // Fragmentation Interface Compatibility
   // ==========================================
@@ -771,6 +833,10 @@ export class UTXOEnhancedMeshProtocol
     });
 
     this.isConnected = true;
+
+    // BREAKING CHANGE: Start node discovery protocol
+    await this.nodeDiscoveryProtocol.startNodeDiscovery();
+
     this.startPeriodicHello();
     this.emit('connected');
   }
@@ -1295,7 +1361,7 @@ export class UTXOEnhancedMeshProtocol
     }
   }
 
-  // Enhanced disconnect to include reliable delivery cleanup
+  // Enhanced disconnect to include reliable delivery and discovery cleanup
   async disconnect(): Promise<void> {
     if (!this.isConnected) {
       return;
@@ -1305,11 +1371,236 @@ export class UTXOEnhancedMeshProtocol
       nodeId: this.nodeId,
     });
 
+    // BREAKING CHANGE: Stop node discovery protocol
+    await this.nodeDiscoveryProtocol.stopNodeDiscovery();
+
     // Shutdown reliable delivery manager
     await this.reliableDeliveryManager.shutdown();
 
     this.isConnected = false;
     this.neighbors.clear();
     this.emit('disconnected');
+  }
+
+  // ==========================================
+  // BREAKING CHANGE: Node Discovery Protocol API
+  // ==========================================
+
+  /**
+   * Get all discovered neighbors with UTXO capabilities
+   */
+  getDiscoveredNeighbors(): NeighborNode[] {
+    return this.nodeDiscoveryProtocol.getNeighbors();
+  }
+
+  /**
+   * Get specific neighbor by node ID
+   */
+  getDiscoveredNeighbor(nodeId: string): NeighborNode | null {
+    return this.nodeDiscoveryProtocol.getNeighbor(nodeId);
+  }
+
+  /**
+   * Get enhanced network topology with discovery information
+   */
+  getEnhancedNetworkTopology(): EnhancedNetworkTopology {
+    return this.nodeDiscoveryProtocol.getNetworkTopology();
+  }
+
+  /**
+   * Find optimal route to destination using discovery information
+   */
+  findOptimalRoute(destination: string): RouteInfo | null {
+    return this.nodeDiscoveryProtocol.findRoute(destination);
+  }
+
+  /**
+   * Get all reachable nodes through the mesh network
+   */
+  getReachableNodes(): string[] {
+    return this.nodeDiscoveryProtocol.getReachableNodes();
+  }
+
+  /**
+   * Get node discovery protocol metrics
+   */
+  getDiscoveryMetrics(): DiscoveryMetrics {
+    return this.nodeDiscoveryProtocol.getDiscoveryMetrics();
+  }
+
+  /**
+   * Check if node discovery is currently active
+   */
+  isNodeDiscoveryActive(): boolean {
+    return this.nodeDiscoveryProtocol.isDiscoveryActive();
+  }
+
+  /**
+   * Manually trigger a discovery beacon transmission
+   */
+  async sendDiscoveryBeacon(): Promise<void> {
+    await this.nodeDiscoveryProtocol.sendDiscoveryBeacon();
+  }
+
+  /**
+   * Process an incoming discovery beacon
+   */
+  async processDiscoveryBeacon(
+    beacon: DiscoveryBeacon,
+    from: string
+  ): Promise<void> {
+    await this.nodeDiscoveryProtocol.processDiscoveryBeacon(beacon, from);
+  }
+
+  /**
+   * Update discovery configuration
+   */
+  updateDiscoveryConfig(config: Partial<DiscoveryConfig>): void {
+    this.discoveryConfig = { ...this.discoveryConfig, ...config };
+    // Note: Would need to restart discovery with new config in full implementation
+    this.logger.info('Discovery configuration updated', config);
+  }
+
+  /**
+   * Get current discovery configuration
+   */
+  getDiscoveryConfig(): DiscoveryConfig {
+    return { ...this.discoveryConfig };
+  }
+
+  // ==========================================
+  // BREAKING CHANGE: Node Discovery Integration Setup
+  // ==========================================
+
+  private setupNodeDiscoveryIntegration(): void {
+    // Integrate with duty cycle manager
+    if (this.dutyCycleManager) {
+      this.nodeDiscoveryProtocol.setDutyCycleManager(this.dutyCycleManager);
+    }
+
+    // Integrate with reliable delivery manager
+    if (this.reliableDeliveryManager) {
+      this.nodeDiscoveryProtocol.setReliableDeliveryManager(
+        this.reliableDeliveryManager
+      );
+    }
+
+    // TODO: Integrate with compression manager when available
+    // if (this.compressionManager) {
+    //   this.nodeDiscoveryProtocol.setCompressionManager(this.compressionManager);
+    // }
+
+    this.logger.info('Node discovery protocol integration configured', {
+      dutyCycleIntegration: !!this.dutyCycleManager,
+      reliableDeliveryIntegration: !!this.reliableDeliveryManager,
+      compressionIntegration: false, // TODO: Enable when compression manager is available
+    });
+  }
+
+  private setupNodeDiscoveryEventHandlers(): void {
+    // Handle neighbor discovered events
+    this.nodeDiscoveryProtocol.on(
+      'neighborDiscovered',
+      (neighbor: NeighborNode) => {
+        this.logger.info(
+          'Mesh protocol: New neighbor discovered via discovery protocol',
+          {
+            nodeId: neighbor.id,
+            nodeType: neighbor.nodeType,
+            capabilities: neighbor.capabilities,
+          }
+        );
+
+        // Update legacy neighbors map for backward compatibility
+        this.neighbors.set(neighbor.id, {
+          nodeId: neighbor.id,
+          nodeType: neighbor.nodeType,
+          blockchainHeight: 0, // Would be set from neighbor capabilities
+          utxoSetCompleteness: 0, // Would be set from neighbor capabilities
+          lastSeen: neighbor.lastSeen,
+        });
+
+        // Emit mesh protocol event for consumers
+        this.emit('neighbor_discovered', neighbor);
+      }
+    );
+
+    // Handle neighbor lost events
+    this.nodeDiscoveryProtocol.on('neighborLost', (nodeId: string) => {
+      this.logger.info('Mesh protocol: Neighbor lost via discovery protocol', {
+        nodeId,
+      });
+
+      // Update legacy neighbors map
+      this.neighbors.delete(nodeId);
+
+      // Emit mesh protocol event
+      this.emit('neighbor_lost', nodeId);
+    });
+
+    // Handle topology updates
+    this.nodeDiscoveryProtocol.on(
+      'topologyUpdated',
+      (topology: EnhancedNetworkTopology) => {
+        this.logger.debug('Mesh protocol: Network topology updated', {
+          nodeCount: topology.nodes.size,
+          edgeCount: topology.edges.size,
+          version: topology.version,
+        });
+
+        // Emit mesh protocol event
+        this.emit('topology_updated', topology);
+      }
+    );
+
+    // Handle route changes
+    this.nodeDiscoveryProtocol.on('routeChanged', (route: RouteInfo) => {
+      this.logger.debug('Mesh protocol: Route changed via discovery protocol', {
+        destination: route.destination,
+        nextHop: route.nextHop,
+        hopCount: route.hopCount,
+        quality: route.quality,
+      });
+
+      // Emit mesh protocol event
+      this.emit('route_changed', route);
+    });
+
+    // Handle discovery errors
+    this.nodeDiscoveryProtocol.on('discoveryError', (error: DiscoveryError) => {
+      this.logger.error('Mesh protocol: Discovery protocol error', {
+        type: error.type,
+        message: error.message,
+        nodeId: error.nodeId,
+      });
+
+      // Emit mesh protocol error event
+      this.emit('discovery_error', error);
+    });
+
+    // Handle beacon received events
+    this.nodeDiscoveryProtocol.on(
+      'beaconReceived',
+      (beacon: DiscoveryBeacon, from: string) => {
+        this.logger.debug('Mesh protocol: Discovery beacon received', {
+          nodeId: beacon.nodeId,
+          nodeType: beacon.nodeType,
+          sequenceNumber: beacon.sequenceNumber,
+          from,
+        });
+
+        // Emit mesh protocol event
+        this.emit('beacon_received', beacon, from);
+      }
+    );
+
+    // Handle beacon send events (for reliable delivery integration)
+    this.nodeDiscoveryProtocol.on(
+      'beaconSend',
+      async (message: MeshMessage) => {
+        // Forward beacon through mesh protocol for actual transmission
+        await this.broadcastMessage(message);
+      }
+    );
   }
 }

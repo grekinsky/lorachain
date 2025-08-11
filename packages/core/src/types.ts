@@ -1365,3 +1365,241 @@ export interface IAcknowledmentHandler {
   // Lifecycle
   shutdown(): Promise<void>;
 }
+
+// ==========================================
+// NODE DISCOVERY PROTOCOL TYPES
+// ==========================================
+
+/**
+ * Discovery beacon message for node discovery protocol
+ * UTXO-aware with compression and regional compliance
+ */
+export interface DiscoveryBeacon {
+  nodeId: string;
+  nodeType: 'light' | 'full';
+  capabilities: NodeCapabilities;
+  sequenceNumber: number;
+  timestamp: number;
+  networkInfo: {
+    blockHeight?: number;
+    peerCount: number;
+    signalStrength: number;
+    utxoSetSize?: number;
+    compressionEngines: string[];
+    dutyCycleRegion: string;
+  };
+  signature: string;
+}
+
+/**
+ * Node capabilities for discovery and routing optimization
+ */
+export interface NodeCapabilities {
+  canMine: boolean;
+  supportsRelay: boolean;
+  batteryLevel?: number;
+  maxHopCount: number;
+  supportedCompressionEngines: string[];
+  dutyCycleCompliance: string[];
+  maxQueueSize: number;
+  supportsUTXORouting: boolean;
+}
+
+/**
+ * Neighbor node information with UTXO and mesh capabilities
+ */
+export interface NeighborNode extends NetworkNode {
+  id: string;
+  nodeType: 'light' | 'full';
+  capabilities: NodeCapabilities;
+  signalStrength: number;
+  hopCount: number;
+  lastSeen: number;
+  firstSeen: number;
+  beaconSequence: number;
+  isStale: boolean;
+  routes: RouteInfo[];
+  compressionCompatibility: CompressionCompatibility;
+  dutyCycleStatus: DutyCycleStatus;
+  queueStatus: QueueStatus;
+}
+
+/**
+ * Route information with compression and performance metrics
+ */
+export interface RouteInfo {
+  destination: string;
+  nextHop: string;
+  hopCount: number;
+  quality: number;
+  lastUpdated: number;
+  compressionSupport: string[];
+  estimatedDelay: number;
+}
+
+/**
+ * Compression compatibility information for optimal engine selection
+ */
+export interface CompressionCompatibility {
+  supportedEngines: string[];
+  preferredEngine: string;
+  compressionRatio: number;
+}
+
+/**
+ * Duty cycle status for regional compliance tracking
+ */
+export interface DutyCycleStatus {
+  region: string;
+  currentUsage: number;
+  availableTime: number;
+  nextAvailableSlot: number;
+}
+
+/**
+ * Queue status for load balancing and routing optimization
+ */
+export interface QueueStatus {
+  currentSize: number;
+  maxSize: number;
+  priorityDistribution: Record<string, number>;
+}
+
+/**
+ * Enhanced network topology with discovery protocol support
+ */
+export interface EnhancedNetworkTopology {
+  nodes: Map<string, TopologyNode>;
+  edges: Map<string, TopologyEdge[]>;
+  links: Map<string, Set<string>>;
+  version: number;
+  lastUpdated: number;
+}
+
+/**
+ * Topology node with enhanced capabilities information
+ */
+export interface TopologyNode {
+  id: string;
+  nodeType: 'light' | 'full';
+  capabilities: NodeCapabilities;
+  lastSeen: number;
+  directNeighbors: string[];
+  hopDistance: number;
+}
+
+/**
+ * Topology edge with quality metrics
+ */
+export interface TopologyEdge {
+  from: string;
+  to: string;
+  signalStrength: number;
+  quality: number;
+  lastSeen: number;
+}
+
+/**
+ * Discovery protocol configuration
+ */
+export interface DiscoveryConfig {
+  beaconInterval: number; // Beacon transmission interval (ms)
+  neighborTimeout: number; // Neighbor stale timeout (ms)
+  maxNeighbors: number; // Maximum neighbors to track
+  enableTopologySharing: boolean; // Share topology information
+  securityConfig: DiscoverySecurityConfig; // Security settings
+  performanceConfig: DiscoveryPerformanceConfig; // Performance settings
+}
+
+/**
+ * Security configuration for discovery protocol
+ */
+export interface DiscoverySecurityConfig {
+  enableBeaconSigning: boolean;
+  maxBeaconRate: number;
+  requireIdentityProof: boolean;
+  allowAnonymousNodes: boolean;
+  topologyValidationStrict: boolean;
+}
+
+/**
+ * Performance configuration for discovery protocol
+ */
+export interface DiscoveryPerformanceConfig {
+  maxBeaconProcessingTime: number;
+  maxNeighborLookupTime: number;
+  maxTopologyUpdateTime: number;
+  maxMemoryUsageMB: number;
+  enableAdaptiveBeaconInterval: boolean;
+}
+
+/**
+ * Discovery protocol events interface
+ */
+export interface DiscoveryEvents {
+  neighborDiscovered: (neighbor: NeighborNode) => void;
+  neighborLost: (nodeId: string) => void;
+  topologyUpdated: (topology: EnhancedNetworkTopology) => void;
+  routeChanged: (route: RouteInfo) => void;
+  beaconReceived: (beacon: DiscoveryBeacon, from: string) => void;
+  discoveryError: (error: DiscoveryError) => void;
+}
+
+/**
+ * Discovery error information
+ */
+export interface DiscoveryError {
+  type:
+    | 'beacon_invalid'
+    | 'neighbor_timeout'
+    | 'topology_inconsistent'
+    | 'signature_invalid';
+  message: string;
+  nodeId?: string;
+  timestamp: number;
+}
+
+/**
+ * Discovery protocol metrics
+ */
+export interface DiscoveryMetrics {
+  beaconsProcessed: number;
+  neighborsDiscovered: number;
+  neighborsLost: number;
+  topologyUpdates: number;
+  averageBeaconProcessingTime: number;
+  averageNeighborLookupTime: number;
+  memoryUsageMB: number;
+  discoverySuccessRate: number;
+}
+
+/**
+ * Node discovery protocol interface
+ */
+export interface INodeDiscoveryProtocol {
+  // Discovery management
+  startNodeDiscovery(config?: DiscoveryConfig): Promise<void>;
+  stopNodeDiscovery(): Promise<void>;
+  isDiscoveryActive(): boolean;
+
+  // Beacon management
+  sendDiscoveryBeacon(): Promise<void>;
+  processDiscoveryBeacon(beacon: DiscoveryBeacon, from: string): Promise<void>;
+
+  // Neighbor information
+  getNeighbors(): NeighborNode[];
+  getNeighbor(nodeId: string): NeighborNode | null;
+  getNeighborCount(): number;
+
+  // Topology information
+  getNetworkTopology(): EnhancedNetworkTopology;
+  findRoute(destination: string): RouteInfo | null;
+  getReachableNodes(): string[];
+
+  // Metrics and monitoring
+  getDiscoveryMetrics(): DiscoveryMetrics;
+
+  // Events
+  on(event: keyof DiscoveryEvents, callback: Function): void;
+  emit(event: keyof DiscoveryEvents, ...args: any[]): boolean;
+}

@@ -131,6 +131,7 @@ export class CompressedUTXOMeshProtocol
       config.fragmentationConfig,
       config.dutyCycleConfig,
       undefined, // reliableDeliveryConfig
+      undefined, // discoveryConfig
       database
     );
 

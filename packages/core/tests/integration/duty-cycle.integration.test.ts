@@ -61,6 +61,27 @@ describe('Duty Cycle Integration Tests', () => {
       ackRequired: true,
     };
 
+    const discoveryConfig = {
+      beaconInterval: 30000,
+      neighborTimeout: 120000,
+      maxNeighbors: 50,
+      enableTopologySharing: true,
+      securityConfig: {
+        enableBeaconSigning: false, // Disable for integration tests
+        maxBeaconRate: 2,
+        requireIdentityProof: false,
+        allowAnonymousNodes: true,
+        topologyValidationStrict: false,
+      },
+      performanceConfig: {
+        maxBeaconProcessingTime: 100,
+        maxNeighborLookupTime: 10,
+        maxTopologyUpdateTime: 200,
+        maxMemoryUsageMB: 10,
+        enableAdaptiveBeaconInterval: false,
+      },
+    };
+
     // Initialize mesh protocol with duty cycle management
     meshProtocol = new UTXOEnhancedMeshProtocol(
       'test-node-001',
@@ -69,6 +90,8 @@ describe('Duty Cycle Integration Tests', () => {
       routingConfig,
       fragmentationConfig,
       dutyCycleConfig,
+      undefined, // reliableDeliveryConfig
+      discoveryConfig,
       database,
       cryptoService
     );
@@ -322,6 +345,27 @@ describe('Duty Cycle Integration Tests', () => {
         'testnet'
       );
 
+      const discoveryConfig = {
+        beaconInterval: 30000,
+        neighborTimeout: 120000,
+        maxNeighbors: 50,
+        enableTopologySharing: true,
+        securityConfig: {
+          enableBeaconSigning: false, // Disable for integration tests
+          maxBeaconRate: 2,
+          requireIdentityProof: false,
+          allowAnonymousNodes: true,
+          topologyValidationStrict: false,
+        },
+        performanceConfig: {
+          maxBeaconProcessingTime: 100,
+          maxNeighborLookupTime: 10,
+          maxTopologyUpdateTime: 200,
+          maxMemoryUsageMB: 10,
+          enableAdaptiveBeaconInterval: false,
+        },
+      };
+
       usMeshProtocol = new UTXOEnhancedMeshProtocol(
         'us-test-node-001',
         'full',
@@ -329,6 +373,8 @@ describe('Duty Cycle Integration Tests', () => {
         routingConfig,
         fragmentationConfig,
         usDutyCycleConfig,
+        undefined, // reliableDeliveryConfig
+        discoveryConfig,
         usDatabase,
         cryptoService
       );
