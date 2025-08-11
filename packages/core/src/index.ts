@@ -169,3 +169,24 @@ export type {
   UTXOPriorityConfig,
   PriorityEvents,
 } from './priority-types.js';
+
+// Reliable Delivery System exports
+export * from './utxo-acknowledgment-handler.js';
+export * from './utxo-reliable-delivery-manager.js';
+
+export { UTXOAcknowledmentHandler } from './utxo-acknowledgment-handler.js';
+export { UTXOReliableDeliveryManager } from './utxo-reliable-delivery-manager.js';
+
+// Reliable delivery type exports
+export type {
+  AckMessage,
+  ReliableMessage,
+  RetryContext,
+  RetryPolicy,
+  DeliveryStatus,
+  DeliveryMetrics,
+  ReliableDeliveryConfig,
+  RetryQueueEntry,
+  IReliableDeliveryManager,
+  IAcknowledmentHandler,
+} from './types.js';
