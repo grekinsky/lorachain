@@ -124,6 +124,7 @@ export class UTXOPriorityMeshProtocol
         routingConfig,
         fragmentationConfig,
         dutyCycleConfig,
+        undefined, // reliableDeliveryConfig
         database
       );
 

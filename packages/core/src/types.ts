@@ -1315,38 +1315,53 @@ export interface RetryQueueEntry {
  */
 export interface IReliableDeliveryManager {
   // Core delivery methods
-  sendReliableMessage(message: ReliableMessage, targetNodeId?: string): Promise<string>;
+  sendReliableMessage(
+    message: ReliableMessage,
+    targetNodeId?: string
+  ): Promise<string>;
   handleAcknowledgment(ack: AckMessage): Promise<void>;
-  
+
   // Status and metrics
   getDeliveryStatus(messageId: string): DeliveryStatus | null;
   getDeliveryMetrics(): DeliveryMetrics;
-  
+
   // Configuration
   setRetryPolicy(messageType: string, policy: RetryPolicy): void;
   updateConfig(config: Partial<ReliableDeliveryConfig>): void;
-  
+
   // Control
   retryMessage(messageId: string): Promise<boolean>;
   cancelMessage(messageId: string): Promise<boolean>;
   shutdown(): Promise<void>;
-  
+
   // Events
   on(event: 'delivered' | 'failed' | 'retry', callback: Function): void;
+
+  // Integration
+  setMeshProtocol(meshProtocol: any): void;
+  setDutyCycleManager(dutyCycleManager: any): void;
+  setCompressionManager(compressionManager: any): void;
+  setPriorityCalculator(priorityCalculator: any): void;
 }
 
 /**
- * Acknowledgment handler interface  
+ * Acknowledgment handler interface
  */
 export interface IAcknowledmentHandler {
   // ACK processing
   sendAcknowledgment(messageId: string, success: boolean): Promise<void>;
   processIncomingAck(ack: AckMessage): Promise<boolean>;
-  
+
   // Duplicate detection
   isDuplicateMessage(messageId: string): boolean;
   recordMessage(messageId: string): void;
-  
+
   // Configuration
   setAckTimeout(timeoutMs: number): void;
+
+  // Event handling
+  on(event: string, callback: Function): void;
+
+  // Lifecycle
+  shutdown(): Promise<void>;
 }

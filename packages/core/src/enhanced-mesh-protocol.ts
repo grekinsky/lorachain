@@ -166,7 +166,8 @@ export class UTXOEnhancedMeshProtocol
       maxPendingMessages: this.reliableDeliveryConfig.maxPendingMessages,
       ackTimeoutMs: this.reliableDeliveryConfig.ackTimeoutMs,
       enableCompression: this.reliableDeliveryConfig.enableCompression,
-      enableDutyCycleIntegration: this.reliableDeliveryConfig.enableDutyCycleIntegration,
+      enableDutyCycleIntegration:
+        this.reliableDeliveryConfig.enableDutyCycleIntegration,
     });
 
     // Initialize routing components
@@ -259,35 +260,6 @@ export class UTXOEnhancedMeshProtocol
   // ==========================================
   // Core Mesh Protocol Interface (IEnhancedMeshProtocol)
   // ==========================================
-
-  async sendMessage(message: MeshMessage): Promise<boolean> {
-    if (!this.isConnected) {
-      this.logger.warn('Cannot send message: not connected to mesh network');
-      return false;
-    }
-
-    try {
-      // Check if this is a routing message
-      const routingMessage =
-        this.routingMessageFactory.fromMeshMessage(message);
-      if (routingMessage) {
-        return this.handleOutgoingRoutingMessage(message);
-      }
-
-      // For non-routing messages, use routing if destination is specified
-      if (message.to) {
-        return this.sendRoutedMessage(message, message.to);
-      } else {
-        return this.broadcastMessage(message);
-      }
-    } catch (error) {
-      this.logger.error('Failed to send message', {
-        messageType: message.type,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return false;
-    }
-  }
 
   receiveMessage(data: Uint8Array): MeshMessage | null {
     try {
@@ -803,20 +775,6 @@ export class UTXOEnhancedMeshProtocol
     this.emit('connected');
   }
 
-  async disconnect(): Promise<void> {
-    if (!this.isConnected) {
-      return;
-    }
-
-    this.logger.info('Disconnecting from UTXO-enhanced mesh network', {
-      nodeId: this.nodeId,
-    });
-
-    this.isConnected = false;
-    this.neighbors.clear();
-    this.emit('disconnected');
-  }
-
   // ==========================================
   // Private Methods
   // ==========================================
@@ -945,7 +903,7 @@ export class UTXOEnhancedMeshProtocol
   private setupReliableDeliveryIntegration(): void {
     // Set up reliable delivery manager with mesh protocol reference
     this.reliableDeliveryManager.setMeshProtocol(this);
-    
+
     // Integrate with duty cycle manager if enabled
     if (this.reliableDeliveryConfig.enableDutyCycleIntegration) {
       this.reliableDeliveryManager.setDutyCycleManager(this.dutyCycleManager);
@@ -962,9 +920,11 @@ export class UTXOEnhancedMeshProtocol
     // }
 
     this.logger.info('Reliable delivery integration configured', {
-      dutyCycleIntegration: this.reliableDeliveryConfig.enableDutyCycleIntegration,
+      dutyCycleIntegration:
+        this.reliableDeliveryConfig.enableDutyCycleIntegration,
       compressionEnabled: this.reliableDeliveryConfig.enableCompression,
-      priorityCalculationEnabled: this.reliableDeliveryConfig.enablePriorityCalculation,
+      priorityCalculationEnabled:
+        this.reliableDeliveryConfig.enablePriorityCalculation,
     });
   }
 
@@ -1154,7 +1114,8 @@ export class UTXOEnhancedMeshProtocol
       ...message,
       id: message.signature || this.generateMessageId(),
       reliability,
-      maxRetries: reliability === 'guaranteed' ? 5 : reliability === 'confirmed' ? 3 : 1,
+      maxRetries:
+        reliability === 'guaranteed' ? 5 : reliability === 'confirmed' ? 3 : 1,
       timeoutMs: this.reliableDeliveryConfig.ackTimeoutMs,
       priority: this.calculateMessagePriority(message),
     };
@@ -1251,20 +1212,35 @@ export class UTXOEnhancedMeshProtocol
   }
 
   /**
-   * Override sendMessage to include ACK message handling
+   * Enhanced sendMessage with reliable delivery integration
    */
   async sendMessage(message: MeshMessage): Promise<boolean> {
-    // Check if this is an ACK message
-    if (message.type === 'ack' || message.type === 'nack') {
-      // Handle ACK messages specially
-      const ackMessage = message as AckMessage;
-      await this.handleIncomingAcknowledgment(ackMessage);
-      return true;
+    if (!this.isConnected) {
+      this.logger.warn('Cannot send message: not connected to mesh network');
+      return false;
     }
 
-    // Use parent implementation for regular messages
-    return super.sendMessage ? await super.sendMessage(message) : 
-           await this.sendMessageInternal(message);
+    try {
+      // Check if this is a routing message
+      const routingMessage =
+        this.routingMessageFactory.fromMeshMessage(message);
+      if (routingMessage) {
+        return this.handleOutgoingRoutingMessage(message);
+      }
+
+      // For non-routing messages, use routing if destination is specified
+      if (message.to) {
+        return this.sendRoutedMessage(message, message.to);
+      } else {
+        return this.broadcastMessage(message);
+      }
+    } catch (error) {
+      this.logger.error('Failed to send message', {
+        messageType: message.type,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return false;
+    }
   }
 
   /**

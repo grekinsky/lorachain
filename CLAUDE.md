@@ -245,6 +245,7 @@ Each package includes comprehensive unit tests using Vitest:
 - **Fragmentation system**: Tests for enhanced fragmentation with missing fragment detection and retransmission
 
 **Total test coverage**: 660+ tests across all packages with 100% passing rate covering Milestone 1 and significant portions of Milestone 2.
+
 - **594 unit tests**: Fast, isolated tests for individual components
 - **66 integration tests**: Comprehensive system-level tests (core package)
 - **Separated configurations**: vitest.config.unit.ts and vitest.config.integration.ts for optimized test execution

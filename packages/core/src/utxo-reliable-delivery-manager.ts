@@ -108,26 +108,29 @@ export class UTXOReliableDeliveryManager
   private retryQueue: PriorityQueue<RetryContext>;
   private ackTimeout: Map<string, NodeJS.Timeout> = new Map();
   private retryPolicies: Map<string, RetryPolicy> = new Map();
-  
+
   // External dependencies
   private ackHandler: IAcknowledmentHandler;
   private meshProtocol: any; // Will be set via integration
   private dutyCycleManager?: IDutyCycleManager;
   private compressionManager?: any;
   private priorityCalculator?: any;
-  
+
   private nodeId: string;
   private nodeKeyPair: KeyPair;
   private cryptoService: CryptographicService;
   private logger: Logger;
 
   // Circuit breaker state for failed nodes
-  private circuitBreakerState: Map<string, {
-    failures: number;
-    lastFailure: number;
-    isOpen: boolean;
-    nextRetry: number;
-  }> = new Map();
+  private circuitBreakerState: Map<
+    string,
+    {
+      failures: number;
+      lastFailure: number;
+      isOpen: boolean;
+      nextRetry: number;
+    }
+  > = new Map();
 
   // Statistics and metrics
   private metrics: DeliveryMetrics = {
@@ -157,7 +160,7 @@ export class UTXOReliableDeliveryManager
     cryptoService?: CryptographicService
   ) {
     super();
-    
+
     this.nodeId = nodeId;
     this.nodeKeyPair = nodeKeyPair;
     this.config = config;
@@ -175,11 +178,9 @@ export class UTXOReliableDeliveryManager
     this.retryQueue = new PriorityQueue<RetryContext>();
 
     // Initialize or use provided ACK handler
-    this.ackHandler = ackHandler || new UTXOAcknowledmentHandler(
-      nodeId,
-      nodeKeyPair,
-      this.cryptoService
-    );
+    this.ackHandler =
+      ackHandler ||
+      new UTXOAcknowledmentHandler(nodeId, nodeKeyPair, this.cryptoService);
 
     // Set up default retry policies
     this.initializeDefaultRetryPolicies();
@@ -212,7 +213,10 @@ export class UTXOReliableDeliveryManager
   ): Promise<string> {
     try {
       // Check pending message limits
-      if (this.deliveryTracker.pendingMessages.size >= this.config.maxPendingMessages) {
+      if (
+        this.deliveryTracker.pendingMessages.size >=
+        this.config.maxPendingMessages
+      ) {
         throw new Error('Maximum pending messages exceeded');
       }
 
@@ -251,11 +255,11 @@ export class UTXOReliableDeliveryManager
 
       // Send message via mesh protocol
       const success = await this.transmitMessage(message, targetNodeId);
-      
+
       if (success) {
         // Set up acknowledgment timeout
         this.setupAckTimeout(message);
-        
+
         this.logger.debug('Reliable message sent', {
           messageId: message.id,
           reliability: message.reliability,
@@ -267,7 +271,11 @@ export class UTXOReliableDeliveryManager
         return message.id;
       } else {
         // Initial transmission failed, add to retry queue
-        this.scheduleRetry(message, targetNodeId || '', 'Initial transmission failed');
+        this.scheduleRetry(
+          message,
+          targetNodeId || '',
+          'Initial transmission failed'
+        );
         return message.id;
       }
     } catch (error) {
@@ -284,7 +292,9 @@ export class UTXOReliableDeliveryManager
    */
   async handleAcknowledgment(ack: AckMessage): Promise<void> {
     try {
-      const deliveryStatus = this.deliveryTracker.pendingMessages.get(ack.messageId);
+      const deliveryStatus = this.deliveryTracker.pendingMessages.get(
+        ack.messageId
+      );
       if (!deliveryStatus) {
         this.logger.warn('ACK received for unknown message', {
           messageId: ack.messageId,
@@ -309,7 +319,8 @@ export class UTXOReliableDeliveryManager
         deliveryStatus.acknowledgedTime = Date.now();
 
         // Calculate delivery time
-        const deliveryTime = deliveryStatus.acknowledgedTime - deliveryStatus.sentTime;
+        const deliveryTime =
+          deliveryStatus.acknowledgedTime - deliveryStatus.sentTime;
         this.deliveryTimes.push(deliveryTime);
         this.retryCounts.push(deliveryStatus.retryCount);
 
@@ -324,7 +335,10 @@ export class UTXOReliableDeliveryManager
         this.retryQueue.remove(ctx => ctx.messageId === ack.messageId);
 
         // Move to completed messages
-        this.deliveryTracker.completedMessages.set(ack.messageId, deliveryStatus);
+        this.deliveryTracker.completedMessages.set(
+          ack.messageId,
+          deliveryStatus
+        );
         this.deliveryTracker.pendingMessages.delete(ack.messageId);
 
         // Reset circuit breaker on success
@@ -340,7 +354,11 @@ export class UTXOReliableDeliveryManager
       } else {
         // NACK received, schedule retry
         deliveryStatus.lastError = 'NACK received';
-        this.scheduleRetryForExisting(ack.messageId, ack.fromNodeId, 'NACK received');
+        this.scheduleRetryForExisting(
+          ack.messageId,
+          ack.fromNodeId,
+          'NACK received'
+        );
       }
     } catch (error) {
       this.logger.error('Failed to handle acknowledgment', {
@@ -364,7 +382,7 @@ export class UTXOReliableDeliveryManager
   ): void {
     const retryPolicy = this.getRetryPolicy(message.type);
     const deliveryStatus = this.deliveryTracker.pendingMessages.get(message.id);
-    
+
     if (!deliveryStatus) {
       return;
     }
@@ -418,7 +436,8 @@ export class UTXOReliableDeliveryManager
     }
 
     // Find message in completed messages for retry context
-    const completedStatus = this.deliveryTracker.completedMessages.get(messageId);
+    const completedStatus =
+      this.deliveryTracker.completedMessages.get(messageId);
     if (completedStatus) {
       // This shouldn't happen, but handle gracefully
       this.logger.warn('Attempting to retry completed message', { messageId });
@@ -474,7 +493,10 @@ export class UTXOReliableDeliveryManager
         if (this.isCircuitBreakerOpen(retryContext.targetNodeId)) {
           // Reschedule for later
           retryContext.nextRetryTime = now + 60000; // 1 minute
-          this.retryQueue.enqueue(retryContext, this.getRetryPriority(retryContext.message));
+          this.retryQueue.enqueue(
+            retryContext,
+            this.getRetryPriority(retryContext.message)
+          );
           continue;
         }
 
@@ -489,7 +511,7 @@ export class UTXOReliableDeliveryManager
             // Reset ACK timeout
             this.setupAckTimeout(retryContext.message);
             this.metrics.messagesRetried++;
-            
+
             this.logger.debug('Message retry succeeded', {
               messageId: retryContext.messageId,
               attemptCount: retryContext.attemptCount + 1,
@@ -508,7 +530,10 @@ export class UTXOReliableDeliveryManager
                 'Retry transmission failed'
               );
             } else {
-              this.moveToDeadLetterQueue(retryContext.message, 'Max retries exceeded');
+              this.moveToDeadLetterQueue(
+                retryContext.message,
+                'Max retries exceeded'
+              );
             }
           }
         } catch (error) {
@@ -642,14 +667,20 @@ export class UTXOReliableDeliveryManager
       .substring(0, 16);
   }
 
-  private calculateRetryDelay(attemptCount: number, policy: RetryPolicy): number {
-    const baseDelay = policy.initialDelayMs * Math.pow(policy.backoffMultiplier, attemptCount);
+  private calculateRetryDelay(
+    attemptCount: number,
+    policy: RetryPolicy
+  ): number {
+    const baseDelay =
+      policy.initialDelayMs * Math.pow(policy.backoffMultiplier, attemptCount);
     const jitter = Math.random() * policy.jitterMaxMs;
     return Math.min(baseDelay + jitter, policy.maxDelayMs);
   }
 
   private getRetryPolicy(messageType: string): RetryPolicy {
-    return this.retryPolicies.get(messageType) || this.config.defaultRetryPolicy;
+    return (
+      this.retryPolicies.get(messageType) || this.config.defaultRetryPolicy
+    );
   }
 
   private getRetryPriority(message: ReliableMessage): number {
@@ -679,10 +710,14 @@ export class UTXOReliableDeliveryManager
     return message.priority || 1;
   }
 
-  private async compressMessage(message: ReliableMessage): Promise<ReliableMessage> {
+  private async compressMessage(
+    message: ReliableMessage
+  ): Promise<ReliableMessage> {
     if (this.compressionManager) {
       // Use existing compression manager
-      const compressed = await this.compressionManager.compress(message.payload);
+      const compressed = await this.compressionManager.compress(
+        message.payload
+      );
       return { ...message, payload: compressed };
     }
     return message;
@@ -727,7 +762,10 @@ export class UTXOReliableDeliveryManager
   // DEAD LETTER QUEUE
   // ==========================================
 
-  private moveToDeadLetterQueue(message: ReliableMessage, reason: string): void {
+  private moveToDeadLetterQueue(
+    message: ReliableMessage,
+    reason: string
+  ): void {
     const deliveryStatus = this.deliveryTracker.pendingMessages.get(message.id);
     if (deliveryStatus) {
       deliveryStatus.status = 'failed';
@@ -736,7 +774,7 @@ export class UTXOReliableDeliveryManager
       // Move to completed messages
       this.deliveryTracker.completedMessages.set(message.id, deliveryStatus);
       this.deliveryTracker.pendingMessages.delete(message.id);
-      
+
       // Add to dead letter queue
       this.deliveryTracker.deadLetterQueue.push(message);
 
@@ -827,8 +865,9 @@ export class UTXOReliableDeliveryManager
   private updateMetrics(): void {
     // Calculate averages
     if (this.deliveryTimes.length > 0) {
-      this.metrics.averageDeliveryTime = 
-        this.deliveryTimes.reduce((a, b) => a + b, 0) / this.deliveryTimes.length;
+      this.metrics.averageDeliveryTime =
+        this.deliveryTimes.reduce((a, b) => a + b, 0) /
+        this.deliveryTimes.length;
     }
 
     if (this.retryCounts.length > 0) {
@@ -837,9 +876,11 @@ export class UTXOReliableDeliveryManager
     }
 
     // Calculate success rate
-    const totalCompleted = this.metrics.messagesDelivered + this.metrics.messagesFailed;
+    const totalCompleted =
+      this.metrics.messagesDelivered + this.metrics.messagesFailed;
     if (totalCompleted > 0) {
-      this.metrics.deliverySuccessRate = this.metrics.messagesDelivered / totalCompleted;
+      this.metrics.deliverySuccessRate =
+        this.metrics.messagesDelivered / totalCompleted;
     }
 
     // Trim arrays to prevent memory growth
@@ -856,13 +897,16 @@ export class UTXOReliableDeliveryManager
   // ==========================================
 
   getDeliveryStatus(messageId: string): DeliveryStatus | null {
-    return this.deliveryTracker.pendingMessages.get(messageId) ||
-           this.deliveryTracker.completedMessages.get(messageId) ||
-           null;
+    return (
+      this.deliveryTracker.pendingMessages.get(messageId) ||
+      this.deliveryTracker.completedMessages.get(messageId) ||
+      null
+    );
   }
 
   getDeliveryMetrics(): DeliveryMetrics {
-    this.metrics.currentPendingCount = this.deliveryTracker.pendingMessages.size;
+    this.metrics.currentPendingCount =
+      this.deliveryTracker.pendingMessages.size;
     return { ...this.metrics };
   }
 
@@ -885,7 +929,7 @@ export class UTXOReliableDeliveryManager
     // Reset retry count and schedule immediate retry
     deliveryStatus.retryCount = 0;
     deliveryStatus.status = 'pending';
-    
+
     this.logger.info('Manual retry requested', { messageId });
     return true;
   }
@@ -899,19 +943,19 @@ export class UTXOReliableDeliveryManager
     // Remove from pending and add to completed with cancelled status
     deliveryStatus.status = 'failed';
     deliveryStatus.lastError = 'Cancelled by user';
-    
+
     this.deliveryTracker.completedMessages.set(messageId, deliveryStatus);
     this.deliveryTracker.pendingMessages.delete(messageId);
-    
+
     // Clean up
     this.clearAckTimeout(messageId);
     this.retryQueue.remove(ctx => ctx.messageId === messageId);
-    
+
     this.metrics.currentPendingCount--;
-    
+
     this.logger.info('Message cancelled', { messageId });
     this.emit('failed', { messageId, reason: 'Cancelled by user' });
-    
+
     return true;
   }
 

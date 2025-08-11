@@ -267,6 +267,7 @@ pnpm test:integration    # Run integration tests once
 ```
 
 **Test Coverage**: 660+ tests across all packages
+
 - ~594 unit tests for fast feedback during development
 - 66 integration tests for comprehensive system validation
 - 100% pass rate with separated test configurations

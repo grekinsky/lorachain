@@ -130,6 +130,7 @@ export class CompressedUTXOMeshProtocol
       config.routingConfig,
       config.fragmentationConfig,
       config.dutyCycleConfig,
+      undefined, // reliableDeliveryConfig
       database
     );
 

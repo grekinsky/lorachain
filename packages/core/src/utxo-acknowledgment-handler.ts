@@ -302,7 +302,7 @@ export class UTXOAcknowledmentHandler
       const messageData = this.serializeAckForSigning(ack);
       const hash = createHash('sha256').update(messageData).digest();
 
-      const signature = await this.cryptoService.signMessage(
+      const signature = CryptographicService.sign(
         hash,
         this.nodeKeyPair.privateKey,
         this.nodeKeyPair.algorithm
@@ -325,10 +325,14 @@ export class UTXOAcknowledmentHandler
     try {
       // In a real implementation, we would need the sender's public key
       // For now, we'll assume signature verification based on known node keys
-      const messageData = this.serializeAckForSigning({
-        ...ack,
-        signature: '', // Clear signature for verification
-      });
+      const ackWithoutSignature = {
+        type: ack.type,
+        messageId: ack.messageId,
+        fromNodeId: ack.fromNodeId,
+        timestamp: ack.timestamp,
+        receivedFragments: ack.receivedFragments,
+      };
+      const messageData = this.serializeAckForSigning(ackWithoutSignature);
 
       const hash = createHash('sha256').update(messageData).digest();
       const signatureBytes = Buffer.from(ack.signature, 'hex');
@@ -419,9 +423,14 @@ export class UTXOAcknowledmentHandler
 
     for (const [messageId, entry] of this.receivedMessages.entries()) {
       const messageAge = now - entry.timestamp;
-      if (messageAge > this.duplicateTrackingWindow || cleaned > 100) {
+      if (messageAge > this.duplicateTrackingWindow) {
         this.receivedMessages.delete(messageId);
         cleaned++;
+      }
+      
+      // Emergency cleanup: remove oldest messages when we've cleaned enough
+      if (cleaned >= 100 && this.receivedMessages.size <= this.maxReceivedMessages) {
+        break;
       }
     }
 
