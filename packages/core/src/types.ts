@@ -1196,3 +1196,172 @@ export interface DutyCycleEvents {
   onRegionChanged(oldRegion: string, newRegion: string): void;
   onComplianceCheck(result: ComplianceResult): void;
 }
+
+// ==========================================
+// RELIABLE DELIVERY TYPES
+// ==========================================
+
+/**
+ * Acknowledgment message for reliable delivery
+ * UTXO-only design with cryptographic signatures
+ */
+export interface AckMessage {
+  type: 'ack' | 'nack';
+  messageId: string;
+  fromNodeId: string;
+  timestamp: number;
+  receivedFragments?: number[]; // For selective ACK
+  signature: string; // Cryptographic signature
+}
+
+/**
+ * Reliable message extending MeshMessage with reliability properties
+ * Fully compatible with existing UTXO message processing
+ */
+export interface ReliableMessage extends MeshMessage {
+  id: string;
+  reliability: 'best-effort' | 'confirmed' | 'guaranteed';
+  maxRetries: number;
+  timeoutMs: number;
+  priority: number;
+}
+
+/**
+ * Retry context for managing failed message retries
+ */
+export interface RetryContext {
+  messageId: string;
+  message: ReliableMessage;
+  attemptCount: number;
+  nextRetryTime: number;
+  lastAttemptTime: number;
+  targetNodeId: string;
+  failureReasons: string[];
+}
+
+/**
+ * Configurable retry policy for different message types
+ */
+export interface RetryPolicy {
+  initialDelayMs: number;
+  maxDelayMs: number;
+  backoffMultiplier: number;
+  jitterMaxMs: number;
+  maxAttempts: number;
+}
+
+/**
+ * Delivery status tracking for reliable messages
+ */
+export interface DeliveryStatus {
+  messageId: string;
+  status: 'pending' | 'acknowledged' | 'confirmed' | 'failed' | 'expired';
+  sentTime: number;
+  acknowledgedTime?: number;
+  confirmedTime?: number;
+  retryCount: number;
+  lastError?: string;
+}
+
+/**
+ * Delivery tracker for managing message delivery state
+ */
+export interface DeliveryTracker {
+  pendingMessages: Map<string, DeliveryStatus>;
+  completedMessages: Map<string, DeliveryStatus>;
+  deadLetterQueue: ReliableMessage[];
+}
+
+/**
+ * Configuration for reliable delivery system
+ */
+export interface ReliableDeliveryConfig {
+  defaultRetryPolicy: RetryPolicy;
+  maxPendingMessages: number;
+  ackTimeoutMs: number;
+  enablePersistence: boolean;
+  deadLetterThreshold: number;
+  // Integration with existing systems
+  enableCompression: boolean;
+  enableDutyCycleIntegration: boolean;
+  enablePriorityCalculation: boolean;
+}
+
+/**
+ * Delivery performance metrics
+ */
+export interface DeliveryMetrics {
+  totalMessagesSent: number;
+  messagesDelivered: number;
+  messagesRetried: number;
+  messagesFailed: number;
+  averageDeliveryTime: number;
+  currentPendingCount: number;
+  deliverySuccessRate: number;
+  averageRetryCount: number;
+}
+
+/**
+ * Priority queue entry for retry management
+ */
+export interface RetryQueueEntry {
+  retryContext: RetryContext;
+  scheduledTime: number;
+  priority: MessagePriority;
+}
+
+/**
+ * Reliable delivery manager interface
+ */
+export interface IReliableDeliveryManager {
+  // Core delivery methods
+  sendReliableMessage(
+    message: ReliableMessage,
+    targetNodeId?: string
+  ): Promise<string>;
+  handleAcknowledgment(ack: AckMessage): Promise<void>;
+
+  // Status and metrics
+  getDeliveryStatus(messageId: string): DeliveryStatus | null;
+  getDeliveryMetrics(): DeliveryMetrics;
+
+  // Configuration
+  setRetryPolicy(messageType: string, policy: RetryPolicy): void;
+  updateConfig(config: Partial<ReliableDeliveryConfig>): void;
+
+  // Control
+  retryMessage(messageId: string): Promise<boolean>;
+  cancelMessage(messageId: string): Promise<boolean>;
+  shutdown(): Promise<void>;
+
+  // Events
+  on(event: 'delivered' | 'failed' | 'retry', callback: Function): void;
+
+  // Integration
+  setMeshProtocol(meshProtocol: any): void;
+  setDutyCycleManager(dutyCycleManager: any): void;
+  setCompressionManager(compressionManager: any): void;
+  setPriorityCalculator(priorityCalculator: any): void;
+}
+
+/**
+ * Acknowledgment handler interface
+ */
+export interface IAcknowledmentHandler {
+  // ACK processing
+  sendAcknowledgment(messageId: string, success: boolean): Promise<void>;
+  processIncomingAck(ack: AckMessage): Promise<boolean>;
+
+  // Duplicate detection
+  isDuplicateMessage(messageId: string): boolean;
+  recordMessage(messageId: string): void;
+
+  // Configuration
+  setAckTimeout(timeoutMs: number): void;
+
+  // Event handling
+  on(event: string, callback: Function): void;
+
+  // Lifecycle
+  shutdown(): Promise<void>;
+}
