@@ -427,9 +427,12 @@ export class UTXOAcknowledmentHandler
         this.receivedMessages.delete(messageId);
         cleaned++;
       }
-      
+
       // Emergency cleanup: remove oldest messages when we've cleaned enough
-      if (cleaned >= 100 && this.receivedMessages.size <= this.maxReceivedMessages) {
+      if (
+        cleaned >= 100 &&
+        this.receivedMessages.size <= this.maxReceivedMessages
+      ) {
         break;
       }
     }
