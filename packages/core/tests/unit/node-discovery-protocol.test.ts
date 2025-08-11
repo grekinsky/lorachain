@@ -1,22 +1,17 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { NodeDiscoveryProtocol } from '../../src/node-discovery-protocol.js';
 import { CryptographicService } from '../../src/cryptographic.js';
-import {
-  type DiscoveryBeacon,
-  type NodeCapabilities,
-  type NeighborNode,
-  type RouteInfo,
-  type DiscoveryConfig,
-  type DiscoveryMetrics,
-  type DiscoveryError,
-  type EnhancedNetworkTopology,
-} from '../../src/types.js';
+import { type DiscoveryBeacon, type DiscoveryConfig } from '../../src/types.js';
 
 describe('NodeDiscoveryProtocol', () => {
   let discoveryProtocol: NodeDiscoveryProtocol;
   let cryptoService: CryptographicService;
   let nodeId: string;
-  let nodeKeyPair: any;
+  let nodeKeyPair: {
+    privateKey: Uint8Array;
+    publicKey: Uint8Array;
+    algorithm: string;
+  };
   let config: DiscoveryConfig;
 
   beforeEach(async () => {
@@ -67,7 +62,11 @@ describe('NodeDiscoveryProtocol', () => {
   describe('Beacon Transmission', () => {
     it('should generate valid discovery beacons', async () => {
       // Mock private method
-      const beacon = await (discoveryProtocol as any).createDiscoveryBeacon();
+      const beacon = await (
+        discoveryProtocol as unknown as {
+          createDiscoveryBeacon: () => Promise<DiscoveryBeacon>;
+        }
+      ).createDiscoveryBeacon();
 
       expect(beacon).toMatchObject({
         nodeId: nodeId,
@@ -115,7 +114,6 @@ describe('NodeDiscoveryProtocol', () => {
     });
 
     it('should respect beacon transmission intervals', async () => {
-      const startTime = Date.now();
       const beaconSendSpy = vi.fn();
 
       discoveryProtocol.on('beaconSend', beaconSendSpy);
@@ -182,7 +180,9 @@ describe('NodeDiscoveryProtocol', () => {
 
       // Mock signature validation
       vi.spyOn(
-        discoveryProtocol as any,
+        discoveryProtocol as unknown as {
+          validateBeaconSignature: () => Promise<boolean>;
+        },
         'validateBeaconSignature'
       ).mockResolvedValue(true);
 
@@ -207,7 +207,9 @@ describe('NodeDiscoveryProtocol', () => {
     it('should update existing neighbor information', async () => {
       // Mock signature validation
       vi.spyOn(
-        discoveryProtocol as any,
+        discoveryProtocol as unknown as {
+          validateBeaconSignature: () => Promise<boolean>;
+        },
         'validateBeaconSignature'
       ).mockResolvedValue(true);
 
@@ -245,7 +247,9 @@ describe('NodeDiscoveryProtocol', () => {
     it('should ignore old or duplicate beacons', async () => {
       // Mock signature validation
       vi.spyOn(
-        discoveryProtocol as any,
+        discoveryProtocol as unknown as {
+          validateBeaconSignature: () => Promise<boolean>;
+        },
         'validateBeaconSignature'
       ).mockResolvedValue(true);
 
@@ -272,7 +276,9 @@ describe('NodeDiscoveryProtocol', () => {
 
       // Mock signature validation
       vi.spyOn(
-        discoveryProtocol as any,
+        discoveryProtocol as unknown as {
+          validateBeaconSignature: () => Promise<boolean>;
+        },
         'validateBeaconSignature'
       ).mockResolvedValue(true);
 
@@ -288,7 +294,9 @@ describe('NodeDiscoveryProtocol', () => {
       );
 
       // Trigger cleanup
-      (discoveryProtocol as any).cleanupStaleNeighbors();
+      (
+        discoveryProtocol as unknown as { cleanupStaleNeighbors: () => void }
+      ).cleanupStaleNeighbors();
 
       expect(neighborLostSpy).toHaveBeenCalledWith('neighbor-001');
       expect(discoveryProtocol.getNeighborCount()).toBe(0);
@@ -307,7 +315,9 @@ describe('NodeDiscoveryProtocol', () => {
 
       // Mock signature validation
       vi.spyOn(
-        limitedProtocol as any,
+        limitedProtocol as unknown as {
+          validateBeaconSignature: () => Promise<boolean>;
+        },
         'validateBeaconSignature'
       ).mockResolvedValue(true);
 
@@ -381,7 +391,9 @@ describe('NodeDiscoveryProtocol', () => {
 
       // Mock signature validation
       vi.spyOn(
-        discoveryProtocol as any,
+        discoveryProtocol as unknown as {
+          validateBeaconSignature: () => Promise<boolean>;
+        },
         'validateBeaconSignature'
       ).mockResolvedValue(true);
 
@@ -405,7 +417,9 @@ describe('NodeDiscoveryProtocol', () => {
     it('should calculate optimal routes', async () => {
       // Mock signature validation
       vi.spyOn(
-        discoveryProtocol as any,
+        discoveryProtocol as unknown as {
+          validateBeaconSignature: () => Promise<boolean>;
+        },
         'validateBeaconSignature'
       ).mockResolvedValue(true);
 
@@ -429,7 +443,9 @@ describe('NodeDiscoveryProtocol', () => {
     it('should find routes through multi-hop paths', async () => {
       // Mock signature validation
       vi.spyOn(
-        discoveryProtocol as any,
+        discoveryProtocol as unknown as {
+          validateBeaconSignature: () => Promise<boolean>;
+        },
         'validateBeaconSignature'
       ).mockResolvedValue(true);
 
@@ -465,7 +481,9 @@ describe('NodeDiscoveryProtocol', () => {
     it('should handle topology changes', async () => {
       // Mock signature validation
       vi.spyOn(
-        discoveryProtocol as any,
+        discoveryProtocol as unknown as {
+          validateBeaconSignature: () => Promise<boolean>;
+        },
         'validateBeaconSignature'
       ).mockResolvedValue(true);
 
@@ -496,7 +514,9 @@ describe('NodeDiscoveryProtocol', () => {
     it('should get reachable nodes correctly', async () => {
       // Mock signature validation
       vi.spyOn(
-        discoveryProtocol as any,
+        discoveryProtocol as unknown as {
+          validateBeaconSignature: () => Promise<boolean>;
+        },
         'validateBeaconSignature'
       ).mockResolvedValue(true);
 
@@ -571,7 +591,9 @@ describe('NodeDiscoveryProtocol', () => {
 
       // Mock signature validation to fail
       vi.spyOn(
-        discoveryProtocol as any,
+        discoveryProtocol as unknown as {
+          validateBeaconSignature: () => Promise<boolean>;
+        },
         'validateBeaconSignature'
       ).mockResolvedValue(false);
 
@@ -619,7 +641,9 @@ describe('NodeDiscoveryProtocol', () => {
 
       // Mock signature validation to throw error
       vi.spyOn(
-        discoveryProtocol as any,
+        discoveryProtocol as unknown as {
+          validateBeaconSignature: () => Promise<boolean>;
+        },
         'validateBeaconSignature'
       ).mockRejectedValue(new Error('Crypto error'));
 
@@ -660,7 +684,9 @@ describe('NodeDiscoveryProtocol', () => {
     it('should track discovery metrics correctly', async () => {
       // Mock signature validation
       vi.spyOn(
-        discoveryProtocol as any,
+        discoveryProtocol as unknown as {
+          validateBeaconSignature: () => Promise<boolean>;
+        },
         'validateBeaconSignature'
       ).mockResolvedValue(true);
 
@@ -702,7 +728,9 @@ describe('NodeDiscoveryProtocol', () => {
     it('should track processing times', async () => {
       // Mock signature validation
       vi.spyOn(
-        discoveryProtocol as any,
+        discoveryProtocol as unknown as {
+          validateBeaconSignature: () => Promise<boolean>;
+        },
         'validateBeaconSignature'
       ).mockResolvedValue(true);
 
@@ -763,11 +791,15 @@ describe('NodeDiscoveryProtocol', () => {
         getQueueStatus: vi.fn().mockReturnValue({ maxSize: 1000 }),
       };
 
-      discoveryProtocol.setDutyCycleManager(mockDutyCycleManager as any);
+      discoveryProtocol.setDutyCycleManager(
+        mockDutyCycleManager as unknown as import('../../src/types.js').IDutyCycleManager
+      );
 
       // Should not throw error
       expect(() =>
-        discoveryProtocol.setDutyCycleManager(mockDutyCycleManager as any)
+        discoveryProtocol.setDutyCycleManager(
+          mockDutyCycleManager as unknown as import('../../src/types.js').IDutyCycleManager
+        )
       ).not.toThrow();
     });
 
@@ -777,13 +809,13 @@ describe('NodeDiscoveryProtocol', () => {
       };
 
       discoveryProtocol.setReliableDeliveryManager(
-        mockReliableDeliveryManager as any
+        mockReliableDeliveryManager as unknown as import('../../src/types.js').IReliableDeliveryManager
       );
 
       // Should not throw error
       expect(() =>
         discoveryProtocol.setReliableDeliveryManager(
-          mockReliableDeliveryManager as any
+          mockReliableDeliveryManager as unknown as import('../../src/types.js').IReliableDeliveryManager
         )
       ).not.toThrow();
     });
@@ -797,11 +829,15 @@ describe('NodeDiscoveryProtocol', () => {
         }),
       };
 
-      discoveryProtocol.setCompressionManager(mockCompressionManager as any);
+      discoveryProtocol.setCompressionManager(
+        mockCompressionManager as unknown as import('../../src/utxo-compression-manager.js').UTXOCompressionManager
+      );
 
       // Should not throw error
       expect(() =>
-        discoveryProtocol.setCompressionManager(mockCompressionManager as any)
+        discoveryProtocol.setCompressionManager(
+          mockCompressionManager as unknown as import('../../src/utxo-compression-manager.js').UTXOCompressionManager
+        )
       ).not.toThrow();
     });
   });
@@ -832,7 +868,9 @@ describe('NodeDiscoveryProtocol', () => {
 
       // Mock signature validation
       vi.spyOn(
-        discoveryProtocol as any,
+        discoveryProtocol as unknown as {
+          validateBeaconSignature: () => Promise<boolean>;
+        },
         'validateBeaconSignature'
       ).mockResolvedValue(true);
 
@@ -863,7 +901,9 @@ describe('NodeDiscoveryProtocol', () => {
       await discoveryProtocol.processDiscoveryBeacon(beacon, 'test-source');
 
       // Force cleanup
-      (discoveryProtocol as any).cleanupStaleNeighbors();
+      (
+        discoveryProtocol as unknown as { cleanupStaleNeighbors: () => void }
+      ).cleanupStaleNeighbors();
 
       expect(neighborLostSpy).toHaveBeenCalledWith('partition-test-node');
     });
