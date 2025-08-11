@@ -8,7 +8,7 @@ Lorachain is a lightweight blockchain network designed for cryptocurrency transa
 
 The blockchain uses a **UTXO (Unspent Transaction Output) model** for transaction management and supports **cryptographic signing** with both ECDSA (secp256k1) and Ed25519 algorithms.
 
-**Current Development Status**: ~40-45% complete toward MVP goal with Milestone 1 (Core Blockchain) fully implemented and Milestone 2 (LoRa/Mesh Protocol) significantly enhanced with compression, prioritization, advanced routing, duty cycle management, and regional compliance. See `specs/ROADMAP.md` for detailed progress tracking.
+**Current Development Status**: ~45-50% complete toward MVP goal with Milestone 1 (Core Blockchain) fully implemented and Milestone 2 (LoRa/Mesh Protocol) significantly enhanced with compression, prioritization, advanced routing, duty cycle management, regional compliance, and reliable delivery. See `specs/ROADMAP.md` for detailed progress tracking.
 
 ## Important Development Guidelines
 
@@ -71,7 +71,7 @@ cd packages/core && pnpm test    # Test specific package
 - **Path mapping** configured for `@lorachain/*` packages in tsconfig.json
 - **LevelDB** for production database persistence with sublevel organization
 - **MessagePack** for efficient data serialization with optional gzip compression
-- **Vitest** for testing framework with comprehensive coverage (660+ tests: 594 unit, 66 integration)
+- **Vitest** for testing framework with comprehensive coverage (745+ tests: 663 unit, 82 integration)
 - **ESLint + Prettier** for code quality
 - **LoRa constraints**: 256-byte message limit, duty cycle restrictions
 
@@ -103,6 +103,8 @@ cd packages/core && pnpm test    # Test specific package
 - **`UTXOQoSManager`** (core) - Quality of Service management with duty cycle integration
 - **`CompressionFactory`** (core) - Factory for creating compression engines (gzip, zlib, brotli, lz4)
 - **`UTXOCompressionManager`** (core) - UTXO-specific compression with engine selection
+- **`UTXOAcknowledmentHandler`** (core) - Secure ACK/NACK processing with cryptographic verification
+- **`UTXOReliableDeliveryManager`** (core) - Reliable delivery with retry logic, circuit breakers, and dead letter queue
 - **`Logger`** (shared) - Centralized logging with levels
 
 ### Technical Constraints
@@ -243,16 +245,17 @@ Each package includes comprehensive unit tests using Vitest:
 - **Advanced routing**: Tests for flood routing, cryptographic verification, path optimization, and blockchain awareness
 - **Duty cycle compliance**: Tests for regional regulations (EU/US/Japan/Australia), transmission scheduling, and compliance validation
 - **Fragmentation system**: Tests for enhanced fragmentation with missing fragment detection and retransmission
+- **Reliable delivery system**: Tests for ACK/NACK processing, retry logic, circuit breakers, and cryptographic verification
 
-**Total test coverage**: 660+ tests across all packages with 100% passing rate covering Milestone 1 and significant portions of Milestone 2.
+**Total test coverage**: 745+ tests across all packages with 100% passing rate covering Milestone 1 and significant portions of Milestone 2.
 
-- **594 unit tests**: Fast, isolated tests for individual components
-- **66 integration tests**: Comprehensive system-level tests (core package)
+- **663 unit tests**: Fast, isolated tests for individual components
+- **82 integration tests**: Comprehensive system-level tests (core package)
 - **Separated configurations**: vitest.config.unit.ts and vitest.config.integration.ts for optimized test execution
 
 Run package-specific tests with `cd packages/<name> && pnpm test` or use watch mode for development with `pnpm test:watch`.
 
-**Development Progress**: Currently ~40-45% complete toward MVP goal. Estimated 7-10 months total development time with significant progress on Milestone 2 (LoRa/Mesh Protocol) including compression, prioritization, advanced routing, duty cycle management, and regional compliance.
+**Development Progress**: Currently ~45-50% complete toward MVP goal. Estimated 7-10 months total development time with significant progress on Milestone 2 (LoRa/Mesh Protocol) including compression, prioritization, advanced routing, duty cycle management, regional compliance, and reliable delivery.
 
 ### Key Implementation Details
 
@@ -284,7 +287,7 @@ Run package-specific tests with `cd packages/<name> && pnpm test` or use watch m
 - **✅ Enhanced Mesh Protocol**: Comprehensive mesh networking with UTXO routing capabilities, duty cycle compliance, and network topology management
 - **✅ Compression**: Multiple compression engines (gzip, zlib, brotli, lz4) with UTXO-specific optimization for 256-byte LoRa constraints
 - **✅ Message Prioritization**: Priority queues with fee-based calculation, QoS levels, emergency mode, and duty cycle integration
-- **🔲 Reliable Delivery**: Acknowledgment mechanism, retry logic, and delivery confirmation (PENDING)
+- **✅ Reliable Delivery**: Acknowledgment mechanism, retry logic, and delivery confirmation with cryptographic security (COMPLETED)
 - **🔲 Node Discovery Protocol**: Periodic beacons, neighbor management, and topology mapping (PENDING)
 
 #### 🔲 Remaining Milestones (PENDING)
