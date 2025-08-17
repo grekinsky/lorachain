@@ -113,6 +113,27 @@ describe('Reliable Delivery Integration Tests', () => {
       enablePriorityCalculation: true,
     };
 
+    const discoveryConfig = {
+      beaconInterval: 30000,
+      neighborTimeout: 120000,
+      maxNeighbors: 50,
+      enableTopologySharing: true,
+      securityConfig: {
+        enableBeaconSigning: false, // Disable for integration tests
+        maxBeaconRate: 2,
+        requireIdentityProof: false,
+        allowAnonymousNodes: true,
+        topologyValidationStrict: false,
+      },
+      performanceConfig: {
+        maxBeaconProcessingTime: 100,
+        maxNeighborLookupTime: 10,
+        maxTopologyUpdateTime: 200,
+        maxMemoryUsageMB: 10,
+        enableAdaptiveBeaconInterval: false,
+      },
+    };
+
     // Create mesh protocols
     meshProtocol1 = new UTXOEnhancedMeshProtocol(
       NODE_ID_1,
@@ -122,6 +143,7 @@ describe('Reliable Delivery Integration Tests', () => {
       fragmentationConfig,
       dutyCycleConfig,
       reliableDeliveryConfig,
+      discoveryConfig,
       database1,
       cryptoService
     );
@@ -134,6 +156,7 @@ describe('Reliable Delivery Integration Tests', () => {
       fragmentationConfig,
       dutyCycleConfig,
       reliableDeliveryConfig,
+      discoveryConfig,
       database2,
       cryptoService
     );
