@@ -43,18 +43,18 @@ MEMORY Recuerda usar el CLI de Github (`gh`) para todas las tareas relacionadas 
 ### SANITIZACION DE CODIGO (ejecutar únicamente cuando se indique explícitamente en algún paso)
 
 - Ejecutar `pwd` y asegúrate de estar en el proyecto base.
-- **Iteración completa hasta que NO HAYA ERRORES DE LINTING:**
+- **Iteración completa hasta que NO HAYA ERRORES DE LINTING (Ignora los Warnings):**
   1. Ejecuta `pnpm lint:fix` para aplicar correcciones automáticas.
-  2. Ejecuta `pnpm lint` para verificar si quedan problemas
-  3. **Si hay errores de linting restantes, DEBES corregirlos manualmente:**
-     - Corregir cualquier otro error de ESLint que no se pueda auto-corregir
-  4. **Repite los pasos 2-3 hasta que `pnpm lint` pase sin errores**
+  2. Ejecuta `pnpm lint` para verificar si quedan errores
+  3. **Si hay ERRORES de linting restantes, DEBES corregirlos manualmente:**
+     - Corregir cualquier otro error de ESLint que no se pueda auto-corregir, ignora los warnings.
+  4. **Repite los pasos 2-3 hasta que `pnpm lint` pase SIN ERRORES**
 - **Iteración completa hasta que NO HAYA ERRORES DE TYPECHECK:**
   1. Ejecuta `pnpm typecheck`.
-  2. **Si hay errores de linting restantes, DEBES corregirlos manualmente:**
+  2. **Si hay errores de typecheck, DEBES corregirlos manualmente:**
   3. **Repite los pasos 1-2 hasta que `pnpm typecheck` pase sin errores**
 - Formatea el codigo con Prettier (`pnpm format`).
-- **VERIFICACION FINAL:** Ejecuta `pnpm lint` y `pnpm typecheck` una vez más para confirmar que no hay problemas
+- **VERIFICACION FINAL:** Ejecuta `pnpm lint` y `pnpm typecheck` una vez más para confirmar que no hay errores.
 - Asegúrate que todas las pruebas estén pasando antes de moverte al siguiente paso.
 
 ### PRUEBAS
