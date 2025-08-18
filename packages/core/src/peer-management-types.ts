@@ -9,7 +9,7 @@
  */
 
 import { NetworkNode } from './types.js';
-import { SyncPeer } from './sync-types.js';
+import { SyncPeer as _SyncPeer } from './sync-types.js';
 
 // =============================================================================
 // Enhanced Peer Interface

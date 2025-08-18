@@ -13,7 +13,7 @@
 
 import { EventEmitter } from 'events';
 import { Logger } from '@lorachain/shared';
-import { v4 as uuidv4 } from 'uuid';
+import { v4 as _uuidv4 } from 'uuid';
 
 import {
   EnhancedNetworkNode,
@@ -25,7 +25,7 @@ import {
   PeerManagerConfig,
   PeerManagerStatistics,
   PeerMetrics,
-  PeerManagerEvents,
+  PeerManagerEvents as _PeerManagerEvents,
   IPeerManager,
   IPeerDiscoveryService,
   IConnectionPoolManager,
@@ -53,7 +53,7 @@ export class PeerDiscoveryService
   private logger = Logger.getInstance();
   private discoveredPeers: Map<string, EnhancedNetworkNode> = new Map();
   private isRunning = false;
-  private discoveryTimer?: NodeJS.Timeout;
+  private discoveryTimer?: ReturnType<typeof setTimeout>;
 
   constructor(config: PeerDiscoveryConfig) {
     super();
@@ -418,7 +418,7 @@ export class PeerScoringService
   private logger = Logger.getInstance();
   private peerScores: Map<string, PeerScore> = new Map();
   private isRunning = false;
-  private scoringTimer?: NodeJS.Timeout;
+  private scoringTimer?: ReturnType<typeof setTimeout>;
 
   constructor(config: ScoringConfig) {
     super();
@@ -537,7 +537,7 @@ export class PeerScoringService
     return totalTime > 0 ? onlineTime / totalTime : 0;
   }
 
-  private calculateDowntime(peer: EnhancedNetworkNode): number {
+  private calculateDowntime(_peer: EnhancedNetworkNode): number {
     // TODO: Implement downtime calculation based on connection history
     return 0;
   }
@@ -551,7 +551,7 @@ export class PeerScoringService
     return 0.8;
   }
 
-  private calculateMessageDeliveryRate(peer: EnhancedNetworkNode): number {
+  private calculateMessageDeliveryRate(_peer: EnhancedNetworkNode): number {
     // TODO: Implement actual message delivery tracking
     return 0.95;
   }
@@ -566,7 +566,7 @@ export class PeerScoringService
     return 0.1;
   }
 
-  private calculateThroughputScore(peer: EnhancedNetworkNode): number {
+  private calculateThroughputScore(_peer: EnhancedNetworkNode): number {
     // TODO: Implement throughput score based on data transfer rates
     return 0.8;
   }
@@ -598,7 +598,7 @@ export class PeerScoringService
     return peer.type === 'full' ? 100 : 20;
   }
 
-  private calculateComplianceScore(peer: EnhancedNetworkNode): number {
+  private calculateComplianceScore(_peer: EnhancedNetworkNode): number {
     // TODO: Check compliance with network protocols (duty cycle, message format, etc.)
     return 0.95;
   }
@@ -625,7 +625,7 @@ export class PeerScoringService
   private applyReputationDecay(): void {
     const now = Date.now();
 
-    for (const [peerId, score] of this.peerScores) {
+    for (const [_peerId, score] of this.peerScores) {
       const timeSinceUpdate = now - score.lastUpdated;
       const decayFactor = Math.exp(
         (-this.config.reputationDecayRate * timeSinceUpdate) /
@@ -658,7 +658,7 @@ export class BanListManager extends EventEmitter implements IBanListManager {
   private bannedAddresses: Map<string, BanEntry> = new Map();
   private misbehaviorHistory: Map<string, MisbehaviorIncident[]> = new Map();
   private isRunning = false;
-  private monitoringTimer?: NodeJS.Timeout;
+  private monitoringTimer?: ReturnType<typeof setTimeout>;
 
   constructor(config: MisbehaviorConfig) {
     super();
@@ -838,7 +838,7 @@ export class BanListManager extends EventEmitter implements IBanListManager {
     let banDuration: number | undefined;
 
     switch (type) {
-      case 'invalid_message':
+      case 'invalid_message': {
         const invalidMessageCount = recentHistory.filter(
           h => h.type === 'invalid_message'
         ).length;
@@ -848,8 +848,9 @@ export class BanListManager extends EventEmitter implements IBanListManager {
           banDuration = this.config.tempBanDuration;
         }
         break;
+      }
 
-      case 'connection_failure':
+      case 'connection_failure': {
         const connectionFailureCount = recentHistory.filter(
           h => h.type === 'connection_failure'
         ).length;
@@ -859,6 +860,7 @@ export class BanListManager extends EventEmitter implements IBanListManager {
           banDuration = this.config.tempBanDuration;
         }
         break;
+      }
 
       case 'protocol_violation':
       case 'malicious_content':
@@ -867,7 +869,7 @@ export class BanListManager extends EventEmitter implements IBanListManager {
         // Permanent ban for serious violations
         break;
 
-      case 'spam':
+      case 'spam': {
         const spamCount = recentHistory.filter(h => h.type === 'spam').length;
         if (spamCount >= 5) {
           shouldBan = true;
@@ -875,6 +877,7 @@ export class BanListManager extends EventEmitter implements IBanListManager {
           banDuration = this.config.tempBanDuration * 2;
         }
         break;
+      }
     }
 
     if (shouldBan) {
@@ -970,7 +973,7 @@ export class ConnectionPoolManager
   private connections: Map<string, PeerConnection> = new Map();
   private peerManager?: IPeerManager;
   private isRunning = false;
-  private maintenanceTimer?: NodeJS.Timeout;
+  private maintenanceTimer?: ReturnType<typeof setTimeout>;
 
   constructor(config: ConnectionPoolConfig, peerManager?: IPeerManager) {
     super();
@@ -1272,8 +1275,8 @@ export class PeerManager extends EventEmitter implements IPeerManager {
   private banListManager: BanListManager;
 
   private isRunning = false;
-  private optimizationTimer?: NodeJS.Timeout;
-  private maintenanceTimer?: NodeJS.Timeout;
+  private optimizationTimer?: ReturnType<typeof setTimeout>;
+  private maintenanceTimer?: ReturnType<typeof setTimeout>;
 
   constructor(config: Partial<PeerManagerConfig> = {}) {
     super();

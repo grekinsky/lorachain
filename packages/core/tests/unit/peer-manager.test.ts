@@ -9,7 +9,7 @@
  * - ConnectionPoolManager
  */
 
-import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, test, expect, beforeEach, afterEach } from 'vitest';
 import {
   PeerManager,
   PeerDiscoveryService,
@@ -23,7 +23,7 @@ import {
   MisbehaviorConfig,
   ConnectionPoolConfig,
   DEFAULT_PEER_MANAGER_CONFIG,
-  MisbehaviorType,
+  MisbehaviorType as _MisbehaviorType,
 } from '../../src/peer-manager.js';
 
 describe('PeerManager', () => {

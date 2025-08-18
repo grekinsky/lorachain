@@ -2,14 +2,46 @@
  * Unit tests for Enhanced Lorachain Node with Peer Management
  */
 
-import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, test, expect, beforeEach, afterEach } from 'vitest';
 import { EnhancedLorachainNode, EnhancedNodeConfig } from './enhanced-node.js';
+import type { GenesisConfig } from '@lorachain/core';
 
 describe('EnhancedLorachainNode', () => {
   let node: EnhancedLorachainNode;
   let mockConfig: EnhancedNodeConfig;
+  let testGenesisConfig: GenesisConfig;
 
   beforeEach(() => {
+    // Test genesis configuration
+    testGenesisConfig = {
+      chainId: 'enhanced-node-test-chain',
+      networkName: 'Enhanced Node Test Network',
+      version: '1.0.0',
+      initialAllocations: [
+        {
+          address: 'lora1enhanced000000000000000000000000000000',
+          amount: 1000000,
+          description: 'Test allocation for enhanced node tests',
+        },
+      ],
+      totalSupply: 21000000,
+      networkParams: {
+        initialDifficulty: 1,
+        targetBlockTime: 180,
+        adjustmentPeriod: 10,
+        maxDifficultyRatio: 4,
+        maxBlockSize: 1024 * 1024,
+        miningReward: 10,
+        halvingInterval: 210000,
+      },
+      metadata: {
+        timestamp: 1700000000000,
+        description: 'Enhanced Node Test Network Genesis Block',
+        creator: 'Enhanced Node Test Suite',
+        networkType: 'testnet',
+      },
+    };
+
     mockConfig = {
       id: 'test-node-1',
       port: 8333,
@@ -19,6 +51,18 @@ describe('EnhancedLorachainNode', () => {
       enablePeerManagement: true,
       autoDiscovery: true,
       maxPeers: 50,
+      genesisConfig: testGenesisConfig, // Use test genesis config directly
+      persistenceConfig: {
+        enabled: true,
+        dbPath: ':memory:',
+        dbType: 'memory',
+        autoSave: true,
+        batchSize: 100,
+        compressionType: 'none',
+        utxoSetCacheSize: 1000,
+        cryptographicAlgorithm: 'secp256k1',
+        compactionStyle: 'size',
+      },
       peerManager: {
         discovery: {
           dnsSeeds: ['test-seed.example.com'],
