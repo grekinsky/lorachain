@@ -31,27 +31,39 @@ MEMORY Recuerda usar el CLI de Github (`gh`) para todas las tareas relacionadas 
 - Resuelve la tarea en pasos pequeños y manejables de acuerdo al plan.
 - Usa Playwright MCP para probar los cambios en la interfaz de usuario.
   - Iterar modificaciones en el código fuente de la UI hasta llegar a un resultado muy aproximado al deseado en los mocks de diseño:
-    - Confirmar que la interfaz de usuario funciona como está planeado.
-    - Si no funciona, hacer debug del código, estilos, revisar mensajes en la consola, llamadas de red, etc.
-    - Si el archivo de especificación contiene referencias a imágenes y mocks, usarlas para compararlas con el desarrollo de la interfaz de usuario mediante capturas de pantalla con Playwright MCP.
+    1. Confirmar que la interfaz de usuario funciona como está planeado.
+    2. Si no funciona, hacer debug del código, estilos, revisar mensajes en la consola, llamadas de red, etc.
+    3. **Repite los pasos 1-2 hasta que la interfaz de usuario funcione sin errores**
+    4. Si el archivo de especificación contiene referencias a imágenes y mocks, usarlas para compararlas con el desarrollo de la interfaz de usuario mediante capturas de pantalla con Playwright MCP.
+    5. Si la comparación del diseño de los mocks y las capturas de pantalla no coinciden en igual o más de un 90%, realizar ajustes en el código y los estilos para hacerlo más parecido al diseño de los mocks.
+    6. **Repite los pasos 4-5 hasta que los mocks y las capturas de pantalla coincidan en igual o más de un 90%**
 - Al finalizar de usar Playwright MCP, cierra el browser.
 - Ejecutar pasos de la **SANITIZACION DE CODIGO**.
 
 ### SANITIZACION DE CODIGO (ejecutar únicamente cuando se indique explícitamente en algún paso)
 
 - Ejecutar `pwd` y asegúrate de estar en el proyecto base.
-- Iterar hasta que ya no hayan errores:
-  - Ejecuta `pnpm lint:fix`, corrige si hay algo roto.
-  - Ejecuta `pnpm typecheck`, corrige si hay algo roto.
+- **Iteración completa hasta que NO HAYA ERRORES DE LINTING:**
+  1. Ejecuta `pnpm lint:fix` para aplicar correcciones automáticas.
+  2. Ejecuta `pnpm lint` para verificar si quedan problemas
+  3. **Si hay errores de linting restantes, DEBES corregirlos manualmente:**
+     - Corregir cualquier otro error de ESLint que no se pueda auto-corregir
+  4. **Repite los pasos 2-3 hasta que `pnpm lint` pase sin errores**
+- **Iteración completa hasta que NO HAYA ERRORES DE TYPECHECK:**
+  1. Ejecuta `pnpm typecheck`.
+  2. **Si hay errores de linting restantes, DEBES corregirlos manualmente:**
+  3. **Repite los pasos 1-2 hasta que `pnpm typecheck` pase sin errores**
 - Formatea el codigo con Prettier (`pnpm format`).
+- **VERIFICACION FINAL:** Ejecuta `pnpm lint` y `pnpm typecheck` una vez más para confirmar que no hay problemas
 - Asegúrate que todas las pruebas estén pasando antes de moverte al siguiente paso.
 
 ### PRUEBAS
 
 - Crea pruebas unitarias para las características desarrolladas en los componentes o librerías de utilidades.
-- Iterar hasta que ya no hayan errores:
-  - Corre todo el suite de pruebas para asegurar que no hayas roto algo.
-  - Si las pruebas fallan, corrígelas.
+- **Iteración completa hasta que NO HAYA ERRORES DE PRUEBAS:**
+  1. Corre todo el suite de pruebas para asegurar que no hayas roto algo.
+  2. **Si hay errores de pruebas, DEBES corregirlos manualmente:**
+  3. **Repite los pasos 1-2 hasta que la ejecución del site de pruebas pase sin errores**
 - Ejecutar pasos de la **SANITIZACION DE CODIGO**.
 
 ### DEPLOY
