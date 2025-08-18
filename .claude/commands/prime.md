@@ -11,6 +11,11 @@
 README.md
 CLAUDE.md
 
-## READ this file:
+## READ these files:
 
 specs/ROADMAP.md
+ai_docs/mcp_tools_guide.md
+
+# CHECK serena onboarding
+
+Check if serena onboarding has been executed
