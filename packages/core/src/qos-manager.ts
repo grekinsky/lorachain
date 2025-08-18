@@ -522,7 +522,7 @@ export class UTXOQoSManager extends EventEmitter implements IQoSManager {
     }
   }
 
-  private calculateTransactionQoSLevel(message: MeshMessage): MessagePriority {
+  private calculateTransactionQoSLevel(_message: MeshMessage): MessagePriority {
     // This would analyze the transaction payload
     // For now, default to HIGH for all transactions
     return MessagePriority.HIGH;

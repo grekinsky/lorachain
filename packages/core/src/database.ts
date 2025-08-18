@@ -538,49 +538,48 @@ export class MemoryDatabase implements IDatabase {
   // Sublevel support for compatibility
   sublevel(name: string): IDatabase {
     // Return a wrapper that prefixes keys with the sublevel name
-    const parent = this;
     return {
-      async open(): Promise<void> {
+      open: async (): Promise<void> => {
         // Sublevel uses parent's open state
       },
-      async get<T>(key: string): Promise<T | null> {
-        return parent.get<T>(key, name);
+      get: async <T>(key: string): Promise<T | null> => {
+        return this.get<T>(key, name);
       },
-      async put<T>(key: string, value: T): Promise<void> {
-        return parent.put(key, value, name);
+      put: async <T>(key: string, value: T): Promise<void> => {
+        return this.put(key, value, name);
       },
-      async del(key: string): Promise<void> {
-        return parent.del(key, name);
+      del: async (key: string): Promise<void> => {
+        return this.del(key, name);
       },
-      async batch(operations: BatchOperation[]): Promise<void> {
+      batch: async (operations: BatchOperation[]): Promise<void> => {
         const prefixedOps = operations.map(op => ({
           ...op,
           sublevel: name,
         }));
-        return parent.batch(prefixedOps);
+        return this.batch(prefixedOps);
       },
-      async *iterator(options: IteratorOptions): AsyncIterable<KeyValue> {
-        yield* parent.iterator({ ...options, sublevel: name });
+      iterator: (options: IteratorOptions): AsyncIterable<KeyValue> => {
+        return this.iterator({ ...options, sublevel: name });
       },
-      async multiGet(
+      multiGet: async (
         keys: Array<{ key: string; sublevel?: string }>
-      ): Promise<Array<unknown | null>> {
-        return parent.multiGet(keys.map(k => ({ ...k, sublevel: name })));
+      ): Promise<Array<unknown | null>> => {
+        return this.multiGet(keys.map(k => ({ ...k, sublevel: name })));
       },
-      async createSnapshot(): Promise<Snapshot> {
-        return parent.createSnapshot();
+      createSnapshot: async (): Promise<Snapshot> => {
+        return this.createSnapshot();
       },
-      async releaseSnapshot(snapshot: Snapshot): Promise<void> {
-        return parent.releaseSnapshot(snapshot);
+      releaseSnapshot: async (snapshot: Snapshot): Promise<void> => {
+        return this.releaseSnapshot(snapshot);
       },
-      async compact(): Promise<void> {
-        return parent.compact(name);
+      compact: async (): Promise<void> => {
+        return this.compact(name);
       },
-      async close(): Promise<void> {
+      close: async (): Promise<void> => {
         // Sublevel doesn't close parent
       },
-      sublevel(subName: string): IDatabase {
-        return parent.sublevel(`${name}!${subName}`);
+      sublevel: (subName: string): IDatabase => {
+        return this.sublevel(`${name}!${subName}`);
       },
     } as IDatabase;
   }

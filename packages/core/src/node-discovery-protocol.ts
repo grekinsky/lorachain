@@ -1,25 +1,17 @@
 import {
   type DiscoveryBeacon,
-  type NodeCapabilities,
   type NeighborNode,
   type RouteInfo,
-  type CompressionCompatibility,
-  type DutyCycleStatus,
-  type QueueStatus,
   type EnhancedNetworkTopology,
-  type TopologyNode,
-  type TopologyEdge,
   type DiscoveryConfig,
-  type DiscoverySecurityConfig,
-  type DiscoveryPerformanceConfig,
-  type DiscoveryEvents,
   type DiscoveryError,
   type DiscoveryMetrics,
   type INodeDiscoveryProtocol,
   type MeshMessage,
-  MessagePriority,
   type IDutyCycleManager,
   type IReliableDeliveryManager,
+  type NodeCapabilities,
+  type TopologyNode,
 } from './types.js';
 import { CryptographicService, type KeyPair } from './cryptographic.js';
 import { UTXOCompressionManager } from './utxo-compression-manager.js';
@@ -53,8 +45,8 @@ export class NodeDiscoveryProtocol
   // Discovery state
   private isActive = false;
   private beaconSequence = 0;
-  private discoveryTimer?: NodeJS.Timeout;
-  private cleanupTimer?: NodeJS.Timeout;
+  private discoveryTimer?: ReturnType<typeof setTimeout>;
+  private cleanupTimer?: ReturnType<typeof setTimeout>;
 
   // Neighbor and topology management
   private neighbors: Map<string, NeighborNode> = new Map();

@@ -9,11 +9,6 @@ import {
   type RoutingConfig,
   type RoutingMetrics,
   type MeshMessage,
-  type Fragment,
-  type FragmentationConfig,
-  type UTXOTransaction,
-  type Block,
-  type CompressedMerkleProof,
 } from './types.js';
 import { CryptographicService, type KeyPair } from './cryptographic.js';
 import { Logger } from '@lorachain/shared';
@@ -197,7 +192,7 @@ export class UTXORouteManager {
     let bestRoute: BlockchainRouteEntry | null = null;
     let bestScore = -1;
 
-    for (const [destination, routes] of this.routeTable.routes) {
+    for (const [_destination, routes] of this.routeTable.routes) {
       for (const route of routes) {
         if (route.nodeType === 'full' && route.isActive) {
           const score = this.calculateFullNodeScore(route);
@@ -519,7 +514,7 @@ export class BlockchainFloodManager {
    * Mark a flood message as processed
    */
   markFloodProcessed(messageId: string): void {
-    for (const [key, entry] of this.floodCache) {
+    for (const [_key, entry] of this.floodCache) {
       if (entry.messageId === messageId) {
         entry.processed = true;
         this.logger.debug('Marked flood message as processed', { messageId });
@@ -881,7 +876,7 @@ export class UTXOMessageForwarder {
   /**
    * Extract blockchain height from message if available
    */
-  private extractBlockchainHeight(message: MeshMessage): number | undefined {
+  private extractBlockchainHeight(_message: MeshMessage): number | undefined {
     // Would extract from message payload based on type
     return undefined;
   }
@@ -905,7 +900,7 @@ export class UTXOMessageForwarder {
    */
   private async processForwardingEntry(
     entry: BlockchainForwardingEntry,
-    message: MeshMessage
+    _message: MeshMessage
   ): Promise<boolean> {
     // In a real implementation, this would interface with the LoRa hardware
     // For now, simulate successful transmission
@@ -1191,7 +1186,7 @@ export class CryptoLoopPrevention {
   /**
    * Extract blockchain height from message
    */
-  private extractBlockchainHeight(message: MeshMessage): number | undefined {
+  private extractBlockchainHeight(_message: MeshMessage): number | undefined {
     // Would extract from message payload based on type
     return undefined;
   }

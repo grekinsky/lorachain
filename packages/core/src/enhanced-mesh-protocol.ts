@@ -8,10 +8,6 @@ import {
   type CompressedMerkleProof,
   type RoutingConfig,
   type RoutingMetrics,
-  type UTXORouteRequest,
-  type UTXORouteReply,
-  type BlockchainRouteError,
-  type BlockchainHelloMessage,
   type FragmentationConfig,
   type FragmentationStats,
   type NetworkNode,
@@ -30,22 +26,12 @@ import {
   type IReliableDeliveryManager,
   // Node Discovery Protocol types
   type DiscoveryBeacon,
-  type NodeCapabilities,
   type NeighborNode,
   type RouteInfo,
-  type CompressionCompatibility,
-  type DutyCycleStatus,
-  type QueueStatus,
   type EnhancedNetworkTopology,
-  type TopologyNode,
-  type TopologyEdge,
   type DiscoveryConfig,
-  type DiscoverySecurityConfig,
-  type DiscoveryPerformanceConfig,
-  type DiscoveryEvents,
   type DiscoveryError,
   type DiscoveryMetrics,
-  type INodeDiscoveryProtocol,
 } from './types.js';
 import {
   UTXORouteManager,
@@ -60,7 +46,6 @@ import {
 } from './routing-messages.js';
 import { CryptographicService, type KeyPair } from './cryptographic.js';
 import { DutyCycleManager } from './duty-cycle.js';
-import { DutyCycleConfigFactory } from './duty-cycle-config.js';
 import { UTXOReliableDeliveryManager } from './utxo-reliable-delivery-manager.js';
 import { NodeDiscoveryProtocol } from './node-discovery-protocol.js';
 import { Logger } from '@lorachain/shared';
@@ -763,7 +748,7 @@ export class UTXOEnhancedMeshProtocol
     });
 
     // Add neighbors
-    for (const [neighborId, neighbor] of this.neighbors) {
+    for (const [neighborId, _neighbor] of this.neighbors) {
       nodes.set(neighborId, {
         id: neighborId,
         address: neighborId,

@@ -13,11 +13,9 @@ import type {
   Block,
   CompressedMerkleProof,
   IDatabase,
-  IDutyCycleManager,
   RoutingConfig,
   FragmentationConfig,
   DutyCycleConfig,
-  NetworkNode,
   FragmentationStats,
 } from './types.js';
 import { MessagePriority } from './types.js';
@@ -30,7 +28,6 @@ import type {
   UTXOQoSPolicy,
   UTXOPriorityThresholds,
   UTXONetworkContext,
-  PriorityEvents,
 } from './priority-types.js';
 import { UTXOPriorityQueue } from './priority-queue.js';
 
@@ -71,7 +68,7 @@ export class UTXOPriorityMeshProtocol
   private logger: Logger;
   private database?: IDatabase;
   private isProcessing = false;
-  private processingInterval?: NodeJS.Timeout;
+  private processingInterval?: ReturnType<typeof setTimeout>;
 
   // Statistics and monitoring
   private protocolStats = {

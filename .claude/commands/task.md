@@ -25,7 +25,7 @@ MEMORY Recuerda usar el CLI de Github (`gh`) para todas las tareas relacionadas 
 
 ### CREA EL CODIGO
 
-- Crea un nuevo branch para la tarea.
+- Únicamente si el branch actual es `main`, crea un nuevo branch para la tarea.
 - Resuelve la tarea en pasos pequeños y manejables de acuerdo al plan.
 - Usa Playwright via MCP para probar los cambios en la interfaz de usuario.
   - Confirmar que la interfaz de usuario funciona como está planeado.
