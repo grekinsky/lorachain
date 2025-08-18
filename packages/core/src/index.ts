@@ -224,3 +224,47 @@ export type {
   UTXOSpentProof,
   SyncCapability,
 } from './sync-types.js';
+
+// Peer Management System exports
+export * from './peer-management-types.js';
+export * from './peer-manager.js';
+
+export {
+  PeerManager,
+  PeerDiscoveryService,
+  PeerScoringService,
+  BanListManager,
+  ConnectionPoolManager,
+} from './peer-manager.js';
+
+// Peer management type exports
+export type {
+  EnhancedNetworkNode,
+  PeerConnection,
+  PeerScore,
+  BanEntry,
+  MisbehaviorType,
+  MisbehaviorIncident,
+  PeerManagerConfig,
+  PeerDiscoveryConfig,
+  ConnectionPoolConfig,
+  ScoringConfig,
+  MisbehaviorConfig,
+  PeerManagerStatistics,
+  PeerMetrics,
+  PeerManagerEvents,
+  IPeerManager,
+  IPeerDiscoveryService,
+  IConnectionPoolManager,
+  IPeerScoringService,
+  IBanListManager,
+} from './peer-management-types.js';
+
+// Peer management default configurations
+export {
+  DEFAULT_DISCOVERY_CONFIG,
+  DEFAULT_CONNECTION_POOL_CONFIG,
+  DEFAULT_SCORING_CONFIG,
+  DEFAULT_MISBEHAVIOR_CONFIG,
+  DEFAULT_PEER_MANAGER_CONFIG,
+} from './peer-management-types.js';

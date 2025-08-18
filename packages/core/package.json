@@ -34,6 +34,8 @@
     "@noble/hashes": "^1.8.0",
     "@noble/secp256k1": "^2.3.0",
     "@types/ws": "^8.18.1",
+    "bloom-filters": "^3.0.1",
+    "bonjour": "^3.5.0",
     "level": "^10.0.0",
     "long": "^5.3.2",
     "lz4": "^0.6.5",
@@ -42,6 +44,7 @@
     "uuid": "^11.1.0"
   },
   "devDependencies": {
+    "@types/bonjour": "^3.5.10",
     "@types/node": "^20.19.7",
     "@types/pako": "^2.0.3",
     "@types/protobufjs": "^6.0.0",

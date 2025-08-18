@@ -305,6 +305,7 @@ Run package-specific tests with `cd packages/<name> && pnpm test` or use watch m
 - **🔲 Peer Management**: Advanced peer discovery, selection, and reputation systems
 
 #### 🔲 Remaining Milestones (PENDING)
+
 - **Milestone 4**: Wallet Functionality (HD wallet, transaction building, QR codes)
 - **Milestone 5**: Mining & Consensus (optimized mining, pool support)
 - **Milestone 6**: Security & Validation (rate limiting, encryption)
@@ -429,6 +430,7 @@ The UTXO sync protocol v2.0.0 provides comprehensive blockchain synchronization 
 - **Reliable Delivery**: ACK/NACK mechanisms with retry logic and circuit breakers
 
 **Key Constraints:**
+
 - All sync operations are UTXO-exclusive (no legacy support)
 - LoRa 256-byte message limit requires fragmentation and compression
 - Duty cycle restrictions must be respected for regional compliance

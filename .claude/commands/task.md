@@ -26,34 +26,47 @@ MEMORY Recuerda usar el CLI de Github (`gh`) para todas las tareas relacionadas 
 ### CREA EL CODIGO
 
 - Únicamente si el branch actual es `main`, crea un nuevo branch para la tarea.
+- Haz commit de los cambios después de cada paso importante.
+- Leer las imágenes y mocks de diseño mencionados en ARCHIVO_SPEC.
 - Resuelve la tarea en pasos pequeños y manejables de acuerdo al plan.
-- Usa Playwright via MCP para probar los cambios en la interfaz de usuario.
-  - Confirmar que la interfaz de usuario funciona como está planeado.
-  - Si no funciona, hacer debug del código, revisar mensajes en la consola, etc.
-  - Si el archivo de especificación contiene referencias a imágenes y mocks, usarlas para compararlas con el desarrollo de la interfaz de usuario.
-  - Iterar modificaciones en el código de la UI hasta llegar a un resultado aproximado al deseado.
-- Al finalizar de usar Playwright, cierra el browser.
-- Ejecuta typecheck, corrige si hay algo roto.
-- Formatea el codigo con Prettier (`pnpm format`) y ejecuta ESLint con auto-fix `pnpm lint:fix`.
-- Haz commit de los cambios después de cada paso.
+- Usa Playwright MCP para probar los cambios en la interfaz de usuario.
+  - Iterar modificaciones en el código fuente de la UI hasta llegar a un resultado muy aproximado al deseado en los mocks de diseño:
+    1. Confirmar que la interfaz de usuario funciona como está planeado.
+    2. Si no funciona, hacer debug del código, estilos, revisar mensajes en la consola, llamadas de red, etc.
+    3. **Repite los pasos 1-2 hasta que la interfaz de usuario funcione sin errores**
+    4. Si el archivo de especificación contiene referencias a imágenes y mocks, usarlas para compararlas con el desarrollo de la interfaz de usuario mediante capturas de pantalla con Playwright MCP.
+    5. Si la comparación del diseño de los mocks y las capturas de pantalla no coinciden en igual o más de un 90%, realizar ajustes en el código y los estilos para hacerlo más parecido al diseño de los mocks.
+    6. **Repite los pasos 4-5 hasta que los mocks y las capturas de pantalla coincidan en igual o más de un 90%**
+- Al finalizar de usar Playwright MCP, cierra el browser.
+- Ejecutar pasos de la **SANITIZACION DE CODIGO**.
 
-### PRUEBA
+### SANITIZACION DE CODIGO (ejecutar únicamente cuando se indique explícitamente en algún paso)
 
-- Usa Playwright via MCP para:
-  - Probar todos los cambios realizados en la interfaz de usuario.
-  - Tomar screenshots de la implementación y compararlos con los mocks de la interfaz de usuario.
-  - Realiza los ajustes necesarios para hacerlo lo más parecido a los mocks.
-  - Iterar hasta llegar a un resultado aceptable.
-- Al finalizar de usar Playwright, cierra el browser.
-- Ejecuta typecheck, corrige si hay algo roto.
-- Crea pruebas unitarias para las características desarrolladas en los componentes o librerías de utilidades.
-- Corre todo el suite de pruebas para asegurar que no hayas roto algo.
-- Si las pruebas fallan, corrígelas.
-- Ejecuta typecheck, corrige si hay algo roto.
-- Formatea el codigo con Prettier (`pnpm format`) y ejecuta ESLint con auto-fix `pnpm lint:fix`.
+- Ejecutar `pwd` y asegúrate de estar en el proyecto base.
+- **Iteración completa hasta que NO HAYA ERRORES DE LINTING (Ignora los Warnings):**
+  1. Ejecuta `pnpm lint:fix` para aplicar correcciones automáticas.
+  2. Ejecuta `pnpm lint` para verificar si quedan errores
+  3. **Si hay ERRORES de linting restantes, DEBES corregirlos manualmente:**
+     - Corregir cualquier otro error de ESLint que no se pueda auto-corregir, ignora los warnings.
+  4. **Repite los pasos 2-3 hasta que `pnpm lint` pase SIN ERRORES**
+- **Iteración completa hasta que NO HAYA ERRORES DE TYPECHECK:**
+  1. Ejecuta `pnpm typecheck`.
+  2. **Si hay errores de typecheck, DEBES corregirlos manualmente:**
+  3. **Repite los pasos 1-2 hasta que `pnpm typecheck` pase sin errores**
+- Formatea el codigo con Prettier (`pnpm format`).
+- **VERIFICACION FINAL:** Ejecuta `pnpm lint` y `pnpm typecheck` una vez más para confirmar que no hay errores.
 - Asegúrate que todas las pruebas estén pasando antes de moverte al siguiente paso.
+
+### PRUEBAS
+
+- Crea pruebas unitarias para las características desarrolladas en los componentes o librerías de utilidades.
+- **Iteración completa hasta que NO HAYA ERRORES DE PRUEBAS:**
+  1. Corre todo el suite de pruebas para asegurar que no hayas roto algo.
+  2. **Si hay errores de pruebas, DEBES corregirlos manualmente:**
+  3. **Repite los pasos 1-2 hasta que la ejecución del site de pruebas pase sin errores**
+- Ejecutar pasos de la **SANITIZACION DE CODIGO**.
 
 ### DEPLOY
 
 - Abre un PR y solicita review.
-- Guarda el resumen del resultado del desarrollo en el archivo RESULT.md y guardalo en la misma carpeta que el archivo $ARGUMENTS.
+- Crea el resumen del resultado del desarrollo en un archivo llamado `RESULT.md` dentro la misma carpeta en la que se encuentra el archivo ARCHIVO_SPEC.
