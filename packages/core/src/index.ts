@@ -190,3 +190,37 @@ export type {
   IReliableDeliveryManager,
   IAcknowledmentHandler,
 } from './types.js';
+
+// UTXO Synchronization Protocol exports
+export * from './sync-types.js';
+export * from './sync-manager.js';
+export * from './sync-strategies.js';
+
+export { UTXOSyncManager } from './sync-manager.js';
+export {
+  InternetSyncStrategy,
+  MeshSyncStrategy,
+  HybridSyncStrategy,
+} from './sync-strategies.js';
+
+// Sync protocol type exports
+export type {
+  UTXOSyncState,
+  UTXOSyncContext,
+  UTXOSyncMessage,
+  UTXOSyncMessageType,
+  UTXOBlockHeader,
+  UTXOSetSnapshot,
+  UTXOSetDelta,
+  SyncPeer,
+  SyncProgress,
+  ValidationResult,
+  UTXOSyncMetrics,
+  UTXOSyncConfig,
+  CompressedPayload,
+  FragmentInfo,
+  DutyCycleInfo,
+  UTXOMerkleProof,
+  UTXOSpentProof,
+  SyncCapability,
+} from './sync-types.js';

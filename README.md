@@ -121,6 +121,8 @@ Core blockchain functionality including:
 - **Genesis configuration system with UTXO-based initial allocations and network parameter management**
 - **UTXO compression system with multiple compression engines (gzip, zlib, brotli, lz4)**
 - **Message prioritization system with fee-based priority calculation**
+- **UTXO sync protocol v2.0.0 with internet, mesh, and hybrid synchronization strategies**
+- **Network detection and adaptive synchronization for hybrid network topologies**
 - **Complete backwards compatibility removal with modern, clean implementations**
 
 ### @lorachain/shared
@@ -351,7 +353,7 @@ For support and questions:
 
 #### 🔲 Upcoming Milestones (PENDING)
 
-- **Milestone 3**: Network Layer & P2P (HTTP/WebSocket, sync protocol, peer management)
+- **Milestone 3**: Network Layer & P2P (✅ sync protocol v2.0.0, HTTP/WebSocket, peer management)
 - **Milestone 4**: Wallet Functionality (HD wallet, transaction building, QR codes)
 - **Milestone 5**: Mining & Consensus (optimized mining, pool support, reward distribution)
 - **Milestone 6**: Security & Validation (malleability fixes, rate limiting, encryption)
@@ -359,11 +361,11 @@ For support and questions:
 - **Milestone 8**: Testing & Documentation (integration tests, API docs, deployment guides)
 - **Milestone 9**: MVP Polish (configuration, mainnet/testnet, Docker images)
 
-**Current Progress**: ~50-55% complete toward MVP goal
+**Current Progress**: ~60-65% complete toward MVP goal
 
 ### Technical Foundation
 
-- **Comprehensive Test Coverage**: 803+ tests across all packages with 100% passing rate (721 unit tests, 82 integration tests)
+- **Comprehensive Test Coverage**: 1,187+ tests across all packages with 100% passing rate (1,105 unit tests, 82 integration tests)
 - **Database Infrastructure**: Dual database support (LevelDB for production, Memory for testing) with sublevel organization
 - **UTXO Persistence**: Complete UTXO set storage with address-based queries, balance calculation, and efficient retrieval
 - **Cryptographic Key Storage**: Secure key pair persistence supporting both secp256k1 and Ed25519 algorithms
@@ -371,8 +373,10 @@ For support and questions:
 - **Atomic Operations**: Batch database operations ensuring data consistency and performance optimization
 - **LoRa Optimization**: Proof compression techniques optimized for 256-byte message constraints
 - **Enhanced Block Validation**: Comprehensive difficulty validation and timestamp manipulation protection
+- **UTXO Sync Protocol v2.0.0**: Comprehensive blockchain synchronization with internet, mesh, and hybrid strategies
+- **Network Adaptation**: Automatic detection and optimization for internet, mesh, or gateway connectivity modes
 - **Production-Ready Components**: Complete monorepo structure with TypeScript, Vitest testing, and code quality tools
 
-**Estimated Timeline**: 7-10 months total for MVP completion (currently 50-55% complete)
+**Estimated Timeline**: 7-10 months total for MVP completion (currently 60-65% complete)
 
 For detailed development progress and upcoming features, see `specs/ROADMAP.md`.

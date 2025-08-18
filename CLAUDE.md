@@ -8,7 +8,7 @@ Lorachain is a lightweight blockchain network designed for cryptocurrency transa
 
 The blockchain uses a **UTXO (Unspent Transaction Output) model** for transaction management and supports **cryptographic signing** with both ECDSA (secp256k1) and Ed25519 algorithms.
 
-**Current Development Status**: ~50-55% complete toward MVP goal with Milestone 1 (Core Blockchain) fully implemented and Milestone 2 (LoRa/Mesh Protocol) completed including compression, prioritization, advanced routing, duty cycle management, regional compliance, reliable delivery, and node discovery protocol. See `specs/ROADMAP.md` for detailed progress tracking.
+**Current Development Status**: ~60-65% complete toward MVP goal with Milestone 1 (Core Blockchain) fully implemented, Milestone 2 (LoRa/Mesh Protocol) completed, and significant progress on Milestone 3 (Network Layer & P2P) with UTXO sync protocol v2.0.0 implementation. See `specs/ROADMAP.md` for detailed progress tracking.
 
 ## Important Development Guidelines
 
@@ -106,6 +106,10 @@ cd packages/core && pnpm test    # Test specific package
 - **`UTXOAcknowledmentHandler`** (core) - Secure ACK/NACK processing with cryptographic verification
 - **`UTXOReliableDeliveryManager`** (core) - Reliable delivery with retry logic, circuit breakers, and dead letter queue
 - **`NodeDiscoveryProtocol`** (core) - Periodic beacons, neighbor management, and network topology mapping
+- **`UTXOSyncManager`** (core) - Comprehensive UTXO blockchain synchronization manager with hybrid network support
+- **`InternetSyncStrategy`** (core) - High-bandwidth parallel synchronization for internet-connected nodes
+- **`MeshSyncStrategy`** (core) - Fragmented synchronization optimized for LoRa mesh constraints
+- **`HybridSyncStrategy`** (core) - Adaptive synchronization combining internet and mesh strategies
 - **`Logger`** (shared) - Centralized logging with levels
 
 ### Technical Constraints
@@ -247,16 +251,17 @@ Each package includes comprehensive unit tests using Vitest:
 - **Duty cycle compliance**: Tests for regional regulations (EU/US/Japan/Australia), transmission scheduling, and compliance validation
 - **Fragmentation system**: Tests for enhanced fragmentation with missing fragment detection and retransmission
 - **Reliable delivery system**: Tests for ACK/NACK processing, retry logic, circuit breakers, and cryptographic verification
+- **UTXO sync protocol**: Tests for sync manager lifecycle, internet/mesh/hybrid strategies, network detection, and state management
 
-**Total test coverage**: 803+ tests across all packages with 100% passing rate covering Milestone 1 and complete Milestone 2.
+**Total test coverage**: 1,187+ tests across all packages with 100% passing rate covering Milestone 1, complete Milestone 2, and sync protocol implementation.
 
-- **721 unit tests**: Fast, isolated tests for individual components
+- **1,105 unit tests**: Fast, isolated tests for individual components including 92 sync protocol tests
 - **82 integration tests**: Comprehensive system-level tests (core package)
 - **Separated configurations**: vitest.config.unit.ts and vitest.config.integration.ts for optimized test execution
 
 Run package-specific tests with `cd packages/<name> && pnpm test` or use watch mode for development with `pnpm test:watch`.
 
-**Development Progress**: Currently ~50-55% complete toward MVP goal. Estimated 7-10 months total development time with Milestone 2 (LoRa/Mesh Protocol) now completed including compression, prioritization, advanced routing, duty cycle management, regional compliance, reliable delivery, and node discovery protocol.
+**Development Progress**: Currently ~60-65% complete toward MVP goal. Estimated 7-10 months total development time with Milestone 2 (LoRa/Mesh Protocol) completed and significant progress on Milestone 3 (Network Layer & P2P) with UTXO sync protocol v2.0.0 implementation including internet, mesh, and hybrid synchronization strategies.
 
 ### Key Implementation Details
 
@@ -291,9 +296,15 @@ Run package-specific tests with `cd packages/<name> && pnpm test` or use watch m
 - **✅ Reliable Delivery**: Acknowledgment mechanism, retry logic, and delivery confirmation with cryptographic security
 - **✅ Node Discovery Protocol**: Periodic beacons, neighbor management, and network topology mapping with 29 comprehensive tests
 
-#### 🔲 Remaining Milestones (PENDING)
+#### 🔄 Milestone 3 - Network Layer & P2P (IN PROGRESS)
 
-- **Milestone 3**: Network Layer & P2P (HTTP/WebSocket, sync protocol, peer management)
+- **✅ UTXO Sync Protocol v2.0.0**: Comprehensive blockchain synchronization with internet, mesh, and hybrid strategies
+- **✅ Network Detection**: Automatic detection of internet, mesh, or gateway connectivity modes
+- **✅ Adaptive Synchronization**: Strategy selection based on network conditions and capabilities
+- **🔲 HTTP/WebSocket Server**: REST API and WebSocket connections for internet nodes
+- **🔲 Peer Management**: Advanced peer discovery, selection, and reputation systems
+
+#### 🔲 Remaining Milestones (PENDING)
 - **Milestone 4**: Wallet Functionality (HD wallet, transaction building, QR codes)
 - **Milestone 5**: Mining & Consensus (optimized mining, pool support)
 - **Milestone 6**: Security & Validation (rate limiting, encryption)
@@ -388,6 +399,40 @@ The genesis configuration system provides comprehensive control over blockchain 
 - Initial allocations create proper UTXO outputs for addresses
 - Network parameters are immutable after blockchain initialization
 - Configuration files must pass strict validation before use
+
+### UTXO Sync Protocol System (COMPLETED)
+
+The UTXO sync protocol v2.0.0 provides comprehensive blockchain synchronization for hybrid network topologies:
+
+#### Sync Manager Operations
+
+- **`UTXOSyncManager.startSync()`**: Complete synchronization lifecycle (discovery → negotiation → headers → UTXO set → blocks → mempool)
+- **`UTXOSyncManager.syncUTXOHeaders()`**: Header synchronization with batch processing and chain validation
+- **`UTXOSyncManager.syncUTXOBlocks()`**: Block synchronization with adaptive strategy selection
+- **`UTXOSyncManager.syncUTXOSet()`**: UTXO set synchronization with snapshot and delta approaches
+- **`UTXOSyncManager.syncPendingUTXOs()`**: Mempool synchronization for pending transactions
+
+#### Synchronization Strategies
+
+- **`InternetSyncStrategy`**: High-bandwidth parallel operations for internet-connected nodes with connection pooling
+- **`MeshSyncStrategy`**: Fragment-aware synchronization optimized for LoRa mesh constraints (256-byte packets)
+- **`HybridSyncStrategy`**: Adaptive strategy combining internet and mesh approaches with automatic network detection
+
+#### Protocol Features
+
+- **Network Detection**: Automatic identification of internet, mesh, or gateway connectivity modes
+- **Message Compression**: UTXO-aware compression with multiple algorithms (gzip, zlib, brotli, lz4)
+- **Duty Cycle Compliance**: Regional compliance validation for LoRa transmission scheduling
+- **Cryptographic Security**: All sync messages signed with ECDSA/Ed25519 verification
+- **Fragmentation Support**: Large block synchronization via 256-byte LoRa-compatible fragments
+- **Priority Management**: Fee-based message prioritization with QoS levels
+- **Reliable Delivery**: ACK/NACK mechanisms with retry logic and circuit breakers
+
+**Key Constraints:**
+- All sync operations are UTXO-exclusive (no legacy support)
+- LoRa 256-byte message limit requires fragmentation and compression
+- Duty cycle restrictions must be respected for regional compliance
+- Cryptographic signatures required for all sync protocol messages
 
 - Remember to use Serena MCP tools
 - Remember to use Context7 MCP tools
