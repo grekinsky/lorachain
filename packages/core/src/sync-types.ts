@@ -1,11 +1,11 @@
 /**
  * UTXO Synchronization Protocol Types
- * 
+ *
  * UTXO-only sync protocol with no backwards compatibility.
  * Designed for hybrid LoRa mesh and internet network topology.
  */
 
-import type { Block, UTXO, UTXOTransaction, MessagePriority } from './types.js';
+import type { MessagePriority } from './types.js';
 import type { CompressionAlgorithm } from './compression-types.js';
 
 // Protocol version - breaking changes allowed
@@ -16,14 +16,14 @@ export const SUPPORTED_VERSIONS = ['2.0.0']; // No backwards compatibility
  * Synchronization state machine states
  */
 export enum UTXOSyncState {
-  DISCOVERING = 'discovering',        // Node discovery via beacons
-  NEGOTIATING = 'negotiating',        // Capability and version negotiation
-  HEADER_SYNC = 'header_sync',        // UTXO block header synchronization
-  UTXO_SET_SYNC = 'utxo_set_sync',   // Full UTXO set synchronization
-  BLOCK_SYNC = 'block_sync',          // Individual block downloading
-  MEMPOOL_SYNC = 'mempool_sync',      // Pending UTXO transactions
-  SYNCHRONIZED = 'synchronized',       // Fully synchronized
-  REORG_HANDLING = 'reorg_handling'   // Chain reorganization in progress
+  DISCOVERING = 'discovering', // Node discovery via beacons
+  NEGOTIATING = 'negotiating', // Capability and version negotiation
+  HEADER_SYNC = 'header_sync', // UTXO block header synchronization
+  UTXO_SET_SYNC = 'utxo_set_sync', // Full UTXO set synchronization
+  BLOCK_SYNC = 'block_sync', // Individual block downloading
+  MEMPOOL_SYNC = 'mempool_sync', // Pending UTXO transactions
+  SYNCHRONIZED = 'synchronized', // Fully synchronized
+  REORG_HANDLING = 'reorg_handling', // Chain reorganization in progress
 }
 
 /**
@@ -48,33 +48,33 @@ export enum UTXOSyncMessageType {
   BEACON = 'beacon',
   CAPABILITY_ANNOUNCE = 'capability_announce',
   VERSION_NEGOTIATE = 'version_negotiate',
-  
+
   // Header Synchronization
   UTXO_HEADER_REQUEST = 'utxo_header_request',
   UTXO_HEADER_BATCH = 'utxo_header_batch',
   UTXO_MERKLE_PROOF = 'utxo_merkle_proof',
-  
+
   // UTXO Set Synchronization
   UTXO_SET_REQUEST = 'utxo_set_request',
   UTXO_SET_SNAPSHOT = 'utxo_set_snapshot',
   UTXO_SET_DELTA = 'utxo_set_delta',
   UTXO_PROOF_REQUEST = 'utxo_proof_request',
-  
+
   // Block Synchronization
   UTXO_BLOCK_REQUEST = 'utxo_block_request',
   UTXO_BLOCK_RESPONSE = 'utxo_block_response',
   UTXO_BLOCK_FRAGMENT = 'utxo_block_fragment',
-  
+
   // Transaction Pool
   UTXO_TX_ANNOUNCE = 'utxo_tx_announce',
   UTXO_TX_REQUEST = 'utxo_tx_request',
   UTXO_TX_BATCH = 'utxo_tx_batch',
-  
+
   // Control Messages
   SYNC_STATUS = 'sync_status',
   COMPRESSION_NEGOTIATE = 'compression_negotiate',
   DUTY_CYCLE_STATUS = 'duty_cycle_status',
-  PRIORITY_OVERRIDE = 'priority_override'
+  PRIORITY_OVERRIDE = 'priority_override',
 }
 
 /**
@@ -84,8 +84,8 @@ export interface CompressedPayload {
   algorithm: CompressionAlgorithm;
   originalSize: number;
   compressedSize: number;
-  data: Uint8Array;                   // Compressed binary data
-  dictionary?: Uint8Array;             // Optional compression dictionary
+  data: Uint8Array; // Compressed binary data
+  dictionary?: Uint8Array; // Optional compression dictionary
 }
 
 /**
@@ -102,9 +102,24 @@ export interface FragmentInfo {
  * Duty cycle information for mesh nodes
  */
 export interface DutyCycleInfo {
-  region: 'EU' | 'US' | 'CA' | 'MX' | 'AU' | 'NZ' | 'JP' | 'IN' | 'CN' | 'KR' | 'BR' | 'AR' | 'RU' | 'ZA' | 'CUSTOM';
-  dutyCycleUsed: number;               // Percentage used
-  timeToReset: number;                 // Milliseconds
+  region:
+    | 'EU'
+    | 'US'
+    | 'CA'
+    | 'MX'
+    | 'AU'
+    | 'NZ'
+    | 'JP'
+    | 'IN'
+    | 'CN'
+    | 'KR'
+    | 'BR'
+    | 'AR'
+    | 'RU'
+    | 'ZA'
+    | 'CUSTOM';
+  dutyCycleUsed: number; // Percentage used
+  timeToReset: number; // Milliseconds
   canTransmit: boolean;
 }
 
@@ -112,11 +127,11 @@ export interface DutyCycleInfo {
  * UTXO sync message structure
  */
 export interface UTXOSyncMessage {
-  version: string;                    // Protocol version (2.0.0)
+  version: string; // Protocol version (2.0.0)
   type: UTXOSyncMessageType;
   timestamp: number;
-  signature: string;                   // ECDSA or Ed25519 signature
-  publicKey: string;                   // Sender's public key
+  signature: string; // ECDSA or Ed25519 signature
+  publicKey: string; // Sender's public key
   payload: CompressedPayload;
   priority: MessagePriority;
   fragmentInfo?: FragmentInfo;
@@ -176,8 +191,8 @@ export interface UTXOMerkleProof {
 export interface UTXOSetDelta {
   fromHeight: number;
   toHeight: number;
-  created: CompressedUTXO[];      // New UTXOs
-  spent: UTXOSpentProof[];        // Spent UTXOs with proofs
+  created: CompressedUTXO[]; // New UTXOs
+  spent: UTXOSpentProof[]; // Spent UTXOs with proofs
   merkleUpdate: MerkleTreeUpdate;
 }
 
@@ -196,7 +211,7 @@ export interface UTXOSpentProof {
   utxoId: string;
   spentInBlock: number;
   spentByTx: string;
-  signature: string;               // Proof of spend
+  signature: string; // Proof of spend
 }
 
 /**
@@ -241,7 +256,7 @@ export enum SyncCapability {
   TX_POOL_SYNC = 'tx_pool_sync',
   STATE_SYNC = 'state_sync',
   FRAGMENTATION = 'fragmentation',
-  UTXO_SYNC = 'utxo_sync'
+  UTXO_SYNC = 'utxo_sync',
 }
 
 /**
@@ -289,18 +304,18 @@ export interface UTXOSyncMetrics {
   blocksPerSecond: number;
   utxosPerSecond: number;
   compressionRatio: number;
-  
+
   // Network metrics
   meshLatency: number;
   internetBandwidth: number;
   dutyCycleUtilization: number;
   fragmentSuccessRate: number;
-  
+
   // Peer metrics
   activePeers: number;
   syncingPeers: number;
   peerReliability: Map<string, number>;
-  
+
   // Data metrics
   totalUTXOs: number;
   syncedHeight: number;

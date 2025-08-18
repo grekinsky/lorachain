@@ -2,7 +2,7 @@ import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   InternetSyncStrategy,
   MeshSyncStrategy,
-  HybridSyncStrategy
+  HybridSyncStrategy,
 } from '../../src/sync-strategies.js';
 import { UTXOCompressionManager } from '../../src/utxo-compression-manager.js';
 import { UTXOEnhancedMeshProtocol } from '../../src/enhanced-mesh-protocol.js';
@@ -14,7 +14,6 @@ import {
   UTXOSyncMessageType,
   type SyncPeer,
   type UTXOSetSnapshot,
-  type CompressedPayload
 } from '../../src/sync-types.js';
 import { MessagePriority, type Block, type UTXO } from '../../src/types.js';
 
@@ -49,11 +48,11 @@ describe('Sync Strategies', () => {
 
     // Create mock compression manager
     mockCompressionManager = {
-      compress: vi.fn(async (data) => ({
+      compress: vi.fn(async _data => ({
         algorithm: 'gzip' as const,
         data: new Uint8Array([1, 2, 3, 4]),
         originalSize: 100,
-        metadata: { version: 1, compressor: 'gzip' }
+        metadata: { version: 1, compressor: 'gzip' },
       })),
       decompress: vi.fn(async () => new Uint8Array([1, 2, 3, 4])),
     } as unknown as UTXOCompressionManager;
@@ -67,9 +66,13 @@ describe('Sync Strategies', () => {
     } as unknown as CryptographicService;
 
     // Mock the static methods
-    vi.spyOn(CryptographicService, 'generateKeyPair').mockReturnValue(nodeKeyPair);
+    vi.spyOn(CryptographicService, 'generateKeyPair').mockReturnValue(
+      nodeKeyPair
+    );
     vi.spyOn(CryptographicService, 'sign').mockReturnValue('test_signature');
-    vi.spyOn(CryptographicService, 'hashMessage').mockReturnValue(new Uint8Array([1, 2, 3, 4]));
+    vi.spyOn(CryptographicService, 'hashMessage').mockReturnValue(
+      new Uint8Array([1, 2, 3, 4])
+    );
 
     // Create mock mesh protocol
     mockMeshProtocol = {
@@ -90,14 +93,16 @@ describe('Sync Strategies', () => {
     mockNodeDiscovery = {
       getNeighbors: vi.fn(() => [
         { id: 'neighbor1', height: 1000 },
-        { id: 'neighbor2', height: 950 }
+        { id: 'neighbor2', height: 950 },
       ]),
       on: vi.fn(),
     } as unknown as NodeDiscoveryProtocol;
 
     // Create mock reliable delivery
     mockReliableDelivery = {
-      sendReliableMessage: vi.fn(async () => ({ data: new Uint8Array([1, 2, 3]) })),
+      sendReliableMessage: vi.fn(async () => ({
+        data: new Uint8Array([1, 2, 3]),
+      })),
     } as unknown as UTXOReliableDeliveryManager;
 
     // Create test peers
@@ -111,7 +116,7 @@ describe('Sync Strategies', () => {
         syncHeight: 1000,
         latency: 100,
         reliability: 0.95,
-        lastSeen: Date.now()
+        lastSeen: Date.now(),
       },
       {
         id: 'peer2',
@@ -122,8 +127,8 @@ describe('Sync Strategies', () => {
         syncHeight: 950,
         latency: 200,
         reliability: 0.88,
-        lastSeen: Date.now()
-      }
+        lastSeen: Date.now(),
+      },
     ];
   });
 
@@ -166,10 +171,13 @@ describe('Sync Strategies', () => {
         vi.spyOn(internetStrategy as any, 'downloadBlock').mockResolvedValue({
           hash: 'test_hash',
           index: 1,
-          transactions: []
+          transactions: [],
         } as Block);
 
-        const blocks = await internetStrategy.parallelBlockDownload(blockHashes, internetPeers);
+        const blocks = await internetStrategy.parallelBlockDownload(
+          blockHashes,
+          internetPeers
+        );
 
         expect(blocks).toBeDefined();
         expect(blocks.length).toBe(blockHashes.length);
@@ -180,10 +188,13 @@ describe('Sync Strategies', () => {
         const internetPeers = testPeers.filter(p => p.type === 'internet');
 
         // Mock download failure
-        vi.spyOn(internetStrategy as any, 'downloadBlock').mockRejectedValue(new Error('Download failed'));
+        vi.spyOn(internetStrategy as any, 'downloadBlock').mockRejectedValue(
+          new Error('Download failed')
+        );
 
-        await expect(internetStrategy.parallelBlockDownload(blockHashes, internetPeers))
-          .rejects.toThrow();
+        await expect(
+          internetStrategy.parallelBlockDownload(blockHashes, internetPeers)
+        ).rejects.toThrow();
       });
 
       test('should respect connection pool limits', async () => {
@@ -193,10 +204,13 @@ describe('Sync Strategies', () => {
         // Mock successful downloads
         vi.spyOn(internetStrategy as any, 'downloadBlock').mockResolvedValue({
           hash: 'test_hash',
-          index: 1
+          index: 1,
         } as Block);
 
-        const blocks = await internetStrategy.parallelBlockDownload(blockHashes, internetPeers);
+        const blocks = await internetStrategy.parallelBlockDownload(
+          blockHashes,
+          internetPeers
+        );
 
         expect(blocks.length).toBe(blockHashes.length);
       });
@@ -215,14 +229,22 @@ describe('Sync Strategies', () => {
           totalValue: BigInt('1000000000'),
           compressedUTXOs: [],
           proofs: [],
-          signature: 'signature'
+          signature: 'signature',
         };
 
         // Mock snapshot download
-        vi.spyOn(internetStrategy as any, 'downloadUTXOSnapshot').mockResolvedValue(mockSnapshot);
-        vi.spyOn(internetStrategy as any, 'verifyMerkleRoot').mockResolvedValue(undefined);
+        vi.spyOn(
+          internetStrategy as any,
+          'downloadUTXOSnapshot'
+        ).mockResolvedValue(mockSnapshot);
+        vi.spyOn(internetStrategy as any, 'verifyMerkleRoot').mockResolvedValue(
+          undefined
+        );
 
-        const snapshot = await internetStrategy.batchUTXOSetSync(height, internetPeers);
+        const snapshot = await internetStrategy.batchUTXOSetSync(
+          height,
+          internetPeers
+        );
 
         expect(snapshot).toBeDefined();
         expect(snapshot.height).toBe(height);
@@ -241,25 +263,33 @@ describe('Sync Strategies', () => {
           totalValue: BigInt('1000000000'),
           compressedUTXOs: [],
           proofs: [],
-          signature: 'signature'
+          signature: 'signature',
         };
 
-        vi.spyOn(internetStrategy as any, 'downloadUTXOSnapshot').mockResolvedValue(mockSnapshot);
-        vi.spyOn(internetStrategy as any, 'verifyMerkleRoot').mockRejectedValue(new Error('Invalid merkle root'));
+        vi.spyOn(
+          internetStrategy as any,
+          'downloadUTXOSnapshot'
+        ).mockResolvedValue(mockSnapshot);
+        vi.spyOn(internetStrategy as any, 'verifyMerkleRoot').mockRejectedValue(
+          new Error('Invalid merkle root')
+        );
 
-        await expect(internetStrategy.batchUTXOSetSync(height, internetPeers))
-          .rejects.toThrow('Invalid merkle root');
+        await expect(
+          internetStrategy.batchUTXOSetSync(height, internetPeers)
+        ).rejects.toThrow('Invalid merkle root');
       });
     });
 
     describe('UTXO Update Streaming', () => {
       test('should setup streaming callbacks', () => {
         const callback = vi.fn();
-        
+
         internetStrategy.streamUTXOUpdates(callback);
 
         // Verify event listeners are set up
-        expect(internetStrategy.listenerCount('utxo:created')).toBeGreaterThan(0);
+        expect(internetStrategy.listenerCount('utxo:created')).toBeGreaterThan(
+          0
+        );
         expect(internetStrategy.listenerCount('utxo:spent')).toBeGreaterThan(0);
       });
 
@@ -271,11 +301,11 @@ describe('Sync Strategies', () => {
           outputIndex: 0,
           amount: BigInt(1000),
           address: 'addr1',
-          isSpent: false
+          isSpent: false,
         };
 
         internetStrategy.streamUTXOUpdates(callback);
-        
+
         // Simulate UTXO events
         internetStrategy.emit('utxo:created', testUTXO);
         internetStrategy.emit('utxo:spent', testUTXO);
@@ -290,7 +320,10 @@ describe('Sync Strategies', () => {
         const hash = 'block_hash_123';
         const peer = testPeers[0];
 
-        const message = await (internetStrategy as any).createBlockRequest(hash, peer);
+        const message = await (internetStrategy as any).createBlockRequest(
+          hash,
+          peer
+        );
 
         expect(message).toBeDefined();
         expect(message.version).toBe('2.0.0');
@@ -304,7 +337,10 @@ describe('Sync Strategies', () => {
         const height = 1000;
         const peer = testPeers[0];
 
-        const message = await (internetStrategy as any).createSnapshotRequest(height, peer);
+        const message = await (internetStrategy as any).createSnapshotRequest(
+          height,
+          peer
+        );
 
         expect(message).toBeDefined();
         expect(message.version).toBe('2.0.0');
@@ -354,7 +390,7 @@ describe('Sync Strategies', () => {
         const mockFragment = {
           data: new Uint8Array([1, 2, 3, 4]),
           totalFragments: 3,
-          fragmentIndex: 0
+          fragmentIndex: 0,
         };
 
         vi.spyOn(mockReliableDelivery, 'sendReliableMessage')
@@ -367,10 +403,13 @@ describe('Sync Strategies', () => {
         vi.spyOn(meshStrategy as any, 'reassembleBlock').mockResolvedValue({
           hash: blockHash,
           index: 1,
-          transactions: []
+          transactions: [],
         } as Block);
 
-        const block = await meshStrategy.fragmentedBlockSync(blockHash, maxFragmentSize);
+        const block = await meshStrategy.fragmentedBlockSync(
+          blockHash,
+          maxFragmentSize
+        );
 
         expect(block).toBeDefined();
         expect(block.hash).toBe(blockHash);
@@ -380,18 +419,23 @@ describe('Sync Strategies', () => {
         const blockHash = 'block_hash_123';
 
         // Mock duty cycle delay
-        vi.spyOn(mockDutyCycleManager, 'getNextTransmissionWindow').mockReturnValue(1000);
+        vi.spyOn(
+          mockDutyCycleManager,
+          'getNextTransmissionWindow'
+        ).mockReturnValue(1000);
 
         // Mock fragment response
-        vi.spyOn(mockReliableDelivery, 'sendReliableMessage').mockResolvedValue({
-          data: new Uint8Array([1, 2, 3, 4]),
-          totalFragments: 1,
-          fragmentIndex: 0
-        });
+        vi.spyOn(mockReliableDelivery, 'sendReliableMessage').mockResolvedValue(
+          {
+            data: new Uint8Array([1, 2, 3, 4]),
+            totalFragments: 1,
+            fragmentIndex: 0,
+          }
+        );
 
         vi.spyOn(meshStrategy as any, 'reassembleBlock').mockResolvedValue({
           hash: blockHash,
-          index: 1
+          index: 1,
         } as Block);
 
         const startTime = Date.now();
@@ -406,10 +450,13 @@ describe('Sync Strategies', () => {
         const blockHash = 'missing_block_hash';
 
         // Mock no fragment response
-        vi.spyOn(mockReliableDelivery, 'sendReliableMessage').mockResolvedValue(null);
+        vi.spyOn(mockReliableDelivery, 'sendReliableMessage').mockResolvedValue(
+          null
+        );
 
-        await expect(meshStrategy.fragmentedBlockSync(blockHash))
-          .rejects.toThrow('Block missing_block_hash not found');
+        await expect(
+          meshStrategy.fragmentedBlockSync(blockHash)
+        ).rejects.toThrow('Block missing_block_hash not found');
       });
     });
 
@@ -423,7 +470,7 @@ describe('Sync Strategies', () => {
             outputIndex: 0,
             amount: BigInt(1000),
             address: address,
-            isSpent: false
+            isSpent: false,
           },
           {
             id: 'utxo2',
@@ -431,16 +478,20 @@ describe('Sync Strategies', () => {
             outputIndex: 0,
             amount: BigInt(2000),
             address: address,
-            isSpent: false
-          }
+            isSpent: false,
+          },
         ];
 
         // Mock UTXO response
-        vi.spyOn(mockReliableDelivery, 'sendReliableMessage').mockResolvedValue({
-          utxos: mockUTXOs
-        });
+        vi.spyOn(mockReliableDelivery, 'sendReliableMessage').mockResolvedValue(
+          {
+            utxos: mockUTXOs,
+          }
+        );
 
-        vi.spyOn(meshStrategy as any, 'processUTXOResponse').mockResolvedValue(mockUTXOs);
+        vi.spyOn(meshStrategy as any, 'processUTXOResponse').mockResolvedValue(
+          mockUTXOs
+        );
 
         const utxos = await meshStrategy.prioritizedUTXOSync(address);
 
@@ -452,15 +503,19 @@ describe('Sync Strategies', () => {
       test('should use high priority for UTXO requests', async () => {
         const address = 'test_address_123';
 
-        vi.spyOn(mockReliableDelivery, 'sendReliableMessage').mockResolvedValue({});
-        vi.spyOn(meshStrategy as any, 'processUTXOResponse').mockResolvedValue([]);
+        vi.spyOn(mockReliableDelivery, 'sendReliableMessage').mockResolvedValue(
+          {}
+        );
+        vi.spyOn(meshStrategy as any, 'processUTXOResponse').mockResolvedValue(
+          []
+        );
 
         await meshStrategy.prioritizedUTXOSync(address);
 
         // Verify high priority was used
         expect(mockReliableDelivery.sendReliableMessage).toHaveBeenCalledWith(
           expect.objectContaining({
-            reliability: 'confirmed'
+            reliability: 'confirmed',
           }),
           'high'
         );
@@ -474,10 +529,12 @@ describe('Sync Strategies', () => {
         // Mock neighbor with sufficient height
         vi.spyOn(mockNodeDiscovery, 'getNeighbors').mockResolvedValue([
           { id: 'neighbor1', height: 1050 },
-          { id: 'neighbor2', height: 950 }
+          { id: 'neighbor2', height: 950 },
         ]);
 
-        vi.spyOn(meshStrategy as any, 'syncFromNeighbor').mockResolvedValue(undefined);
+        vi.spyOn(meshStrategy as any, 'syncFromNeighbor').mockResolvedValue(
+          undefined
+        );
 
         await meshStrategy.cooperativeSync(targetHeight);
 
@@ -490,13 +547,16 @@ describe('Sync Strategies', () => {
         // Mock neighbors with insufficient height
         vi.spyOn(mockNodeDiscovery, 'getNeighbors').mockResolvedValue([
           { id: 'neighbor1', height: 950 },
-          { id: 'neighbor2', height: 900 }
+          { id: 'neighbor2', height: 900 },
         ]);
 
-        vi.spyOn(meshStrategy as any, 'syncFromNeighbor').mockRejectedValue(new Error('Sync failed'));
+        vi.spyOn(meshStrategy as any, 'syncFromNeighbor').mockRejectedValue(
+          new Error('Sync failed')
+        );
 
-        await expect(meshStrategy.cooperativeSync(targetHeight))
-          .rejects.toThrow('No neighbors available for sync');
+        await expect(
+          meshStrategy.cooperativeSync(targetHeight)
+        ).rejects.toThrow('No neighbors available for sync');
       });
     });
 
@@ -505,7 +565,10 @@ describe('Sync Strategies', () => {
         const hash = 'block_hash_123';
         const fragmentIndex = 2;
 
-        const request = await (meshStrategy as any).createFragmentRequest(hash, fragmentIndex);
+        const request = await (meshStrategy as any).createFragmentRequest(
+          hash,
+          fragmentIndex
+        );
 
         expect(request).toBeDefined();
         expect(request.version).toBe('2.0.0');
@@ -518,13 +581,13 @@ describe('Sync Strategies', () => {
         const fragments = [
           new Uint8Array([1, 2, 3, 4]),
           new Uint8Array([5, 6, 7, 8]),
-          new Uint8Array([9, 10, 11, 12])
+          new Uint8Array([9, 10, 11, 12]),
         ];
 
         const mockBlockData = {
           hash: 'reassembled_block',
           index: 1,
-          transactions: []
+          transactions: [],
         };
 
         // Mock compression manager decompress
@@ -586,13 +649,19 @@ describe('Sync Strategies', () => {
         const priority = MessagePriority.HIGH;
 
         // Mock internet network detection
-        vi.spyOn(hybridStrategy as any, 'detectNetworkType').mockResolvedValue('internet');
+        vi.spyOn(hybridStrategy as any, 'detectNetworkType').mockResolvedValue(
+          'internet'
+        );
         vi.spyOn(internetStrategy, 'parallelBlockDownload').mockResolvedValue([
           { hash: 'hash1', index: 1 },
-          { hash: 'hash2', index: 2 }
+          { hash: 'hash2', index: 2 },
         ] as Block[]);
 
-        const blocks = await hybridStrategy.adaptiveSync(blockHashes, priority, testPeers);
+        const blocks = await hybridStrategy.adaptiveSync(
+          blockHashes,
+          priority,
+          testPeers
+        );
 
         expect(blocks).toBeDefined();
         expect(blocks.length).toBe(2);
@@ -604,13 +673,19 @@ describe('Sync Strategies', () => {
         const priority = MessagePriority.HIGH;
 
         // Mock mesh network detection
-        vi.spyOn(hybridStrategy as any, 'detectNetworkType').mockResolvedValue('mesh');
+        vi.spyOn(hybridStrategy as any, 'detectNetworkType').mockResolvedValue(
+          'mesh'
+        );
         vi.spyOn(meshStrategy, 'fragmentedBlockSync').mockResolvedValue({
           hash: 'hash1',
-          index: 1
+          index: 1,
         } as Block);
 
-        const blocks = await hybridStrategy.adaptiveSync(blockHashes, priority, testPeers);
+        const blocks = await hybridStrategy.adaptiveSync(
+          blockHashes,
+          priority,
+          testPeers
+        );
 
         expect(blocks).toBeDefined();
         expect(blocks.length).toBe(1);
@@ -622,13 +697,19 @@ describe('Sync Strategies', () => {
         const priority = MessagePriority.HIGH;
 
         // Mock gateway network detection
-        vi.spyOn(hybridStrategy as any, 'detectNetworkType').mockResolvedValue('gateway');
+        vi.spyOn(hybridStrategy as any, 'detectNetworkType').mockResolvedValue(
+          'gateway'
+        );
         vi.spyOn(hybridStrategy as any, 'syncViaGateway').mockResolvedValue([
           { hash: 'hash1', index: 1 },
-          { hash: 'hash2', index: 2 }
+          { hash: 'hash2', index: 2 },
         ] as Block[]);
 
-        const blocks = await hybridStrategy.adaptiveSync(blockHashes, priority, testPeers);
+        const blocks = await hybridStrategy.adaptiveSync(
+          blockHashes,
+          priority,
+          testPeers
+        );
 
         expect(blocks).toBeDefined();
         expect(blocks.length).toBe(2);
@@ -640,10 +721,13 @@ describe('Sync Strategies', () => {
         // Mock successful fetch
         (global.fetch as any).mockResolvedValue({
           ok: true,
-          status: 200
+          status: 200,
         });
 
-        vi.spyOn(hybridStrategy as any, 'checkMeshConnectivity').mockResolvedValue(false);
+        vi.spyOn(
+          hybridStrategy as any,
+          'checkMeshConnectivity'
+        ).mockResolvedValue(false);
 
         const networkType = await (hybridStrategy as any).detectNetworkType();
 
@@ -654,7 +738,10 @@ describe('Sync Strategies', () => {
         // Mock failed fetch
         (global.fetch as any).mockRejectedValue(new Error('Network error'));
 
-        vi.spyOn(hybridStrategy as any, 'checkMeshConnectivity').mockResolvedValue(true);
+        vi.spyOn(
+          hybridStrategy as any,
+          'checkMeshConnectivity'
+        ).mockResolvedValue(true);
 
         const networkType = await (hybridStrategy as any).detectNetworkType();
 
@@ -665,10 +752,13 @@ describe('Sync Strategies', () => {
         // Mock successful fetch and mesh
         (global.fetch as any).mockResolvedValue({
           ok: true,
-          status: 200
+          status: 200,
         });
 
-        vi.spyOn(hybridStrategy as any, 'checkMeshConnectivity').mockResolvedValue(true);
+        vi.spyOn(
+          hybridStrategy as any,
+          'checkMeshConnectivity'
+        ).mockResolvedValue(true);
 
         const networkType = await (hybridStrategy as any).detectNetworkType();
 
@@ -678,10 +768,14 @@ describe('Sync Strategies', () => {
       test('should throw error when no connectivity', async () => {
         // Mock no connectivity
         (global.fetch as any).mockRejectedValue(new Error('Network error'));
-        vi.spyOn(hybridStrategy as any, 'checkMeshConnectivity').mockResolvedValue(false);
+        vi.spyOn(
+          hybridStrategy as any,
+          'checkMeshConnectivity'
+        ).mockResolvedValue(false);
 
-        await expect((hybridStrategy as any).detectNetworkType())
-          .rejects.toThrow('No network connectivity available');
+        await expect(
+          (hybridStrategy as any).detectNetworkType()
+        ).rejects.toThrow('No network connectivity available');
       });
     });
 
@@ -694,17 +788,26 @@ describe('Sync Strategies', () => {
         // Mock internet download
         vi.spyOn(internetStrategy, 'parallelBlockDownload').mockResolvedValue([
           { hash: 'hash1', index: 1 },
-          { hash: 'hash2', index: 2 }
+          { hash: 'hash2', index: 2 },
         ] as Block[]);
 
         // Mock mesh relay
-        vi.spyOn(hybridStrategy as any, 'relayToMeshNodes').mockResolvedValue(undefined);
+        vi.spyOn(hybridStrategy as any, 'relayToMeshNodes').mockResolvedValue(
+          undefined
+        );
 
-        const blocks = await (hybridStrategy as any).syncViaGateway(blockHashes, priority, testPeers);
+        const blocks = await (hybridStrategy as any).syncViaGateway(
+          blockHashes,
+          priority,
+          testPeers
+        );
 
         expect(blocks).toBeDefined();
         expect(blocks.length).toBe(2);
-        expect(internetStrategy.parallelBlockDownload).toHaveBeenCalledWith(blockHashes, internetPeers);
+        expect(internetStrategy.parallelBlockDownload).toHaveBeenCalledWith(
+          blockHashes,
+          internetPeers
+        );
       });
     });
 
@@ -712,7 +815,7 @@ describe('Sync Strategies', () => {
       test('should check active neighbors for mesh connectivity', async () => {
         vi.spyOn(mockNodeDiscovery, 'getNeighbors').mockResolvedValue([
           { id: 'neighbor1' },
-          { id: 'neighbor2' }
+          { id: 'neighbor2' },
         ]);
 
         const hasMesh = await (hybridStrategy as any).checkMeshConnectivity();
@@ -732,8 +835,6 @@ describe('Sync Strategies', () => {
 
   describe('Strategy Integration', () => {
     test('should handle compression consistently across strategies', async () => {
-      const testData = { blockHash: 'test', requestId: 'req123' };
-
       // Test internet strategy compression
       const internetStrategy = new InternetSyncStrategy(
         mockCompressionManager,
@@ -779,11 +880,13 @@ describe('Sync Strategies', () => {
 
       // Test internet strategy signing
       await (internetStrategy as any).createBlockRequest('hash', testPeers[0]);
-      const internetCallCount = vi.mocked(CryptographicService.sign).mock.calls.length;
+      const internetCallCount = vi.mocked(CryptographicService.sign).mock.calls
+        .length;
 
       // Test mesh strategy signing
       await (meshStrategy as any).createFragmentRequest('hash', 0);
-      const meshCallCount = vi.mocked(CryptographicService.sign).mock.calls.length;
+      const meshCallCount = vi.mocked(CryptographicService.sign).mock.calls
+        .length;
 
       expect(internetCallCount).toBeGreaterThan(0);
       expect(meshCallCount).toBeGreaterThan(internetCallCount);
@@ -801,20 +904,20 @@ describe('Sync Strategies', () => {
 
       // Test with default fragment size (200 bytes - within LoRa limits)
       const blockHash = 'test_block_hash';
-      
+
       vi.spyOn(mockReliableDelivery, 'sendReliableMessage').mockResolvedValue({
         data: new Uint8Array([1, 2, 3, 4]),
         totalFragments: 1,
-        fragmentIndex: 0
+        fragmentIndex: 0,
       });
 
       vi.spyOn(meshStrategy as any, 'reassembleBlock').mockResolvedValue({
         hash: blockHash,
-        index: 1
+        index: 1,
       } as Block);
 
       const block = await meshStrategy.fragmentedBlockSync(blockHash, 200);
-      
+
       expect(block).toBeDefined();
       // Verify that fragment size constraint is respected
       expect(200).toBeLessThanOrEqual(256); // LoRa limit

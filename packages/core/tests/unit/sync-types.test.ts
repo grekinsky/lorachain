@@ -9,7 +9,6 @@ import {
   type UTXOSyncMessage,
   type UTXOBlockHeader,
   type UTXOSetSnapshot,
-  type UTXOSetDelta,
   type SyncPeer,
   type SyncProgress,
   type ValidationResult,
@@ -48,7 +47,7 @@ describe('UTXO Sync Types', () => {
         'block_sync',
         'mempool_sync',
         'synchronized',
-        'reorg_handling'
+        'reorg_handling',
       ];
 
       expectedStates.forEach(state => {
@@ -68,12 +67,16 @@ describe('UTXO Sync Types', () => {
   describe('UTXOSyncMessageType Enum', () => {
     test('should have discovery and negotiation messages', () => {
       expect(UTXOSyncMessageType.BEACON).toBe('beacon');
-      expect(UTXOSyncMessageType.CAPABILITY_ANNOUNCE).toBe('capability_announce');
+      expect(UTXOSyncMessageType.CAPABILITY_ANNOUNCE).toBe(
+        'capability_announce'
+      );
       expect(UTXOSyncMessageType.VERSION_NEGOTIATE).toBe('version_negotiate');
     });
 
     test('should have header synchronization messages', () => {
-      expect(UTXOSyncMessageType.UTXO_HEADER_REQUEST).toBe('utxo_header_request');
+      expect(UTXOSyncMessageType.UTXO_HEADER_REQUEST).toBe(
+        'utxo_header_request'
+      );
       expect(UTXOSyncMessageType.UTXO_HEADER_BATCH).toBe('utxo_header_batch');
       expect(UTXOSyncMessageType.UTXO_MERKLE_PROOF).toBe('utxo_merkle_proof');
     });
@@ -86,13 +89,19 @@ describe('UTXO Sync Types', () => {
 
     test('should have block synchronization messages', () => {
       expect(UTXOSyncMessageType.UTXO_BLOCK_REQUEST).toBe('utxo_block_request');
-      expect(UTXOSyncMessageType.UTXO_BLOCK_RESPONSE).toBe('utxo_block_response');
-      expect(UTXOSyncMessageType.UTXO_BLOCK_FRAGMENT).toBe('utxo_block_fragment');
+      expect(UTXOSyncMessageType.UTXO_BLOCK_RESPONSE).toBe(
+        'utxo_block_response'
+      );
+      expect(UTXOSyncMessageType.UTXO_BLOCK_FRAGMENT).toBe(
+        'utxo_block_fragment'
+      );
     });
 
     test('should have control messages', () => {
       expect(UTXOSyncMessageType.SYNC_STATUS).toBe('sync_status');
-      expect(UTXOSyncMessageType.COMPRESSION_NEGOTIATE).toBe('compression_negotiate');
+      expect(UTXOSyncMessageType.COMPRESSION_NEGOTIATE).toBe(
+        'compression_negotiate'
+      );
       expect(UTXOSyncMessageType.DUTY_CYCLE_STATUS).toBe('duty_cycle_status');
     });
   });
@@ -105,7 +114,7 @@ describe('UTXO Sync Types', () => {
         'tx_pool_sync',
         'state_sync',
         'fragmentation',
-        'utxo_sync'
+        'utxo_sync',
       ];
 
       expectedCapabilities.forEach(capability => {
@@ -128,7 +137,7 @@ describe('UTXO Sync Types', () => {
         utxoSetSize: 1000,
         compressionRatio: 0.7,
         meshLatency: 250,
-        dutyCycleRemaining: 85
+        dutyCycleRemaining: 85,
       };
 
       expect(context.state).toBe(UTXOSyncState.DISCOVERING);
@@ -146,7 +155,7 @@ describe('UTXO Sync Types', () => {
         algorithm: 'gzip',
         originalSize: 1024,
         compressedSize: 512,
-        data: new Uint8Array([1, 2, 3, 4])
+        data: new Uint8Array([1, 2, 3, 4]),
       };
 
       const message: UTXOSyncMessage = {
@@ -156,12 +165,14 @@ describe('UTXO Sync Types', () => {
         signature: 'test_signature',
         publicKey: 'test_public_key',
         payload: compressedPayload,
-        priority: MessagePriority.HIGH
+        priority: MessagePriority.HIGH,
       };
 
       expect(message.version).toBe('2.0.0');
       expect(message.type).toBe(UTXOSyncMessageType.UTXO_BLOCK_REQUEST);
-      expect(message.payload.compressedSize).toBeLessThan(message.payload.originalSize);
+      expect(message.payload.compressedSize).toBeLessThan(
+        message.payload.originalSize
+      );
       expect(message.priority).toBe(MessagePriority.HIGH);
     });
 
@@ -170,10 +181,12 @@ describe('UTXO Sync Types', () => {
         messageId: 'msg_123',
         fragmentIndex: 2,
         totalFragments: 5,
-        checksum: 'abc123'
+        checksum: 'abc123',
       };
 
-      expect(fragmentInfo.fragmentIndex).toBeLessThan(fragmentInfo.totalFragments);
+      expect(fragmentInfo.fragmentIndex).toBeLessThan(
+        fragmentInfo.totalFragments
+      );
       expect(fragmentInfo.messageId).toBeTruthy();
       expect(fragmentInfo.checksum).toBeTruthy();
     });
@@ -183,7 +196,7 @@ describe('UTXO Sync Types', () => {
         region: 'EU',
         dutyCycleUsed: 45.5,
         timeToReset: 15000,
-        canTransmit: true
+        canTransmit: true,
       };
 
       expect(dutyCycleInfo.dutyCycleUsed).toBeGreaterThanOrEqual(0);
@@ -201,7 +214,7 @@ describe('UTXO Sync Types', () => {
         timestamp: Date.now(),
         utxoMerkleRoot: 'merkle_root_123',
         difficulty: 1024,
-        nonce: 42
+        nonce: 42,
       };
 
       expect(header.index).toBeGreaterThanOrEqual(0);
@@ -222,7 +235,7 @@ describe('UTXO Sync Types', () => {
         totalValue: BigInt('1000000000'),
         compressedUTXOs: [],
         proofs: [],
-        signature: 'snapshot_signature'
+        signature: 'snapshot_signature',
       };
 
       expect(snapshot.height).toBeGreaterThan(0);
@@ -244,7 +257,7 @@ describe('UTXO Sync Types', () => {
         syncHeight: 500,
         latency: 150,
         reliability: 0.95,
-        lastSeen: Date.now()
+        lastSeen: Date.now(),
       };
 
       expect(peer.capabilities).toContain(SyncCapability.UTXO_SYNC);
@@ -267,11 +280,13 @@ describe('UTXO Sync Types', () => {
         bytesDownloaded: 1024000,
         bytesUploaded: 512000,
         peersConnected: 5,
-        estimatedTimeRemaining: 30000
+        estimatedTimeRemaining: 30000,
       };
 
       expect(progress.currentHeight).toBeLessThanOrEqual(progress.targetHeight);
-      expect(progress.headersDownloaded).toBeGreaterThanOrEqual(progress.blocksDownloaded);
+      expect(progress.headersDownloaded).toBeGreaterThanOrEqual(
+        progress.blocksDownloaded
+      );
       expect(progress.bytesDownloaded).toBeGreaterThan(0);
       expect(progress.peersConnected).toBeGreaterThan(0);
     });
@@ -280,7 +295,7 @@ describe('UTXO Sync Types', () => {
   describe('ValidationResult Interface', () => {
     test('should create successful validation result', () => {
       const result: ValidationResult = {
-        success: true
+        success: true,
       };
 
       expect(result.success).toBe(true);
@@ -292,7 +307,7 @@ describe('UTXO Sync Types', () => {
       const result: ValidationResult = {
         success: false,
         invalidAt: 123,
-        error: 'Invalid block header'
+        error: 'Invalid block header',
       };
 
       expect(result.success).toBe(false);
@@ -316,12 +331,12 @@ describe('UTXO Sync Types', () => {
         syncingPeers: 3,
         peerReliability: new Map([
           ['peer1', 0.95],
-          ['peer2', 0.88]
+          ['peer2', 0.88],
         ]),
         totalUTXOs: 10000,
         syncedHeight: 800,
         targetHeight: 1000,
-        mempoolSize: 25
+        mempoolSize: 25,
       };
 
       expect(metrics.headersPerSecond).toBeGreaterThan(metrics.blocksPerSecond);
@@ -345,7 +360,7 @@ describe('UTXO Sync Types', () => {
         syncTimeout: 300000,
         retryAttempts: 3,
         minStakeForAuth: 1000,
-        compressionThreshold: 100
+        compressionThreshold: 100,
       };
 
       expect(config.maxPeers).toBeGreaterThan(0);
@@ -361,7 +376,7 @@ describe('UTXO Sync Types', () => {
       const proof: UTXOMerkleProof = {
         txId: 'transaction_123',
         proof: ['hash1', 'hash2', 'hash3'],
-        position: 5
+        position: 5,
       };
 
       expect(proof.txId).toBeTruthy();
@@ -376,7 +391,7 @@ describe('UTXO Sync Types', () => {
         utxoId: 'utxo_123',
         spentInBlock: 500,
         spentByTx: 'spending_tx_123',
-        signature: 'spend_signature'
+        signature: 'spend_signature',
       };
 
       expect(spentProof.utxoId).toBeTruthy();
@@ -393,7 +408,7 @@ describe('UTXO Sync Types', () => {
         newTip: 'new_tip_hash',
         commonAncestor: 'common_ancestor_hash',
         orphanedBlocks: ['block1', 'block2'],
-        newBlocks: ['block3', 'block4', 'block5']
+        newBlocks: ['block3', 'block4', 'block5'],
       };
 
       expect(reorgInfo.oldTip).toBeTruthy();
@@ -416,9 +431,9 @@ describe('UTXO Sync Types', () => {
           algorithm: 'gzip',
           originalSize: 100,
           compressedSize: 50,
-          data: new Uint8Array([1, 2, 3])
+          data: new Uint8Array([1, 2, 3]),
         },
-        priority: MessagePriority.NORMAL
+        priority: MessagePriority.NORMAL,
       };
 
       expect(Object.values(MessagePriority)).toContain(message.priority);
@@ -427,15 +442,16 @@ describe('UTXO Sync Types', () => {
     test('should enforce UTXO-only design', () => {
       // All sync message types should be UTXO-specific
       const utxoMessageTypes = Object.values(UTXOSyncMessageType);
-      const utxoSpecificTypes = utxoMessageTypes.filter(type => 
-        type.includes('utxo') || 
-        type === 'beacon' || 
-        type === 'capability_announce' ||
-        type === 'version_negotiate' ||
-        type === 'sync_status' ||
-        type === 'compression_negotiate' ||
-        type === 'duty_cycle_status' ||
-        type === 'priority_override'
+      const utxoSpecificTypes = utxoMessageTypes.filter(
+        type =>
+          type.includes('utxo') ||
+          type === 'beacon' ||
+          type === 'capability_announce' ||
+          type === 'version_negotiate' ||
+          type === 'sync_status' ||
+          type === 'compression_negotiate' ||
+          type === 'duty_cycle_status' ||
+          type === 'priority_override'
       );
 
       expect(utxoSpecificTypes.length).toBe(utxoMessageTypes.length);

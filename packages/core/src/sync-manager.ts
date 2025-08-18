@@ -1,6 +1,6 @@
 /**
  * UTXO Synchronization Manager
- * 
+ *
  * Core synchronization manager for the UTXO-only blockchain.
  * Handles sync across hybrid LoRa mesh and internet networks.
  */
@@ -17,15 +17,12 @@ import { DutyCycleManager } from './duty-cycle.js';
 import { UTXOPriorityQueue } from './priority-queue.js';
 import { Logger } from '@lorachain/shared';
 
-import type { Block, UTXO, UTXOTransaction, MessagePriority } from './types.js';
+import type { Block, UTXOTransaction, MessagePriority } from './types.js';
 import {
   UTXOSyncState,
   UTXOSyncContext,
-  UTXOSyncMessage,
-  UTXOSyncMessageType,
   UTXOBlockHeader,
   UTXOSetSnapshot,
-  UTXOSetDelta,
   SyncPeer,
   SyncProgress,
   ValidationResult,
@@ -62,7 +59,7 @@ export class UTXOSyncManager extends EventEmitter {
     config?: Partial<UTXOSyncConfig>
   ) {
     super();
-    
+
     this.blockchain = blockchain;
     this.utxoManager = utxoManager;
     this.meshProtocol = meshProtocol;
@@ -86,15 +83,15 @@ export class UTXOSyncManager extends EventEmitter {
         backoffMultiplier: 1.5,
         jitterMaxMs: 500,
         maxAttempts: 3,
-      }
+      },
     };
-    
+
     this.reliableDelivery = new UTXOReliableDeliveryManager(
       'sync-manager-node',
       nodeKeyPair,
       reliableDeliveryConfig
     );
-    
+
     const dutyCycleConfig = {
       region: 'EU' as const,
       activeFrequencyBand: 'EU868',
@@ -109,9 +106,9 @@ export class UTXOSyncManager extends EventEmitter {
       adaptivePowerControl: false,
       strictComplianceMode: true,
       autoRegionDetection: false,
-      networkType: 'testnet' as const
+      networkType: 'testnet' as const,
     };
-    
+
     const discoveryConfig = {
       beaconInterval: 30000,
       neighborTimeout: 120000,
@@ -124,7 +121,7 @@ export class UTXOSyncManager extends EventEmitter {
         maxBeaconRate: 10,
         requireIdentityProof: false,
         allowAnonymousNodes: true,
-        topologyValidationStrict: false
+        topologyValidationStrict: false,
       },
       performanceConfig: {
         batchSize: 10,
@@ -133,10 +130,16 @@ export class UTXOSyncManager extends EventEmitter {
         maxNeighborLookupTime: 2000,
         maxTopologyUpdateTime: 5000,
         maxMemoryUsageMB: 100,
-        enableAdaptiveBeaconInterval: true
-      }
+        enableAdaptiveBeaconInterval: true,
+      },
     };
-    this.nodeDiscovery = new NodeDiscoveryProtocol('sync-node', nodeKeyPair, 'full', discoveryConfig, undefined);
+    this.nodeDiscovery = new NodeDiscoveryProtocol(
+      'sync-node',
+      nodeKeyPair,
+      'full',
+      discoveryConfig,
+      undefined
+    );
     this.dutyCycleManager = new DutyCycleManager(dutyCycleConfig);
     const queueConfig = {
       maxMessages: 100,
@@ -147,11 +150,11 @@ export class UTXOSyncManager extends EventEmitter {
         [0]: 20,
         [1]: 30,
         [2]: 30,
-        [3]: 20
+        [3]: 20,
       },
       emergencyCapacityReserve: 20,
       memoryLimitBytes: 2 * 1024 * 1024,
-      evictionStrategy: 'lru' as const
+      evictionStrategy: 'lru' as const,
     };
     this.priorityQueue = new UTXOPriorityQueue(queueConfig);
 
@@ -167,7 +170,7 @@ export class UTXOSyncManager extends EventEmitter {
       retryAttempts: 3,
       minStakeForAuth: 1000,
       compressionThreshold: 100,
-      ...config
+      ...config,
     };
 
     // Initialize sync context
@@ -179,7 +182,7 @@ export class UTXOSyncManager extends EventEmitter {
       utxoSetSize: 0,
       compressionRatio: 0,
       meshLatency: 0,
-      dutyCycleRemaining: 100
+      dutyCycleRemaining: 100,
     };
 
     // Initialize metrics
@@ -198,7 +201,7 @@ export class UTXOSyncManager extends EventEmitter {
       totalUTXOs: 0,
       syncedHeight: 0,
       targetHeight: 0,
-      mempoolSize: 0
+      mempoolSize: 0,
     };
 
     this.setupEventHandlers();
@@ -220,26 +223,25 @@ export class UTXOSyncManager extends EventEmitter {
     try {
       // Phase 1: Discovery
       await this.discoverPeers();
-      
+
       // Phase 2: Negotiation
       await this.negotiateCapabilities();
-      
+
       // Phase 3: Header sync
       await this.syncHeaders();
-      
+
       // Phase 4: UTXO set sync
       await this.syncUTXOSetInternal();
-      
+
       // Phase 5: Block sync
       await this.syncBlocks();
-      
+
       // Phase 6: Mempool sync
       await this.syncMempool();
-      
+
       // Mark as synchronized
       this.updateSyncState(UTXOSyncState.SYNCHRONIZED);
       this.emit('sync:completed');
-      
     } catch (error) {
       this.logger.error('Sync failed:', error as Error);
       this.emit('sync:error', {});
@@ -252,48 +254,56 @@ export class UTXOSyncManager extends EventEmitter {
   /**
    * Sync UTXO headers
    */
-  async syncUTXOHeaders(startHeight: number, endHeight: number): Promise<UTXOBlockHeader[]> {
+  async syncUTXOHeaders(
+    startHeight: number,
+    endHeight: number
+  ): Promise<UTXOBlockHeader[]> {
     this.updateSyncState(UTXOSyncState.HEADER_SYNC);
-    
+
     const headers: UTXOBlockHeader[] = [];
     const batchSize = this.config.headerBatchSize;
-    
+
     for (let height = startHeight; height <= endHeight; height += batchSize) {
       const batchEnd = Math.min(height + batchSize - 1, endHeight);
       const batch = await this.fetchHeaderBatch(height, batchEnd);
-      
+
       // Validate header chain
       const valid = await this.validateHeaderChain(batch);
       if (!valid.success) {
-        throw new Error(`Invalid header chain at height ${valid.invalidAt}: ${valid.error}`);
+        throw new Error(
+          `Invalid header chain at height ${valid.invalidAt}: ${valid.error}`
+        );
       }
-      
+
       headers.push(...batch);
-      
+
       // Update progress
       this.emit('sync:progress', {
         state: UTXOSyncState.HEADER_SYNC,
         currentHeight: batchEnd,
         targetHeight: endHeight,
-        headersDownloaded: headers.length
+        headersDownloaded: headers.length,
       } as SyncProgress);
     }
-    
+
     return headers;
   }
 
   /**
    * Sync UTXO blocks
    */
-  async syncUTXOBlocks(hashes: string[], priority: MessagePriority): Promise<Block[]> {
+  async syncUTXOBlocks(
+    hashes: string[],
+    priority: MessagePriority
+  ): Promise<Block[]> {
     this.updateSyncState(UTXOSyncState.BLOCK_SYNC);
-    
+
     const blocks: Block[] = [];
     const networkType = await this.detectNetworkType();
-    
+
     if (networkType === 'internet') {
       // Use parallel download for internet nodes
-      blocks.push(...await this.parallelBlockDownload(hashes));
+      blocks.push(...(await this.parallelBlockDownload(hashes)));
     } else if (networkType === 'mesh') {
       // Use fragmented download for mesh nodes
       for (const hash of hashes) {
@@ -302,9 +312,9 @@ export class UTXOSyncManager extends EventEmitter {
       }
     } else {
       // Hybrid approach
-      blocks.push(...await this.hybridBlockSync(hashes, priority));
+      blocks.push(...(await this.hybridBlockSync(hashes, priority)));
     }
-    
+
     return blocks;
   }
 
@@ -313,9 +323,9 @@ export class UTXOSyncManager extends EventEmitter {
    */
   async syncUTXOSet(height: number): Promise<UTXOSetSnapshot> {
     this.updateSyncState(UTXOSyncState.UTXO_SET_SYNC);
-    
+
     const networkType = await this.detectNetworkType();
-    
+
     if (networkType === 'internet') {
       // Download full snapshot
       return await this.downloadUTXOSnapshot(height);
@@ -330,20 +340,20 @@ export class UTXOSyncManager extends EventEmitter {
    */
   async syncPendingUTXOs(): Promise<UTXOTransaction[]> {
     this.updateSyncState(UTXOSyncState.MEMPOOL_SYNC);
-    
+
     const localTxIds = await this.getLocalTransactionIds();
     const remoteTxIds = await this.getRemoteTransactionIds();
-    
+
     // Calculate difference
     const missing = remoteTxIds.filter(id => !localTxIds.includes(id));
-    
+
     if (missing.length === 0) {
       return [];
     }
-    
+
     // Download missing transactions
     const transactions = await this.downloadTransactionBatch(missing);
-    
+
     // Validate and add to mempool
     for (const tx of transactions) {
       const valid = await this.validateTransaction(tx);
@@ -351,7 +361,7 @@ export class UTXOSyncManager extends EventEmitter {
         await this.addToMempool(tx);
       }
     }
-    
+
     return transactions;
   }
 
@@ -363,14 +373,14 @@ export class UTXOSyncManager extends EventEmitter {
     this.nodeDiscovery.on('peer:discovered', (peer: any) => {
       this.handlePeerDiscovered(peer);
     });
-    
+
     // Mesh protocol events
     this.meshProtocol.on('message:received', (message: any) => {
       this.handleSyncMessage(message);
     });
-    
+
     // Blockchain events would be handled if blockchain had event emitter capabilities
-    
+
     // Duty cycle events
     this.dutyCycleManager.on('window:available', () => {
       this.resumeSyncIfNeeded();
@@ -382,21 +392,21 @@ export class UTXOSyncManager extends EventEmitter {
    */
   private async discoverPeers(): Promise<void> {
     this.updateSyncState(UTXOSyncState.DISCOVERING);
-    
+
     // Start node discovery
     await this.nodeDiscovery.startNodeDiscovery();
-    
+
     // Wait for minimum peers
     const timeout = setTimeout(() => {
       throw new Error('Peer discovery timeout');
     }, 30000);
-    
+
     while (this.peers.size < 3) {
       await new Promise(resolve => setTimeout(resolve, 1000));
     }
-    
+
     clearTimeout(timeout);
-    
+
     this.logger.info(`Discovered ${this.peers.size} peers for sync`);
   }
 
@@ -405,23 +415,24 @@ export class UTXOSyncManager extends EventEmitter {
    */
   private async negotiateCapabilities(): Promise<void> {
     this.updateSyncState(UTXOSyncState.NEGOTIATING);
-    
+
     const negotiationPromises = Array.from(this.peers.values()).map(peer =>
       this.negotiateWithPeer(peer)
     );
-    
+
     await Promise.all(negotiationPromises);
-    
+
     // Filter peers that support UTXO sync
-    const capablePeers = Array.from(this.peers.values()).filter(peer =>
-      peer.capabilities.includes(SyncCapability.UTXO_SYNC) &&
-      peer.protocolVersion === SYNC_PROTOCOL_VERSION
+    const capablePeers = Array.from(this.peers.values()).filter(
+      peer =>
+        peer.capabilities.includes(SyncCapability.UTXO_SYNC) &&
+        peer.protocolVersion === SYNC_PROTOCOL_VERSION
     );
-    
+
     if (capablePeers.length === 0) {
       throw new Error('No peers support UTXO sync protocol v2.0.0');
     }
-    
+
     this.logger.info(`${capablePeers.length} peers support UTXO sync`);
   }
 
@@ -431,16 +442,16 @@ export class UTXOSyncManager extends EventEmitter {
   private async syncHeaders(): Promise<void> {
     const currentHeight = this.blockchain.getBlocks().length - 1;
     const targetHeight = await this.getHighestPeerHeight();
-    
+
     if (currentHeight >= targetHeight) {
       this.logger.info('Already synchronized');
       return;
     }
-    
+
     this.syncContext.targetHeight = targetHeight;
-    
+
     const headers = await this.syncUTXOHeaders(currentHeight + 1, targetHeight);
-    
+
     // Store headers for later block download
     this.emit('headers:synced', headers);
   }
@@ -451,10 +462,10 @@ export class UTXOSyncManager extends EventEmitter {
   private async syncUTXOSetInternal(): Promise<void> {
     const height = this.blockchain.getBlocks().length - 1;
     const snapshot = await this.syncUTXOSet(height);
-    
+
     // Apply snapshot to UTXO manager
     await this.applyUTXOSnapshot(snapshot);
-    
+
     this.emit('utxo:synced', snapshot);
   }
 
@@ -464,22 +475,28 @@ export class UTXOSyncManager extends EventEmitter {
   private async syncBlocks(): Promise<void> {
     const currentHeight = this.blockchain.getBlocks().length - 1;
     const targetHeight = this.syncContext.targetHeight;
-    
+
     if (currentHeight >= targetHeight) {
       return;
     }
-    
+
     // Get missing block hashes
-    const missingHashes = await this.getMissingBlockHashes(currentHeight + 1, targetHeight);
-    
+    const missingHashes = await this.getMissingBlockHashes(
+      currentHeight + 1,
+      targetHeight
+    );
+
     // Download blocks with high priority
-    const blocks = await this.syncUTXOBlocks(missingHashes, 'high' as unknown as MessagePriority);
-    
+    const blocks = await this.syncUTXOBlocks(
+      missingHashes,
+      'high' as unknown as MessagePriority
+    );
+
     // Add blocks to blockchain
     for (const block of blocks) {
       await this.blockchain.addBlock(block);
     }
-    
+
     this.emit('blocks:synced', blocks);
   }
 
@@ -505,10 +522,10 @@ export class UTXOSyncManager extends EventEmitter {
   private async detectNetworkType(): Promise<'internet' | 'mesh' | 'gateway'> {
     // Check for internet connectivity
     const hasInternet = await this.checkInternetConnectivity();
-    
-    // Check for mesh connectivity  
+
+    // Check for mesh connectivity
     const hasMesh = true; // Simplified check
-    
+
     if (hasInternet && hasMesh) {
       return 'gateway';
     } else if (hasInternet) {
@@ -523,100 +540,115 @@ export class UTXOSyncManager extends EventEmitter {
   /**
    * Helper methods (simplified implementations)
    */
-  
-  private async fetchHeaderBatch(start: number, end: number): Promise<UTXOBlockHeader[]> {
+
+  private async fetchHeaderBatch(
+    _start: number,
+    _end: number
+  ): Promise<UTXOBlockHeader[]> {
     // Implementation would fetch headers from peers
     return [];
   }
-  
-  private async validateHeaderChain(headers: UTXOBlockHeader[]): Promise<ValidationResult> {
+
+  private async validateHeaderChain(
+    _headers: UTXOBlockHeader[]
+  ): Promise<ValidationResult> {
     // Implementation would validate header chain
     return { success: true };
   }
-  
-  private async parallelBlockDownload(hashes: string[]): Promise<Block[]> {
+
+  private async parallelBlockDownload(_hashes: string[]): Promise<Block[]> {
     // Implementation would download blocks in parallel
     return [];
   }
-  
-  private async fragmentedBlockSync(hash: string): Promise<Block> {
+
+  private async fragmentedBlockSync(_hash: string): Promise<Block> {
     // Implementation would sync block via fragments
     return {} as Block;
   }
-  
-  private async hybridBlockSync(hashes: string[], priority: MessagePriority): Promise<Block[]> {
+
+  private async hybridBlockSync(
+    _hashes: string[],
+    _priority: MessagePriority
+  ): Promise<Block[]> {
     // Implementation would use hybrid sync approach
     return [];
   }
-  
-  private async downloadUTXOSnapshot(height: number): Promise<UTXOSetSnapshot> {
+
+  private async downloadUTXOSnapshot(
+    _height: number
+  ): Promise<UTXOSetSnapshot> {
     // Implementation would download UTXO snapshot
     return {} as UTXOSetSnapshot;
   }
-  
-  private async deltaUTXOSync(height: number): Promise<UTXOSetSnapshot> {
+
+  private async deltaUTXOSync(_height: number): Promise<UTXOSetSnapshot> {
     // Implementation would perform delta sync
     return {} as UTXOSetSnapshot;
   }
-  
+
   private async getLocalTransactionIds(): Promise<string[]> {
     // Implementation would get local tx IDs
     return [];
   }
-  
+
   private async getRemoteTransactionIds(): Promise<string[]> {
     // Implementation would get remote tx IDs
     return [];
   }
-  
-  private async downloadTransactionBatch(ids: string[]): Promise<UTXOTransaction[]> {
+
+  private async downloadTransactionBatch(
+    _ids: string[]
+  ): Promise<UTXOTransaction[]> {
     // Implementation would download transactions
     return [];
   }
-  
-  private async validateTransaction(tx: UTXOTransaction): Promise<boolean> {
+
+  private async validateTransaction(_tx: UTXOTransaction): Promise<boolean> {
     // Implementation would validate transaction
     return true;
   }
-  
-  private async addToMempool(tx: UTXOTransaction): Promise<void> {
+
+  private async addToMempool(_tx: UTXOTransaction): Promise<void> {
     // Implementation would add to mempool
   }
-  
-  private handlePeerDiscovered(peer: any): void {
+
+  private handlePeerDiscovered(_peer: any): void {
     // Implementation would handle peer discovery
   }
-  
-  private handleSyncMessage(message: any): void {
+
+  private handleSyncMessage(_message: any): void {
     // Implementation would handle sync messages
   }
-  
-  private handleNewBlock(block: Block): void {
+
+  private handleNewBlock(_block: Block): void {
     // Implementation would handle new blocks
   }
-  
+
   private resumeSyncIfNeeded(): void {
     // Implementation would resume sync if needed
   }
-  
-  private async negotiateWithPeer(peer: SyncPeer): Promise<void> {
+
+  private async negotiateWithPeer(_peer: SyncPeer): Promise<void> {
     // Implementation would negotiate with peer
   }
-  
+
   private async getHighestPeerHeight(): Promise<number> {
     // Implementation would get highest peer height
     return 0;
   }
-  
-  private async applyUTXOSnapshot(snapshot: UTXOSetSnapshot): Promise<void> {
+
+  private async applyUTXOSnapshot(_snapshot: UTXOSetSnapshot): Promise<void> {
     // Implementation would apply UTXO snapshot
   }
-  
-  private async getMissingBlockHashes(start: number, end: number): Promise<string[]> {
+
+  private async getMissingBlockHashes(
+    _start: number,
+    _end: number
+  ): Promise<string[]> {
     // Implementation would get missing block hashes
     return [];
   }
-  
+
   private async checkInternetConnectivity(): Promise<boolean> {
     // Implementation would check internet connectivity
     return true;
@@ -636,7 +668,7 @@ export class UTXOSyncManager extends EventEmitter {
       bytesDownloaded: 0,
       bytesUploaded: 0,
       peersConnected: this.peers.size,
-      estimatedTimeRemaining: 0
+      estimatedTimeRemaining: 0,
     };
   }
 

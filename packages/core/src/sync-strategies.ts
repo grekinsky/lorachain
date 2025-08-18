@@ -1,6 +1,6 @@
 /**
  * UTXO Synchronization Strategies
- * 
+ *
  * Different synchronization strategies optimized for network types:
  * - Internet: High bandwidth, parallel operations
  * - Mesh: Constrained bandwidth, fragmented operations
@@ -13,13 +13,12 @@ import { UTXOEnhancedMeshProtocol } from './enhanced-mesh-protocol.js';
 import { DutyCycleManager } from './duty-cycle.js';
 import { NodeDiscoveryProtocol } from './node-discovery-protocol.js';
 import { UTXOReliableDeliveryManager } from './utxo-reliable-delivery-manager.js';
-import { UTXOPriorityQueue } from './priority-queue.js';
 import { CryptographicService } from './cryptographic.js';
 import { Logger } from '@lorachain/shared';
 
-import type { Block, UTXO, UTXOTransaction } from './types.js';
+import type { Block, UTXO } from './types.js';
 import type { MessagePriority } from './types.js';
-import type { CompressionAlgorithm, CompressionLevel } from './compression-types.js';
+import type { CompressionAlgorithm } from './compression-types.js';
 import {
   UTXOSetSnapshot,
   UTXOSyncMessage,
@@ -27,7 +26,6 @@ import {
   SyncPeer,
   FragmentInfo,
   CompressedPayload,
-  UTXOBlockHeader,
 } from './sync-types.js';
 
 /**
@@ -92,7 +90,7 @@ export class InternetSyncStrategy extends EventEmitter {
     maxConnections: number = 10
   ) {
     super();
-    
+
     this.compressionManager = compressionManager;
     this.cryptoService = cryptoService;
     this.logger = Logger.getInstance();
@@ -113,7 +111,7 @@ export class InternetSyncStrategy extends EventEmitter {
     );
 
     const blocks = await Promise.all(downloads);
-    
+
     this.logger.info(`Downloaded ${blocks.length} blocks successfully`);
     return blocks;
   }
@@ -121,15 +119,18 @@ export class InternetSyncStrategy extends EventEmitter {
   /**
    * Batch UTXO set synchronization
    */
-  async batchUTXOSetSync(height: number, peers: SyncPeer[]): Promise<UTXOSetSnapshot> {
+  async batchUTXOSetSync(
+    height: number,
+    peers: SyncPeer[]
+  ): Promise<UTXOSetSnapshot> {
     this.logger.info(`Starting UTXO set sync for height ${height}`);
 
     // Download entire UTXO set in compressed batches
     const snapshot = await this.downloadUTXOSnapshot(height, peers);
-    
+
     // Verify merkle root
     await this.verifyMerkleRoot(snapshot);
-    
+
     this.logger.info(`UTXO set synced: ${snapshot.utxoCount} UTXOs`);
     return snapshot;
   }
@@ -140,7 +141,7 @@ export class InternetSyncStrategy extends EventEmitter {
   streamUTXOUpdates(callback: (utxo: UTXO) => void): void {
     // WebSocket streaming implementation would go here
     this.logger.info('Started UTXO update streaming');
-    
+
     // Emit events for new UTXOs
     this.on('utxo:created', callback);
     this.on('utxo:spent', callback);
@@ -154,40 +155,55 @@ export class InternetSyncStrategy extends EventEmitter {
       try {
         // Create block request message
         const request = await this.createBlockRequest(hash, peer);
-        
+
         // Send request and wait for response
-        const response = await this.sendBlockRequest(request, peer) as Record<string, any>;
-        
+        const response = (await this.sendBlockRequest(request, peer)) as Record<
+          string,
+          any
+        >;
+
         // Decompress and validate block
         const block = await this.processBlockResponse(response);
-        
+
         return block;
       } catch (error) {
-        this.logger.warn(`Failed to download block ${hash} from peer ${peer.id}:`, error as Error);
+        this.logger.warn(
+          `Failed to download block ${hash} from peer ${peer.id}:`,
+          error as Error
+        );
         continue;
       }
     }
-    
+
     throw new Error(`Failed to download block ${hash} from all peers`);
   }
 
   /**
    * Download UTXO snapshot
    */
-  private async downloadUTXOSnapshot(height: number, peers: SyncPeer[]): Promise<UTXOSetSnapshot> {
+  private async downloadUTXOSnapshot(
+    height: number,
+    peers: SyncPeer[]
+  ): Promise<UTXOSetSnapshot> {
     for (const peer of peers) {
       try {
         const request = await this.createSnapshotRequest(height, peer);
-        const response = await this.sendSnapshotRequest(request, peer) as Record<string, any>;
+        const response = (await this.sendSnapshotRequest(
+          request,
+          peer
+        )) as Record<string, any>;
         const snapshot = await this.processSnapshotResponse(response);
-        
+
         return snapshot;
       } catch (error) {
-        this.logger.warn(`Failed to download snapshot from peer ${peer.id}:`, error as Error);
+        this.logger.warn(
+          `Failed to download snapshot from peer ${peer.id}:`,
+          error as Error
+        );
         continue;
       }
     }
-    
+
     throw new Error(`Failed to download UTXO snapshot for height ${height}`);
   }
 
@@ -202,43 +218,58 @@ export class InternetSyncStrategy extends EventEmitter {
   /**
    * Helper methods for message creation and processing
    */
-  private async createBlockRequest(hash: string, peer: SyncPeer): Promise<UTXOSyncMessage> {
+  private async createBlockRequest(
+    hash: string,
+    _peer: SyncPeer
+  ): Promise<UTXOSyncMessage> {
     const requestData = JSON.stringify({
       blockHash: hash,
-      requestId: this.generateRequestId()
+      requestId: this.generateRequestId(),
     });
     const requestBytes = new TextEncoder().encode(requestData);
     const compressed = await this.compressionManager.compress(requestBytes);
-    
+
     const payload: CompressedPayload = {
       algorithm: compressed.algorithm,
       originalSize: requestBytes.length,
       compressedSize: compressed.data.length,
-      data: compressed.data
+      data: compressed.data,
     };
 
-    return this.createSyncMessage(UTXOSyncMessageType.UTXO_BLOCK_REQUEST, payload);
+    return this.createSyncMessage(
+      UTXOSyncMessageType.UTXO_BLOCK_REQUEST,
+      payload
+    );
   }
 
-  private async createSnapshotRequest(height: number, peer: SyncPeer): Promise<UTXOSyncMessage> {
+  private async createSnapshotRequest(
+    height: number,
+    _peer: SyncPeer
+  ): Promise<UTXOSyncMessage> {
     const requestData = JSON.stringify({
       height,
-      requestId: this.generateRequestId()
+      requestId: this.generateRequestId(),
     });
     const requestBytes = new TextEncoder().encode(requestData);
     const compressed = await this.compressionManager.compress(requestBytes);
-    
+
     const payload: CompressedPayload = {
       algorithm: compressed.algorithm,
       originalSize: requestBytes.length,
       compressedSize: compressed.data.length,
-      data: compressed.data
+      data: compressed.data,
     };
 
-    return this.createSyncMessage(UTXOSyncMessageType.UTXO_SET_REQUEST, payload);
+    return this.createSyncMessage(
+      UTXOSyncMessageType.UTXO_SET_REQUEST,
+      payload
+    );
   }
 
-  private async createSyncMessage(type: UTXOSyncMessageType, payload: CompressedPayload): Promise<UTXOSyncMessage> {
+  private async createSyncMessage(
+    type: UTXOSyncMessageType,
+    payload: CompressedPayload
+  ): Promise<UTXOSyncMessage> {
     const message = {
       version: '2.0.0',
       type,
@@ -246,35 +277,53 @@ export class InternetSyncStrategy extends EventEmitter {
       signature: '',
       publicKey: '',
       payload,
-      priority: 'high' as unknown as MessagePriority
+      priority: 'high' as unknown as MessagePriority,
     };
 
     // Sign the message
     const messageData = new TextEncoder().encode(JSON.stringify(message));
     const keyPair = CryptographicService.generateKeyPair('secp256k1');
-    const signature = CryptographicService.sign(messageData, keyPair.privateKey, 'secp256k1');
-    message.signature = typeof signature === 'string' ? signature : new TextDecoder().decode(signature as unknown as Uint8Array);
-    message.publicKey = typeof keyPair.publicKey === 'string' ? keyPair.publicKey : new TextDecoder().decode(keyPair.publicKey);
+    const signature = CryptographicService.sign(
+      messageData,
+      keyPair.privateKey,
+      'secp256k1'
+    );
+    message.signature =
+      typeof signature === 'string'
+        ? signature
+        : new TextDecoder().decode(signature as unknown as Uint8Array);
+    message.publicKey =
+      typeof keyPair.publicKey === 'string'
+        ? keyPair.publicKey
+        : new TextDecoder().decode(keyPair.publicKey);
 
     return message;
   }
 
-  private async sendBlockRequest(request: UTXOSyncMessage, peer: SyncPeer): Promise<any> {
+  private async sendBlockRequest(
+    _request: UTXOSyncMessage,
+    _peer: SyncPeer
+  ): Promise<any> {
     // Implementation would send HTTP/WebSocket request
     return {};
   }
 
-  private async sendSnapshotRequest(request: UTXOSyncMessage, peer: SyncPeer): Promise<any> {
+  private async sendSnapshotRequest(
+    _request: UTXOSyncMessage,
+    _peer: SyncPeer
+  ): Promise<any> {
     // Implementation would send HTTP/WebSocket request
     return {};
   }
 
-  private async processBlockResponse(response: any): Promise<Block> {
+  private async processBlockResponse(_response: any): Promise<Block> {
     // Implementation would process and decompress block response
     return {} as Block;
   }
 
-  private async processSnapshotResponse(response: any): Promise<UTXOSetSnapshot> {
+  private async processSnapshotResponse(
+    _response: any
+  ): Promise<UTXOSetSnapshot> {
     // Implementation would process and decompress snapshot response
     return {} as UTXOSetSnapshot;
   }
@@ -305,7 +354,7 @@ export class MeshSyncStrategy extends EventEmitter {
     cryptoService: CryptographicService
   ) {
     super();
-    
+
     this.meshProtocol = meshProtocol;
     this.dutyCycleManager = dutyCycleManager;
     this.nodeDiscovery = nodeDiscovery;
@@ -320,7 +369,7 @@ export class MeshSyncStrategy extends EventEmitter {
    */
   async fragmentedBlockSync(
     hash: string,
-    maxFragmentSize: number = 200  // Leave room for headers
+    _maxFragmentSize: number = 200 // Leave room for headers
   ): Promise<Block> {
     this.logger.info(`Starting fragmented sync for block ${hash}`);
 
@@ -336,7 +385,10 @@ export class MeshSyncStrategy extends EventEmitter {
       }
 
       // Request fragment
-      const fragmentRequest = await this.createFragmentRequest(hash, fragmentIndex);
+      const fragmentRequest = await this.createFragmentRequest(
+        hash,
+        fragmentIndex
+      );
       const reliableMessage = {
         id: this.generateRequestId(),
         type: 'sync' as const,
@@ -347,9 +399,12 @@ export class MeshSyncStrategy extends EventEmitter {
         maxRetries: 3,
         timeoutMs: 30000,
         from: 'sync-manager',
-        priority: fragmentRequest.priority
+        priority: fragmentRequest.priority,
       };
-      const fragment = await this.reliableDelivery.sendReliableMessage(reliableMessage, 'high') as any;
+      const fragment = (await this.reliableDelivery.sendReliableMessage(
+        reliableMessage,
+        'high'
+      )) as any;
 
       if (!fragment) {
         if (fragmentIndex === 0) {
@@ -360,7 +415,7 @@ export class MeshSyncStrategy extends EventEmitter {
 
       // Store fragment
       fragments.push(fragment.data);
-      
+
       if (fragmentIndex === 0) {
         totalFragments = fragment.totalFragments;
       }
@@ -375,8 +430,10 @@ export class MeshSyncStrategy extends EventEmitter {
 
     // Reassemble block
     const block = await this.reassembleBlock(fragments);
-    
-    this.logger.info(`Successfully reassembled block ${hash} from ${fragments.length} fragments`);
+
+    this.logger.info(
+      `Successfully reassembled block ${hash} from ${fragments.length} fragments`
+    );
     return block;
   }
 
@@ -387,24 +444,30 @@ export class MeshSyncStrategy extends EventEmitter {
     this.logger.info(`Syncing UTXOs for address ${address}`);
 
     // Only sync UTXOs for specific addresses to minimize data
-    const request = await this.createUTXORequest(address, 'high' as unknown as MessagePriority);
+    const request = await this.createUTXORequest(
+      address,
+      'high' as unknown as MessagePriority
+    );
     const reliableMessage = {
-        id: this.generateRequestId(),
-        type: 'sync' as const,
-        payload: request.payload,
-        timestamp: request.timestamp,
-        signature: request.signature,
-        reliability: 'confirmed' as const,
-        maxRetries: 3,
-        timeoutMs: 30000,
-        from: 'sync-manager',
-        priority: request.priority
-      };
-    const response = await this.reliableDelivery.sendReliableMessage(reliableMessage, 'high') as any;
+      id: this.generateRequestId(),
+      type: 'sync' as const,
+      payload: request.payload,
+      timestamp: request.timestamp,
+      signature: request.signature,
+      reliability: 'confirmed' as const,
+      maxRetries: 3,
+      timeoutMs: 30000,
+      from: 'sync-manager',
+      priority: request.priority,
+    };
+    const response = (await this.reliableDelivery.sendReliableMessage(
+      reliableMessage,
+      'high'
+    )) as any;
 
     // Decompress and validate UTXOs
     const utxos = await this.processUTXOResponse(response);
-    
+
     this.logger.info(`Synced ${utxos.length} UTXOs for address ${address}`);
     return utxos;
   }
@@ -416,7 +479,7 @@ export class MeshSyncStrategy extends EventEmitter {
     this.logger.info(`Starting cooperative sync to height ${targetHeight}`);
 
     const neighbors = await this.nodeDiscovery.getNeighbors();
-    
+
     for (const neighbor of neighbors) {
       if ((neighbor as any).height >= targetHeight) {
         try {
@@ -424,89 +487,120 @@ export class MeshSyncStrategy extends EventEmitter {
           this.logger.info(`Successfully synced from neighbor ${neighbor.id}`);
           return;
         } catch (error) {
-          this.logger.warn(`Failed to sync from neighbor ${neighbor.id}:`, error as Error);
+          this.logger.warn(
+            `Failed to sync from neighbor ${neighbor.id}:`,
+            error as Error
+          );
           continue;
         }
       }
     }
-    
-    throw new Error(`No neighbors available for sync to height ${targetHeight}`);
+
+    throw new Error(
+      `No neighbors available for sync to height ${targetHeight}`
+    );
   }
 
   /**
    * Create fragment request
    */
-  private async createFragmentRequest(hash: string, fragmentIndex: number): Promise<UTXOSyncMessage> {
+  private async createFragmentRequest(
+    hash: string,
+    fragmentIndex: number
+  ): Promise<UTXOSyncMessage> {
     const requestData = JSON.stringify({
       blockHash: hash,
       fragmentIndex,
-      requestId: this.generateRequestId()
+      requestId: this.generateRequestId(),
     });
     const requestBytes = new TextEncoder().encode(requestData);
     const compressed = await this.compressionManager.compress(requestBytes);
-    
+
     const payload: CompressedPayload = {
       algorithm: compressed.algorithm,
       originalSize: requestBytes.length,
       compressedSize: compressed.data.length,
-      data: compressed.data
+      data: compressed.data,
     };
 
     const fragmentInfo: FragmentInfo = {
       messageId: this.generateRequestId(),
       fragmentIndex,
       totalFragments: 1,
-      checksum: await this.calculateChecksum(payload.data)
+      checksum: await this.calculateChecksum(payload.data),
     };
 
     const keyPair = CryptographicService.generateKeyPair('secp256k1');
     const messageData = new TextEncoder().encode(hash);
-    
-    const signature = CryptographicService.sign(messageData, keyPair.privateKey, 'secp256k1');
-    
+
+    const signature = CryptographicService.sign(
+      messageData,
+      keyPair.privateKey,
+      'secp256k1'
+    );
+
     return {
       version: '2.0.0',
       type: UTXOSyncMessageType.UTXO_BLOCK_FRAGMENT,
       timestamp: Date.now(),
-      signature: typeof signature === 'string' ? signature : new TextDecoder().decode(signature as unknown as Uint8Array),
-      publicKey: typeof keyPair.publicKey === 'string' ? keyPair.publicKey : new TextDecoder().decode(keyPair.publicKey),
+      signature:
+        typeof signature === 'string'
+          ? signature
+          : new TextDecoder().decode(signature as unknown as Uint8Array),
+      publicKey:
+        typeof keyPair.publicKey === 'string'
+          ? keyPair.publicKey
+          : new TextDecoder().decode(keyPair.publicKey),
       payload,
       priority: 'high' as unknown as MessagePriority,
-      fragmentInfo
+      fragmentInfo,
     };
   }
 
   /**
    * Create UTXO request
    */
-  private async createUTXORequest(address: string, priority: MessagePriority): Promise<UTXOSyncMessage> {
+  private async createUTXORequest(
+    address: string,
+    priority: MessagePriority
+  ): Promise<UTXOSyncMessage> {
     const requestData = JSON.stringify({
       address,
-      requestId: this.generateRequestId()
+      requestId: this.generateRequestId(),
     });
     const requestBytes = new TextEncoder().encode(requestData);
     const compressed = await this.compressionManager.compress(requestBytes);
-    
+
     const payload: CompressedPayload = {
       algorithm: compressed.algorithm,
       originalSize: requestBytes.length,
       compressedSize: compressed.data.length,
-      data: compressed.data
+      data: compressed.data,
     };
 
     const keyPair = CryptographicService.generateKeyPair('secp256k1');
     const messageData = new TextEncoder().encode(address);
 
-    const signature = CryptographicService.sign(messageData, keyPair.privateKey, 'secp256k1');
-    
+    const signature = CryptographicService.sign(
+      messageData,
+      keyPair.privateKey,
+      'secp256k1'
+    );
+
     return {
       version: '2.0.0',
       type: UTXOSyncMessageType.UTXO_SET_REQUEST,
       timestamp: Date.now(),
-      signature: typeof signature === 'string' ? signature : new TextDecoder().decode(signature as unknown as Uint8Array),
-      publicKey: typeof keyPair.publicKey === 'string' ? keyPair.publicKey : new TextDecoder().decode(keyPair.publicKey),
+      signature:
+        typeof signature === 'string'
+          ? signature
+          : new TextDecoder().decode(signature as unknown as Uint8Array),
+      publicKey:
+        typeof keyPair.publicKey === 'string'
+          ? keyPair.publicKey
+          : new TextDecoder().decode(keyPair.publicKey),
       payload,
-      priority
+      priority,
     };
   }
 
@@ -515,9 +609,12 @@ export class MeshSyncStrategy extends EventEmitter {
    */
   private async reassembleBlock(fragments: Uint8Array[]): Promise<Block> {
     // Concatenate all fragments
-    const totalLength = fragments.reduce((sum, fragment) => sum + fragment.length, 0);
+    const totalLength = fragments.reduce(
+      (sum, fragment) => sum + fragment.length,
+      0
+    );
     const combined = new Uint8Array(totalLength);
-    
+
     let offset = 0;
     for (const fragment of fragments) {
       combined.set(fragment, offset);
@@ -529,9 +626,10 @@ export class MeshSyncStrategy extends EventEmitter {
       algorithm: 'gzip' as CompressionAlgorithm,
       data: combined,
       originalSize: combined.length * 2,
-      metadata: { version: 1, compressor: 'gzip' }
+      metadata: { version: 1, compressor: 'gzip' },
     };
-    const decompressed = await this.compressionManager.decompress(compressedData);
+    const decompressed =
+      await this.compressionManager.decompress(compressedData);
 
     // Parse block from decompressed data
     const blockData = JSON.parse(new TextDecoder().decode(decompressed));
@@ -541,7 +639,7 @@ export class MeshSyncStrategy extends EventEmitter {
   /**
    * Process UTXO response
    */
-  private async processUTXOResponse(response: any): Promise<UTXO[]> {
+  private async processUTXOResponse(_response: any): Promise<UTXO[]> {
     // Implementation would decompress and validate UTXO response
     return [];
   }
@@ -549,7 +647,10 @@ export class MeshSyncStrategy extends EventEmitter {
   /**
    * Sync from a specific neighbor
    */
-  private async syncFromNeighbor(neighbor: any, targetHeight: number): Promise<void> {
+  private async syncFromNeighbor(
+    _neighbor: any,
+    _targetHeight: number
+  ): Promise<void> {
     // Implementation would sync from neighbor
   }
 
@@ -583,7 +684,7 @@ export class HybridSyncStrategy extends EventEmitter {
     meshStrategy: MeshSyncStrategy
   ) {
     super();
-    
+
     this.internetStrategy = internetStrategy;
     this.meshStrategy = meshStrategy;
     this.logger = Logger.getInstance();
@@ -598,8 +699,10 @@ export class HybridSyncStrategy extends EventEmitter {
     peers: SyncPeer[]
   ): Promise<Block[]> {
     const networkType = await this.detectNetworkType();
-    
-    this.logger.info(`Using ${networkType} sync strategy for ${hashes.length} blocks`);
+
+    this.logger.info(
+      `Using ${networkType} sync strategy for ${hashes.length} blocks`
+    );
 
     if (networkType === 'internet') {
       return await this.internetStrategy.parallelBlockDownload(hashes, peers);
@@ -628,7 +731,10 @@ export class HybridSyncStrategy extends EventEmitter {
 
     // Download blocks via internet
     const internetPeers = peers.filter(p => p.type === 'internet');
-    const blocks = await this.internetStrategy.parallelBlockDownload(hashes, internetPeers);
+    const blocks = await this.internetStrategy.parallelBlockDownload(
+      hashes,
+      internetPeers
+    );
 
     // Relay blocks to mesh nodes
     await this.relayToMeshNodes(blocks);
@@ -654,10 +760,10 @@ export class HybridSyncStrategy extends EventEmitter {
   private async detectNetworkType(): Promise<'internet' | 'mesh' | 'gateway'> {
     // Check for internet connectivity
     const hasInternet = await this.checkInternetConnectivity();
-    
-    // Check for mesh connectivity  
+
+    // Check for mesh connectivity
     const hasMesh = await this.checkMeshConnectivity();
-    
+
     if (hasInternet && hasMesh) {
       return 'gateway';
     } else if (hasInternet) {
@@ -677,7 +783,7 @@ export class HybridSyncStrategy extends EventEmitter {
       // Simple connectivity check
       const response = await fetch('https://httpbin.org/status/200', {
         method: 'HEAD',
-        signal: AbortSignal.timeout(5000)
+        signal: AbortSignal.timeout(5000),
       });
       return response.ok;
     } catch {
