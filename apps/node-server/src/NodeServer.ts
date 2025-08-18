@@ -2,10 +2,13 @@ import { LorachainNode } from '@lorachain/node';
 import { MeshProtocol } from '@lorachain/mesh-protocol';
 import { Logger } from '@lorachain/shared';
 import { randomBytes } from 'crypto';
+import { HttpWebSocketServer } from './HttpWebSocketServer.js';
+import { ServerConfig } from './types.js';
 
 export class NodeServer {
   private node: LorachainNode;
   private meshProtocol: MeshProtocol;
+  private httpWebSocketServer?: HttpWebSocketServer;
   private logger = Logger.getInstance();
   private nodeId: string;
 
@@ -48,6 +51,9 @@ export class NodeServer {
     try {
       await Promise.all([this.node.start(), this.meshProtocol.connect()]);
 
+      // Initialize and start HTTP/WebSocket server
+      await this.startHttpWebSocketServer();
+
       this.logger.info('Node server started successfully');
       this.setupMessageHandling();
     } catch (error) {
@@ -60,12 +66,61 @@ export class NodeServer {
     this.logger.info('Stopping node server');
 
     try {
-      await Promise.all([this.node.stop(), this.meshProtocol.disconnect()]);
+      const promises: Promise<void>[] = [
+        this.node.stop(),
+        this.meshProtocol.disconnect()
+      ];
+
+      if (this.httpWebSocketServer) {
+        promises.push(this.httpWebSocketServer.stop());
+      }
+
+      await Promise.all(promises);
 
       this.logger.info('Node server stopped successfully');
     } catch (error) {
       this.logger.error('Error during node server shutdown', { error });
     }
+  }
+
+  private async startHttpWebSocketServer(): Promise<void> {
+    const serverConfig: ServerConfig = {
+      port: 8080,
+      host: '0.0.0.0',
+      corsOrigins: ['http://localhost:3000', 'http://localhost:3001'],
+      rateLimiting: {
+        windowMs: 15 * 60 * 1000, // 15 minutes
+        maxRequests: 100,
+        utxoPriorityBoost: true,
+      },
+      auth: {
+        jwtSecret: process.env.JWT_SECRET || randomBytes(32).toString('hex'),
+        jwtExpiration: '1h',
+        signatureAlgorithm: 'ed25519',
+        challengeExpiration: 60000, // 1 minute
+      },
+      websocket: {
+        enabled: true,
+        path: '/socket.io',
+        maxConnections: 1000,
+        compressionEnabled: true,
+        compressionEngine: 'gzip',
+      },
+      utxo: {
+        maxInputsPerTransaction: 500,
+        maxOutputsPerTransaction: 500,
+        minRelayFee: BigInt(1000), // 1000 satoshis
+        mempoolMaxSize: 10000,
+      },
+    };
+
+    this.httpWebSocketServer = new HttpWebSocketServer(this.node, serverConfig);
+    await this.httpWebSocketServer.start();
+
+    this.logger.info('HTTP/WebSocket server started', {
+      port: serverConfig.port,
+      host: serverConfig.host,
+    });
   }
 
   private setupMessageHandling(): void {
@@ -80,6 +135,7 @@ export class NodeServer {
       blockchainHeight: this.node.getBlockchain().getBlocks().length,
       pendingTransactions: this.node.getBlockchain().getPendingTransactions()
         .length,
+      httpServerRunning: this.httpWebSocketServer?.isServerRunning() || false,
     };
   }
 
@@ -95,5 +151,9 @@ export class NodeServer {
       difficulty: blockchain.getDifficulty(),
       miningReward: blockchain.getMiningReward(),
     };
+  }
+
+  getHttpWebSocketServer(): HttpWebSocketServer | undefined {
+    return this.httpWebSocketServer;
   }
 }
