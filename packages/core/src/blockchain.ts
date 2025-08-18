@@ -6,7 +6,6 @@ import type {
   BlockchainState,
   ValidationResult,
   UTXOBlockchainState,
-  UTXOPersistenceConfig,
   GenesisConfig,
   NetworkParameters,
   InitialAllocation,
@@ -15,7 +14,7 @@ import { BlockManager } from './block.js';
 import { UTXOManager } from './utxo.js';
 import { UTXOTransactionManager } from './utxo-transaction.js';
 import { UTXOPersistenceManager } from './persistence.js';
-import { CryptographicService, type KeyPair } from './cryptographic.js';
+import { CryptographicService } from './cryptographic.js';
 import {
   DifficultyManager,
   type DifficultyConfig,
@@ -98,7 +97,7 @@ export class Blockchain {
             await this.genesisConfigManager!.loadConfigFromFile(
               genesisConfigParam
             );
-        } catch (fileError) {
+        } catch {
           throw new Error(
             `Genesis configuration not found for chain ID: ${genesisConfigParam}. Neither in database nor config file.`
           );

@@ -5,7 +5,7 @@
  * following the "NO BACKWARDS COMPATIBILITY" policy - UTXO-only support.
  */
 
-import type { UTXOTransaction, UTXO } from './types.js';
+import type { UTXOTransaction } from './types.js';
 
 // Compression algorithms supported by the system
 export const CompressionAlgorithm = {

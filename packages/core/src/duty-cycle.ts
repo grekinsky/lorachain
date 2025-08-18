@@ -4,19 +4,12 @@ import {
   type TransmissionRecord,
   type QueuedMessage,
   type ComplianceResult,
-  type RegionalLimits,
   type MessageQueue,
   type QueueStats,
   type DutyCycleStats,
-  type DutyCycleMetrics,
-  type DutyCycleViolation,
-  type DutyCycleWarning,
   type MessageSizeEstimate,
   type LoRaTransmissionParams,
   type IDutyCycleManager,
-  type DutyCycleEvents,
-  type TransmissionWindow,
-  type ScheduledTransmission,
   MessagePriority,
   type IDatabase,
 } from './types.js';
@@ -177,8 +170,8 @@ export class RegionalComplianceValidator {
   }
 
   private validateAustralia(
-    config: DutyCycleConfig,
-    transmissionTimeMs: number
+    _config: DutyCycleConfig,
+    _transmissionTimeMs: number
   ): ComplianceResult {
     // Australia has no duty cycle restrictions, only power limits
     // Power validation would be handled by radio hardware
@@ -186,8 +179,8 @@ export class RegionalComplianceValidator {
   }
 
   private validateSouthAmerica(
-    config: DutyCycleConfig,
-    transmissionTimeMs: number
+    _config: DutyCycleConfig,
+    _transmissionTimeMs: number
   ): ComplianceResult {
     // Brazil and Argentina generally follow FCC rules - no duty cycle
     return { compliant: true };
@@ -308,8 +301,8 @@ export class MessageSizeEstimator {
     const preambleTime = (preambleLength + 4.25) * symbolTime;
 
     // Payload symbols calculation
-    const payloadBits = payloadBytes * 8;
-    const headerBits = params.headerMode === 'explicit' ? 20 : 0;
+    const _payloadBits = payloadBytes * 8;
+    const _headerBits = params.headerMode === 'explicit' ? 20 : 0;
     const crcBits = params.crcEnabled ? 16 : 0;
 
     const numerator = Math.max(
@@ -394,7 +387,7 @@ export class PriorityMessageQueue implements MessageQueue {
 
   async dequeue(): Promise<QueuedMessage | null> {
     // Process queues in priority order (EMERGENCY -> CRITICAL -> HIGH -> NORMAL -> LOW)
-    for (const [priority, queue] of this.queues.entries()) {
+    for (const [_priority, queue] of this.queues.entries()) {
       if (queue.length > 0) {
         return queue.shift() || null;
       }
@@ -403,7 +396,7 @@ export class PriorityMessageQueue implements MessageQueue {
   }
 
   peek(): QueuedMessage | null {
-    for (const [priority, queue] of this.queues.entries()) {
+    for (const [_priority, queue] of this.queues.entries()) {
       if (queue.length > 0) {
         return queue[0];
       }
@@ -517,7 +510,7 @@ export class DutyCycleManager
   private logger: Logger;
   private database?: IDatabase;
   private isRunning = false;
-  private processingInterval?: NodeJS.Timeout;
+  private processingInterval?: ReturnType<typeof setTimeout>;
 
   // Statistics tracking
   private stats: DutyCycleStats = {

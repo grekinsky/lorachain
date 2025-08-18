@@ -5,9 +5,6 @@ import {
   type BlockchainHelloMessage,
   type FragmentInfo,
   type MeshMessage,
-  type UTXOTransaction,
-  type Block,
-  type CompressedMerkleProof,
 } from './types.js';
 import { CryptographicService, type KeyPair } from './cryptographic.js';
 import { Logger } from '@lorachain/shared';

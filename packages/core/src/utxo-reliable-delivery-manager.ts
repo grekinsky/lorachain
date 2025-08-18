@@ -11,21 +11,16 @@ import { createHash, randomBytes } from 'crypto';
 import type {
   AckMessage,
   ReliableMessage,
-  MeshMessage,
   RetryContext,
   RetryPolicy,
   DeliveryStatus,
   DeliveryTracker,
   ReliableDeliveryConfig,
   DeliveryMetrics,
-  RetryQueueEntry,
   IReliableDeliveryManager,
   IAcknowledmentHandler,
   IDutyCycleManager,
   MessagePriority,
-  UTXOTransaction,
-  Block,
-  CompressedMerkleProof,
 } from './types.js';
 import { UTXOAcknowledmentHandler } from './utxo-acknowledgment-handler.js';
 import { CryptographicService, type KeyPair } from './cryptographic.js';
@@ -106,7 +101,7 @@ export class UTXOReliableDeliveryManager
   private config: ReliableDeliveryConfig;
   private deliveryTracker: DeliveryTracker;
   private retryQueue: PriorityQueue<RetryContext>;
-  private ackTimeout: Map<string, NodeJS.Timeout> = new Map();
+  private ackTimeout: Map<string, ReturnType<typeof setTimeout>> = new Map();
   private retryPolicies: Map<string, RetryPolicy> = new Map();
 
   // External dependencies
@@ -149,8 +144,8 @@ export class UTXOReliableDeliveryManager
 
   // Processing state
   private isProcessing = false;
-  private retryProcessor?: NodeJS.Timeout;
-  private metricsProcessor?: NodeJS.Timeout;
+  private retryProcessor?: ReturnType<typeof setTimeout>;
+  private metricsProcessor?: ReturnType<typeof setTimeout>;
 
   constructor(
     nodeId: string,
@@ -1000,7 +995,7 @@ export class UTXOReliableDeliveryManager
     }
 
     // Clear all timeouts
-    for (const [messageId, timeoutId] of this.ackTimeout.entries()) {
+    for (const [_messageId, timeoutId] of this.ackTimeout.entries()) {
       clearTimeout(timeoutId);
     }
     this.ackTimeout.clear();

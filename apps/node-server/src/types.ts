@@ -1,4 +1,4 @@
-import { UTXOTransaction, UTXO } from '@lorachain/core';
+// Types are imported in files that use them
 
 // Server Configuration
 export interface ServerConfig {
@@ -61,7 +61,7 @@ export enum UTXOErrorCode {
   TRANSACTION_TOO_LARGE = 'UTXO_TRANSACTION_TOO_LARGE',
   RATE_LIMITED = 'UTXO_RATE_LIMITED',
   UNAUTHORIZED = 'UTXO_UNAUTHORIZED',
-  INTERNAL_ERROR = 'UTXO_INTERNAL_ERROR'
+  INTERNAL_ERROR = 'UTXO_INTERNAL_ERROR',
 }
 
 // UTXO Response Types

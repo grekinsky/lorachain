@@ -53,7 +53,7 @@ export class MockDatabase implements IDatabase {
     return new MockSublevelDatabase(this, name);
   }
 
-  async *iterator(options?: any): AsyncIterableIterator<[string, any]> {
+  async *iterator(_options?: any): AsyncIterableIterator<[string, any]> {
     if (!this.isOpen) throw new Error('Database is closed');
     const entries = Array.from(this.data.entries());
     for (const [key, value] of entries) {
@@ -134,7 +134,7 @@ class MockSublevelDatabase implements IDatabase {
     return new MockSublevelDatabase(this.parent, `${this.prefix}!${name}`);
   }
 
-  async *iterator(options?: any): AsyncIterableIterator<[string, any]> {
+  async *iterator(_options?: any): AsyncIterableIterator<[string, any]> {
     const allData = this.parent.getAllData();
     for (const [key, value] of allData.entries()) {
       if (key.startsWith(`${this.prefix}!`)) {

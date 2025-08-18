@@ -19,7 +19,7 @@ export class MockCryptographicService {
     };
   }
 
-  async signData(data: string, privateKey: string): Promise<string> {
+  async signData(data: string, _privateKey: string): Promise<string> {
     this.signatureCounter++;
     return `mock-signature-${this.signatureCounter}-${data.slice(0, 10)}`;
   }
@@ -27,7 +27,7 @@ export class MockCryptographicService {
   async verifySignature(
     data: string,
     signature: string,
-    publicKey: string
+    _publicKey: string
   ): Promise<boolean> {
     // Mock verification - always returns true for mock signatures
     return signature.startsWith('mock-signature-');

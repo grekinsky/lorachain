@@ -127,6 +127,7 @@ describe('NodeServer', () => {
         connectedMeshNodes: 2,
         blockchainHeight: 2,
         pendingTransactions: 2,
+        httpServerRunning: false,
       });
     });
   });

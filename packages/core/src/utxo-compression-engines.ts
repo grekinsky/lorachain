@@ -5,7 +5,6 @@
  * BREAKING CHANGE: UTXO-only support, no backwards compatibility
  */
 
-import { createHash } from 'crypto';
 import type {
   ICompressionEngine,
   ICompressionEngineOptions,
@@ -19,7 +18,6 @@ import {
   type CompressionOptions,
   type UTXOContext,
   type CompressionDictionary,
-  type DictionaryEntry,
   type CompressionMetadata,
 } from './compression-types.js';
 
@@ -43,7 +41,7 @@ export class UTXOCustomCompressionEngine implements ICompressionEngine {
   private feeStructure = { tiers: [1, 10, 100, 1000, 10000] };
   private recentTransactions: any[] = [];
 
-  compress(data: Uint8Array, options?: CompressionOptions): CompressedData {
+  compress(data: Uint8Array, _options?: CompressionOptions): CompressedData {
     try {
       const startTime = performance.now();
 
@@ -874,7 +872,7 @@ export class DictionaryCompressionEngine
     return this.createDictionary(samples, id);
   }
 
-  optimizeDictionaryForRegion(id: string, region: string): void {
+  optimizeDictionaryForRegion(id: string, _region: string): void {
     const dictionary = this.dictionaries.get(id);
     if (!dictionary) {
       return;
@@ -908,7 +906,7 @@ export class DictionaryCompressionEngine
     return this.level;
   }
 
-  getExpectedRatio(dataSize: number, type?: MessageType): number {
+  getExpectedRatio(_dataSize: number, _type?: MessageType): number {
     // Dictionary compression can achieve very high ratios with repetitive data
     return 0.2; // 80% compression for repetitive blockchain data
   }
@@ -960,7 +958,7 @@ export class DictionaryCompressionEngine
       let bestLength = 0;
 
       // Find longest matching pattern
-      for (const [pattern, id] of dictionary.entries) {
+      for (const [pattern, _id] of dictionary.entries) {
         if (
           text.substr(i, pattern.length) === pattern &&
           pattern.length > bestLength
@@ -1060,7 +1058,7 @@ export class DictionaryCompressionEngine
 
   private estimateCompressionRatio(
     samples: Uint8Array[],
-    entries: string[]
+    _entries: string[]
   ): number {
     let totalOriginal = 0;
     let totalCompressed = 0;

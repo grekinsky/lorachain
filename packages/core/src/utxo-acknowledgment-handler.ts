@@ -8,12 +8,7 @@
 
 import { EventEmitter } from 'events';
 import { createHash } from 'crypto';
-import type {
-  AckMessage,
-  ReliableMessage,
-  MeshMessage,
-  IAcknowledmentHandler,
-} from './types.js';
+import type { AckMessage, IAcknowledmentHandler } from './types.js';
 import { CryptographicService, type KeyPair } from './cryptographic.js';
 import { Logger } from '@lorachain/shared';
 
@@ -77,7 +72,7 @@ export class UTXOAcknowledmentHandler
   };
 
   // Cleanup timer
-  private cleanupTimer?: NodeJS.Timeout;
+  private cleanupTimer?: ReturnType<typeof setTimeout>;
 
   constructor(
     nodeId: string,
@@ -332,10 +327,7 @@ export class UTXOAcknowledmentHandler
         timestamp: ack.timestamp,
         receivedFragments: ack.receivedFragments,
       };
-      const messageData = this.serializeAckForSigning(ackWithoutSignature);
-
-      const hash = createHash('sha256').update(messageData).digest();
-      const signatureBytes = Buffer.from(ack.signature, 'hex');
+      const _messageData = this.serializeAckForSigning(ackWithoutSignature);
 
       // This would require a public key lookup by node ID
       // For now, we'll return true as a placeholder

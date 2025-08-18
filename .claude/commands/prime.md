@@ -10,3 +10,7 @@
 
 README.md
 CLAUDE.md
+
+## READ this file:
+
+specs/ROADMAP.md

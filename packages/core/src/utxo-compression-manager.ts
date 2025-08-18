@@ -8,7 +8,6 @@
  */
 
 import { EventEmitter } from 'events';
-import { createHash } from 'crypto';
 import type {
   ICompressionManager,
   ICompressionEngine,
@@ -24,7 +23,6 @@ import {
   type UTXOCompressionConfig,
   type CompressionStats,
   type CompressionDictionary,
-  type UTXOContext,
   type UTXOPatterns,
   type DutyCycleConstraints,
   type DutyCycleEfficiency,
@@ -33,7 +31,6 @@ import {
   type DecompressionResult,
   type CompressionError,
   type PerformanceMetrics,
-  type AlgorithmStats,
   type DataPatterns,
   type CompressionMetadata,
 } from './compression-types.js';
@@ -734,7 +731,7 @@ export class UTXOCompressionManager
       const text = new TextDecoder().decode(data);
       if (text.includes('{') && text.includes('}')) {
         structure = 'structured';
-      } else if (/^[a-zA-Z0-9\s\.,!?]+$/.test(text)) {
+      } else if (/^[a-zA-Z0-9\s.,!?]+$/.test(text)) {
         structure = 'text';
       }
     } catch {
@@ -848,8 +845,8 @@ export class UTXOCompressionManager
   }
 
   private selectFastAlgorithm(
-    data: Uint8Array,
-    type?: MessageType
+    _data: Uint8Array,
+    _type?: MessageType
   ): CompressionAlgorithm {
     return CompressionAlgorithm.LZ4; // Always use LZ4 for fast compression
   }
@@ -969,7 +966,7 @@ export class UTXOCompressionManager
 
   private estimateDictionaryRatio(
     samples: Uint8Array[],
-    entries: string[]
+    _entries: string[]
   ): number {
     // Simple estimation of compression ratio with dictionary
     let totalOriginalSize = 0;
@@ -997,7 +994,7 @@ export class UTXOCompressionManager
    */
   async compressIfBeneficial(
     data: string,
-    type: string
+    _type: string
   ): Promise<{ data: Uint8Array | string; isCompressed: boolean }> {
     const dataBytes = new TextEncoder().encode(data);
 

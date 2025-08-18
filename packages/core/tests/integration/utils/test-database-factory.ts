@@ -21,7 +21,7 @@ export class TestDatabaseFactory {
    * Create a LevelDB database for testing (if needed)
    * Note: For integration tests, we typically use MemoryDatabase
    */
-  static async createLevelDatabase(path: string): Promise<IDatabase> {
+  static async createLevelDatabase(_path: string): Promise<IDatabase> {
     // For now, we'll use MemoryDatabase even for "level" requests
     // This avoids file system dependencies in tests
     const db = new MemoryDatabase();
@@ -71,7 +71,7 @@ export class TestDatabaseFactory {
     for (const db of this.databases) {
       try {
         await db.close();
-      } catch (error) {
+      } catch {
         // Ignore errors during cleanup
       }
     }
@@ -89,7 +89,7 @@ export class TestDatabaseFactory {
     const originalMethod = db[failOn].bind(db);
     let callCount = 0;
 
-    // @ts-ignore - Overriding method for testing
+    // @ts-expect-error - Overriding method for testing
     db[failOn] = async (...args: any[]) => {
       callCount++;
       if (callCount > 2) {

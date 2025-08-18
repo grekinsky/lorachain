@@ -1335,7 +1335,10 @@ export interface IReliableDeliveryManager {
   shutdown(): Promise<void>;
 
   // Events
-  on(event: 'delivered' | 'failed' | 'retry', callback: Function): void;
+  on(
+    event: 'delivered' | 'failed' | 'retry',
+    callback: (...args: any[]) => void
+  ): void;
 
   // Integration
   setMeshProtocol(meshProtocol: any): void;
@@ -1360,7 +1363,7 @@ export interface IAcknowledmentHandler {
   setAckTimeout(timeoutMs: number): void;
 
   // Event handling
-  on(event: string, callback: Function): void;
+  on(event: string, callback: (...args: any[]) => void): void;
 
   // Lifecycle
   shutdown(): Promise<void>;
@@ -1600,6 +1603,6 @@ export interface INodeDiscoveryProtocol {
   getDiscoveryMetrics(): DiscoveryMetrics;
 
   // Events
-  on(event: keyof DiscoveryEvents, callback: Function): void;
+  on(event: keyof DiscoveryEvents, callback: (...args: any[]) => void): void;
   emit(event: keyof DiscoveryEvents, ...args: any[]): boolean;
 }

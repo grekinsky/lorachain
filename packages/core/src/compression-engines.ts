@@ -83,7 +83,7 @@ abstract class BaseCompressionEngine implements ICompressionEngine {
     return true;
   }
 
-  getExpectedRatio(dataSize: number, type?: MessageType): number {
+  getExpectedRatio(_dataSize: number, _type?: MessageType): number {
     // Default implementation - should be overridden by specific engines
     return 0.7; // 30% compression ratio
   }
@@ -143,7 +143,7 @@ export class ProtobufCompressionEngine
     this.initializeSchemas();
   }
 
-  compress(data: Uint8Array, options?: CompressionOptions): CompressedData {
+  compress(data: Uint8Array, _options?: CompressionOptions): CompressedData {
     try {
       const startTime = performance.now();
 
@@ -346,7 +346,7 @@ export class ProtobufCompressionEngine
     }
   }
 
-  private getSchemaForType(type?: MessageType): protobuf.Type {
+  private getSchemaForType(_type?: MessageType): protobuf.Type {
     // Return appropriate schema based on message type
     // For now, return a placeholder
     return (
@@ -657,7 +657,7 @@ export class GzipCompressionEngine extends BaseCompressionEngine {
     }
   }
 
-  getExpectedRatio(dataSize: number, type?: MessageType): number {
+  getExpectedRatio(dataSize: number, _type?: MessageType): number {
     // GZIP typically achieves better compression on larger, structured data
     if (dataSize > 1024) {
       return 0.3; // 70% compression for large structured data
@@ -693,7 +693,7 @@ export class LZ4CompressionEngine extends BaseCompressionEngine {
     this.supportedTypes = Object.values(MessageType);
   }
 
-  compress(data: Uint8Array, options?: CompressionOptions): CompressedData {
+  compress(data: Uint8Array, _options?: CompressionOptions): CompressedData {
     try {
       const startTime = performance.now();
 
@@ -729,7 +729,7 @@ export class LZ4CompressionEngine extends BaseCompressionEngine {
     }
   }
 
-  getExpectedRatio(dataSize: number, type?: MessageType): number {
+  getExpectedRatio(_dataSize: number, _type?: MessageType): number {
     return 0.6; // 40% compression - LZ4 prioritizes speed over ratio
   }
 

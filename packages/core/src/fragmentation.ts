@@ -8,7 +8,6 @@ import {
   Block,
   CompressedMerkleProof,
   UTXOMessageType,
-  UTXOFragmentableMessage,
   EvictionCriteria,
   IDatabase,
   EnhancedReassemblySession,
@@ -21,7 +20,6 @@ import {
   NetworkMetrics,
   NodeQuota,
   EnhancedFragmentationConfig,
-  RoutingHint,
 } from './types.js';
 import { CryptographicService, type KeyPair } from './cryptographic.js';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils';
@@ -547,11 +545,11 @@ export class UTXOFragmentCache {
     return null;
   }
 
-  async evict(criteria: EvictionCriteria): Promise<void> {
-    const now = Date.now();
+  async evict(_criteria: EvictionCriteria): Promise<void> {
+    const _now = Date.now();
     const keysToEvict: string[] = [];
 
-    for (const [key, fragment] of this.cache) {
+    for (const [key, _fragment] of this.cache) {
       // Evict based on age or other criteria
       // For now, implement simple age-based eviction
       keysToEvict.push(key);
@@ -1060,7 +1058,7 @@ export class EnhancedUTXOFragmentReassembler extends UTXOFragmentReassembler {
   }
 
   // Resource protection
-  private canAcceptFragment(nodeId: string, fragment: Fragment): boolean {
+  private canAcceptFragment(nodeId: string, _fragment: Fragment): boolean {
     const quota = this.getOrCreateNodeQuota(nodeId);
     const now = Date.now();
 
@@ -1092,7 +1090,7 @@ export class EnhancedUTXOFragmentReassembler extends UTXOFragmentReassembler {
   }
 
   // Utility methods
-  private determineMessageType(fragment: Fragment): UTXOMessageType {
+  private determineMessageType(_fragment: Fragment): UTXOMessageType {
     // This would typically be determined from fragment metadata or first fragment
     // For now, default to UTXO_TRANSACTION
     return UTXOMessageType.UTXO_TRANSACTION;
@@ -1172,7 +1170,7 @@ export class EnhancedUTXOFragmentReassembler extends UTXOFragmentReassembler {
     return true;
   }
 
-  private verifyAcknowledgmentSignature(ack: FragmentAcknowledgment): boolean {
+  private verifyAcknowledgmentSignature(_ack: FragmentAcknowledgment): boolean {
     // TODO: Implement signature verification
     return true;
   }
@@ -1204,8 +1202,8 @@ export class EnhancedUTXOFragmentReassembler extends UTXOFragmentReassembler {
   }
 
   private cleanupRetransmissionQueue(): void {
-    const now = Date.now();
-    const staleTime = 30 * 60 * 1000; // 30 minutes
+    const _now = Date.now();
+    const _staleTime = 30 * 60 * 1000; // 30 minutes
 
     // Remove stale tasks (this is simplified - would need proper queue filtering)
     // For now, just clear very old tasks

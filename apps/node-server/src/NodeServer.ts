@@ -68,7 +68,7 @@ export class NodeServer {
     try {
       const promises: Promise<void>[] = [
         this.node.stop(),
-        this.meshProtocol.disconnect()
+        this.meshProtocol.disconnect(),
       ];
 
       if (this.httpWebSocketServer) {

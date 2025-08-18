@@ -424,7 +424,7 @@ class CompressionFactoryImpl implements ICompressionFactory {
         if (decompressed.length !== data.length) {
           errors++;
         }
-      } catch (error) {
+      } catch {
         errors++;
       }
     }

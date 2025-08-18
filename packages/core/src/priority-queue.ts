@@ -20,8 +20,6 @@ import type {
   UTXOQueueStatistics,
   QueueCapacityConfig,
   IUTXOPriorityQueue,
-  PriorityEvents,
-  UTXONetworkContext,
 } from './priority-types.js';
 import { Logger } from '@lorachain/shared';
 import { v4 as uuidv4 } from 'uuid';
@@ -407,7 +405,7 @@ export class UTXOPriorityQueue
   }
 
   getStatistics(): UTXOQueueStatistics {
-    const now = Date.now();
+    const _now = Date.now();
 
     return {
       totalMessages: this.heap.length,

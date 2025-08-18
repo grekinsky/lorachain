@@ -8,7 +8,6 @@
 import type {
   CompressionAlgorithm,
   CompressionLevel,
-  CompressionPriority,
   MessageType,
   CompressedData,
   CompressionOptions,

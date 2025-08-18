@@ -387,3 +387,6 @@ The genesis configuration system provides comprehensive control over blockchain 
 - Initial allocations create proper UTXO outputs for addresses
 - Network parameters are immutable after blockchain initialization
 - Configuration files must pass strict validation before use
+
+- Remember to use Serena MCP tools
+- Remember to use Context7 MCP tools

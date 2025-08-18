@@ -9,7 +9,7 @@ export default [
   js.configs.recommended,
   prettierConfig,
   {
-    files: ['**/*.ts'],
+    files: ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx'],
     languageOptions: {
       parser: tsParser,
       parserOptions: {
@@ -47,6 +47,8 @@ export default [
       'prefer-const': 'error',
       'no-var': 'error',
       'no-unused-vars': 'off', // Turn off base rule as it's handled by @typescript-eslint
+      'no-redeclare': 'off', // Allow const/type pattern in TypeScript
+      '@typescript-eslint/no-redeclare': 'off', // Allow const/type pattern in TypeScript
     },
   },
   {
