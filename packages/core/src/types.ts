@@ -1606,3 +1606,236 @@ export interface INodeDiscoveryProtocol {
   on(event: keyof DiscoveryEvents, callback: (...args: any[]) => void): void;
   emit(event: keyof DiscoveryEvents, ...args: any[]): boolean;
 }
+
+// ==========================================
+// CHAIN SELECTION TYPES (UTXO-ONLY, NO LEGACY SUPPORT)
+// ==========================================
+
+/**
+ * UTXO-only blockchain branch supporting multiple competing chains
+ * NO BACKWARDS COMPATIBILITY - only UTXO transactions supported
+ */
+export interface UTXOChainBranch {
+  id: string;
+  utxoBlocks: Block[]; // Contains only UTXO transactions
+  height: number;
+  cumulativeDifficulty: bigint;
+  totalWork: bigint;
+  utxoMerkleRoot: string; // UTXO-specific merkle root
+  lastBlockHash: string;
+  branchPoint: number;
+  isActive: boolean;
+  utxoSetHash: string; // Hash of UTXO set at tip
+  timestamp: number;
+  parentBranchId?: string; // For branch genealogy tracking
+}
+
+/**
+ * Enhanced UTXO blockchain state supporting multiple branches
+ * Integrates with existing UTXOBlockchainState while adding fork support
+ */
+export interface UTXOChainState extends UTXOBlockchainState {
+  // Existing UTXOBlockchainState fields
+  blocks: Block[];
+  utxoSet: Map<string, UTXO>;
+  pendingUTXOTransactions: UTXOTransaction[];
+  difficulty: number;
+  miningReward: number;
+  latestBlockIndex: number;
+  utxoRootHash: string;
+  cryptographicKeys: Map<string, unknown>;
+  
+  // New chain selection fields
+  activeBranch: UTXOChainBranch;
+  branches: Map<string, UTXOChainBranch>;
+  orphanUTXOBlocks: Block[]; // Only blocks with UTXO transactions
+  maxReorganizationDepth: number;
+  consensusThreshold: number;
+  utxoSetSnapshot: Map<string, UTXO>; // Current UTXO set snapshot
+  lastReorganizationTime: number;
+  chainSelectionHistory: UTXOChainSelectionRecord[];
+}
+
+/**
+ * UTXO set delta for tracking changes during reorganizations
+ */
+export interface UTXOSetDelta {
+  addedUTXOs: UTXO[];
+  removedUTXOs: Array<{ txId: string; outputIndex: number }>;
+  modifiedUTXOs: UTXO[];
+  totalValueChange: number;
+  transactionsAffected: string[];
+}
+
+/**
+ * Fork detection result with LoRa optimization info
+ * Integrates with existing compression and fragmentation infrastructure
+ */
+export interface UTXOForkDetectionResult {
+  type: 'extension' | 'fork' | 'orphan';
+  utxoBlock: Block; // Only UTXO blocks supported
+  branch?: UTXOChainBranch;
+  branchPoint?: number;
+  competingBranch?: UTXOChainBranch;
+  reason?: string;
+  utxoSetDelta?: UTXOSetDelta; // UTXO changes
+  compressionInfo?: {
+    algorithm: string;
+    compressedSize: number;
+    compressionRatio: number;
+    fragmentationRequired: boolean;
+  };
+  fragmentationRequired?: boolean; // LoRa constraint handling
+  timestamp: number;
+}
+
+/**
+ * Configuration for UTXO-only chain selection with LoRa constraints
+ * Integrates with existing infrastructure (DutyCycleManager, UTXOCompressionManager, etc.)
+ */
+export interface UTXOChainConfig {
+  // Network constraints (existing infrastructure)
+  maxMessageSize: number; // 256 bytes for LoRa
+  maxBlocksPerMessage: number; // 1-2 blocks per message
+  dutyCycleCompliance: boolean; // Use existing DutyCycleManager
+  
+  // Chain selection parameters
+  maxReorganizationDepth: number; // 6-12 blocks for finality
+  branchPruningThreshold: number; // Remove old branches after N blocks
+  orphanBlockTimeout: number; // Remove orphans after N minutes
+  
+  // UTXO-specific parameters
+  utxoSetSnapshotInterval: number; // UTXO snapshot frequency
+  utxoMerkleTreeDepth: number; // Existing merkle tree integration
+  
+  // Consensus parameters
+  consensusThreshold: number; // Minimum confirmations for finality
+  suspiciousSplitThreshold: number; // Alert threshold for splits
+  maxConcurrentBranches: number; // Memory management
+  
+  // Existing infrastructure integration
+  compressionEngines: string[]; // Existing compression types
+  syncStrategies: string[]; // Existing sync strategies
+  reliableDeliveryEnabled: boolean; // Existing delivery system
+  nodeDiscoveryEnabled: boolean; // Existing discovery protocol
+}
+
+/**
+ * Result of chain reorganization operation
+ * Integrates with existing UTXOTransactionManager and UTXOPersistenceManager
+ */
+export interface UTXOReorganizationResult {
+  success: boolean;
+  reason?: string;
+  branchPoint?: number;
+  reorgDepth?: number;
+  revertedBlocks?: Block[];
+  appliedBlocks?: Block[];
+  affectedUTXOTransactions?: string[];
+  utxoSetDelta?: UTXOSetDelta;
+  transactionPoolUpdates?: {
+    addedTransactions: UTXOTransaction[];
+    removedTransactions: string[];
+  };
+  persistenceUpdates?: boolean;
+  timestamp: number;
+}
+
+/**
+ * Chain split analysis for security monitoring
+ * Integrates with existing NodeDiscoveryProtocol for topology awareness
+ */
+export interface UTXOChainSplitAnalysis {
+  isSuspicious: boolean;
+  splitDepth: number;
+  competingBranches: UTXOChainBranch[];
+  riskLevel: 'low' | 'medium' | 'high';
+  recommendations: string[];
+  minerDistribution?: {
+    totalMiners: number;
+    dominantMiner: string;
+    dominantMinerPercentage: number;
+    minerDistribution: Array<[string, number]>;
+  };
+  networkTopology?: {
+    connectedNodes: number;
+    isolatedNodes: number;
+    partitionDetected: boolean;
+  };
+  timestamp: number;
+}
+
+/**
+ * Chain selection record for auditing and analysis
+ */
+export interface UTXOChainSelectionRecord {
+  timestamp: number;
+  previousActiveBranch: string;
+  newActiveBranch: string;
+  selectionReason: 'higher_difficulty' | 'longer_chain' | 'reorganization' | 'fork_resolution';
+  difficultyDifference: bigint;
+  heightDifference: number;
+  reorgDepth?: number;
+}
+
+/**
+ * Fork detector interface for UTXO-only fork detection
+ * Leverages existing compression and sync infrastructure
+ */
+export interface IUTXOForkDetector {
+  detectUTXOFork(newBlock: Block, chainState: UTXOChainState): UTXOForkDetectionResult;
+  findUTXOBranchPoint(block: Block, mainBranch: UTXOChainBranch): number;
+  isUTXOOnlyBlock(block: Block): boolean;
+  validateBlockUTXOCompleteness(block: Block): boolean;
+  estimateLoRaFragmentation(block: Block): boolean;
+}
+
+/**
+ * Chain selector interface for UTXO-only chain comparison
+ * Uses existing DifficultyManager for cumulative difficulty calculations
+ */
+export interface IUTXOChainSelector {
+  selectBestUTXOChain(branches: Map<string, UTXOChainBranch>): UTXOChainBranch;
+  compareUTXOBranches(branchA: UTXOChainBranch, branchB: UTXOChainBranch): number;
+  calculateCumulativeDifficulty(blocks: Block[]): bigint;
+  isValidUTXOBranch(branch: UTXOChainBranch): boolean;
+  meetsLoRaConstraints(branch: UTXOChainBranch): boolean;
+}
+
+/**
+ * Reorganization manager interface for safe UTXO chain switching
+ * Integrates with existing UTXOPersistenceManager and UTXOTransactionManager
+ */
+export interface IUTXOReorganizationManager {
+  executeUTXOReorganization(
+    currentBranch: UTXOChainBranch,
+    newBranch: UTXOChainBranch
+  ): Promise<UTXOReorganizationResult>;
+  
+  validateReorganizationSafety(
+    currentBranch: UTXOChainBranch,
+    newBranch: UTXOChainBranch
+  ): boolean;
+  
+  createUTXOSetDelta(
+    fromBranch: UTXOChainBranch,
+    toBranch: UTXOChainBranch
+  ): UTXOSetDelta;
+  
+  updateTransactionPool(
+    revertedBlocks: Block[],
+    appliedBlocks: Block[]
+  ): Promise<void>;
+}
+
+/**
+ * Chain split protector interface for attack detection
+ * Integrates with existing NodeDiscoveryProtocol and security infrastructure
+ */
+export interface IUTXOChainSplitProtector {
+  analyzeUTXOChainSplit(branches: Map<string, UTXOChainBranch>): UTXOChainSplitAnalysis;
+  detectSelfishMining(branches: UTXOChainBranch[]): boolean;
+  detectEclipseAttack(branches: UTXOChainBranch[], topology?: EnhancedNetworkTopology): boolean;
+  detectLongRangeAttack(branches: UTXOChainBranch[]): boolean;
+  validateChainIntegrity(branch: UTXOChainBranch): boolean;
+}
