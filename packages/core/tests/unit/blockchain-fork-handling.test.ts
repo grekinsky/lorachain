@@ -14,7 +14,7 @@ import type {
   GenesisConfig,
   UTXOPersistenceConfig,
   UTXOChainBranch,
-  UTXOChainState
+  UTXOChainState,
 } from '../../src/types.js';
 
 describe('Enhanced Blockchain Fork Handling (NO BACKWARDS COMPATIBILITY)', () => {
@@ -69,11 +69,11 @@ describe('Enhanced Blockchain Fork Handling (NO BACKWARDS COMPATIBILITY)', () =>
 
   beforeEach(async () => {
     const database = DatabaseFactory.create(testConfig);
-    await database.initialize();
-    
+    // MemoryDatabase auto-opens in constructor, no initialize() method needed
+
     persistence = new UTXOPersistenceManager(database, testConfig);
     utxoManager = new UTXOManager();
-    
+
     const chainConfig = {
       maxReorganizationDepth: 10,
       suspiciousSplitThreshold: 6,
@@ -81,11 +81,24 @@ describe('Enhanced Blockchain Fork Handling (NO BACKWARDS COMPATIBILITY)', () =>
       maxMessageSize: 256,
       forkDetectionEnabled: true,
       attackDetectionEnabled: true,
-      minConfirmationsForFinality: 6
+      minConfirmationsForFinality: 6,
     };
-    
-    compressionManager = new UTXOCompressionManager();
-    reliableDelivery = new UTXOReliableDeliveryManager(chainConfig, compressionManager);
+
+    compressionManager = new UTXOCompressionManager({
+      defaultAlgorithm: 'gzip' as const,
+      compressionLevel: 'balanced' as const,
+      enableDictionary: false,
+      maxCompressionMemory: 512 * 1024,
+      enableAdaptive: true,
+      compressionThreshold: 64,
+      dutyCycleIntegration: false,
+      utxoOptimization: true,
+      regionalCompliance: 'US',
+    });
+    reliableDelivery = new UTXOReliableDeliveryManager(
+      chainConfig,
+      compressionManager
+    );
     nodeDiscovery = new NodeDiscoveryProtocol(chainConfig);
 
     blockchain = new Blockchain(
@@ -113,9 +126,9 @@ describe('Enhanced Blockchain Fork Handling (NO BACKWARDS COMPATIBILITY)', () =>
 
       // Create a valid extension block
       const extensionBlock = createMockUTXOBlock(2, minedBlock!.hash, 2);
-      
+
       const result = await blockchain.addBlock(extensionBlock);
-      
+
       expect(result.isValid).toBe(true);
       expect(blockchain.getBlocks()).toHaveLength(3); // Genesis + mined + extension
       expect(blockchain.getActiveBranch().height).toBe(2);
@@ -127,16 +140,16 @@ describe('Enhanced Blockchain Fork Handling (NO BACKWARDS COMPATIBILITY)', () =>
 
       // Create a block with legacy transactions (should be rejected)
       const legacyBlock = createMockLegacyBlock(2, minedBlock!.hash, 2);
-      
+
       const result = await blockchain.addBlock(legacyBlock);
-      
+
       expect(result.isValid).toBe(false);
       expect(result.errors[0]).toContain('non-UTXO transactions');
     });
 
     it('should update active branch after extension', async () => {
       const initialHeight = blockchain.getActiveBranch().height;
-      
+
       const minedBlock = blockchain.minePendingUTXOTransactions('test-miner');
       expect(minedBlock).toBeDefined();
 
@@ -156,9 +169,9 @@ describe('Enhanced Blockchain Fork Handling (NO BACKWARDS COMPATIBILITY)', () =>
 
       // Create a competing fork from block1
       const forkBlock = createMockUTXOBlock(2, block1!.hash, 4); // Fork with higher difficulty
-      
+
       const result = await blockchain.addBlock(forkBlock);
-      
+
       expect(result.isValid).toBe(true);
       expect(blockchain.getCompetingBranches().size).toBeGreaterThan(1);
     });
@@ -170,11 +183,11 @@ describe('Enhanced Blockchain Fork Handling (NO BACKWARDS COMPATIBILITY)', () =>
 
       // Create competing fork with higher difficulty
       const highDifficultyFork = createMockUTXOBlock(2, block1!.hash, 8); // Much higher difficulty
-      
+
       const result = await blockchain.addBlock(highDifficultyFork);
-      
+
       expect(result.isValid).toBe(true);
-      
+
       // The chain might reorganize to the higher difficulty fork
       // Check if the active branch reflects the best chain
       const activeBranch = blockchain.getActiveBranch();
@@ -183,17 +196,17 @@ describe('Enhanced Blockchain Fork Handling (NO BACKWARDS COMPATIBILITY)', () =>
 
     it('should maintain competing branches information', async () => {
       const block1 = blockchain.minePendingUTXOTransactions('miner1');
-      
+
       // Create multiple competing forks
       const fork1 = createMockUTXOBlock(2, block1!.hash, 3);
       const fork2 = createMockUTXOBlock(2, block1!.hash, 4);
-      
+
       await blockchain.addBlock(fork1);
       await blockchain.addBlock(fork2);
-      
+
       const branches = blockchain.getCompetingBranches();
       expect(branches.size).toBeGreaterThan(1);
-      
+
       // Check that branches have correct metadata
       for (const branch of branches.values()) {
         expect(branch.id).toBeDefined();
@@ -209,14 +222,14 @@ describe('Enhanced Blockchain Fork Handling (NO BACKWARDS COMPATIBILITY)', () =>
 
       // Create a stronger competing chain
       const strongerFork = createMockUTXOBlock(weakBlock!.index, 'genesis', 10); // Much higher difficulty
-      
+
       const result = await blockchain.addBlock(strongerFork);
-      
+
       expect(result.isValid).toBe(true);
-      
+
       // Force chain selection to see if reorganization occurs
       const selectionResult = await blockchain.forceChainSelection();
-      
+
       expect(selectionResult.selectedBranch).toBeDefined();
       expect(selectionResult.splitAnalysis).toBeDefined();
     });
@@ -226,9 +239,9 @@ describe('Enhanced Blockchain Fork Handling (NO BACKWARDS COMPATIBILITY)', () =>
     it('should handle orphan blocks correctly', async () => {
       // Create an orphan block with unknown parent
       const orphanBlock = createMockUTXOBlock(5, 'unknown-parent-hash', 2);
-      
+
       const result = await blockchain.addBlock(orphanBlock);
-      
+
       expect(result.isValid).toBe(true);
       expect(blockchain.getOrphanBlocks()).toContain(orphanBlock);
     });
@@ -237,31 +250,31 @@ describe('Enhanced Blockchain Fork Handling (NO BACKWARDS COMPATIBILITY)', () =>
       // Create orphan block first
       const orphanBlock = createMockUTXOBlock(3, 'missing-parent', 2);
       await blockchain.addBlock(orphanBlock);
-      
+
       expect(blockchain.getOrphanBlocks()).toContain(orphanBlock);
-      
+
       // Now create the missing parent by mining
       const block1 = blockchain.minePendingUTXOTransactions('miner1');
       const parentBlock = createMockUTXOBlock(2, block1!.hash, 2);
       parentBlock.hash = 'missing-parent';
-      
+
       const result = await blockchain.addBlock(parentBlock);
-      
+
       expect(result.isValid).toBe(true);
-      
+
       // The orphan block should potentially be connected now
       // (This is a simplified test - in reality the connection logic is more complex)
     });
 
     it('should maintain orphan block list', async () => {
       const initialOrphans = blockchain.getOrphanBlocks().length;
-      
+
       const orphan1 = createMockUTXOBlock(10, 'missing-1', 2);
       const orphan2 = createMockUTXOBlock(15, 'missing-2', 2);
-      
+
       await blockchain.addBlock(orphan1);
       await blockchain.addBlock(orphan2);
-      
+
       const currentOrphans = blockchain.getOrphanBlocks();
       expect(currentOrphans.length).toBeGreaterThanOrEqual(initialOrphans + 2);
     });
@@ -271,20 +284,22 @@ describe('Enhanced Blockchain Fork Handling (NO BACKWARDS COMPATIBILITY)', () =>
     it('should analyze chain splits for security threats', async () => {
       // Create competing branches that might indicate an attack
       const block1 = blockchain.minePendingUTXOTransactions('miner1');
-      
+
       // Create multiple competing forks quickly (potential attack pattern)
       const fork1 = createMockUTXOBlock(2, block1!.hash, 3);
       const fork2 = createMockUTXOBlock(2, block1!.hash, 3);
       const fork3 = createMockUTXOBlock(2, block1!.hash, 3);
-      
+
       await blockchain.addBlock(fork1);
       await blockchain.addBlock(fork2);
       await blockchain.addBlock(fork3);
-      
+
       const selectionResult = await blockchain.forceChainSelection();
-      
+
       expect(selectionResult.splitAnalysis).toBeDefined();
-      expect(selectionResult.splitAnalysis.competingBranches.length).toBeGreaterThan(1);
+      expect(
+        selectionResult.splitAnalysis.competingBranches.length
+      ).toBeGreaterThan(1);
       expect(selectionResult.splitAnalysis.recommendations).toBeDefined();
     });
 
@@ -302,36 +317,40 @@ describe('Enhanced Blockchain Fork Handling (NO BACKWARDS COMPATIBILITY)', () =>
       }
 
       const selectionResult = await blockchain.forceChainSelection();
-      
+
       expect(selectionResult.splitAnalysis.minerDistribution).toBeDefined();
       if (selectionResult.splitAnalysis.minerDistribution) {
-        expect(selectionResult.splitAnalysis.minerDistribution.totalMiners).toBeGreaterThan(0);
+        expect(
+          selectionResult.splitAnalysis.minerDistribution.totalMiners
+        ).toBeGreaterThan(0);
       }
     });
 
     it('should provide security recommendations', async () => {
       const block1 = blockchain.minePendingUTXOTransactions('miner1');
-      
+
       // Create a suspicious pattern (multiple equal-height branches)
       const suspiciousFork1 = createMockUTXOBlock(2, block1!.hash, 2);
       const suspiciousFork2 = createMockUTXOBlock(2, block1!.hash, 2);
-      
+
       await blockchain.addBlock(suspiciousFork1);
       await blockchain.addBlock(suspiciousFork2);
-      
+
       const selectionResult = await blockchain.forceChainSelection();
-      
+
       expect(selectionResult.splitAnalysis.recommendations).toBeDefined();
-      expect(Array.isArray(selectionResult.splitAnalysis.recommendations)).toBe(true);
+      expect(Array.isArray(selectionResult.splitAnalysis.recommendations)).toBe(
+        true
+      );
     });
   });
 
   describe('chain state management', () => {
     it('should provide accurate chain state', async () => {
       const minedBlock = blockchain.minePendingUTXOTransactions('miner');
-      
+
       const chainState = blockchain.getUTXOChainState();
-      
+
       expect(chainState.activeBranch).toBeDefined();
       expect(chainState.branches).toBeDefined();
       expect(chainState.orphanUTXOBlocks).toBeDefined();
@@ -341,9 +360,9 @@ describe('Enhanced Blockchain Fork Handling (NO BACKWARDS COMPATIBILITY)', () =>
     it('should maintain branch metadata correctly', async () => {
       const block1 = blockchain.minePendingUTXOTransactions('miner1');
       const block2 = blockchain.minePendingUTXOTransactions('miner2');
-      
+
       const activeBranch = blockchain.getActiveBranch();
-      
+
       expect(activeBranch.id).toBeDefined();
       expect(activeBranch.height).toBeGreaterThan(0);
       expect(activeBranch.cumulativeDifficulty).toBeGreaterThan(0n);
@@ -354,12 +373,12 @@ describe('Enhanced Blockchain Fork Handling (NO BACKWARDS COMPATIBILITY)', () =>
 
     it('should update timestamps correctly', async () => {
       const beforeTime = Date.now();
-      
+
       blockchain.minePendingUTXOTransactions('miner');
-      
+
       const afterTime = Date.now();
       const activeBranch = blockchain.getActiveBranch();
-      
+
       expect(activeBranch.timestamp).toBeGreaterThanOrEqual(beforeTime);
       expect(activeBranch.timestamp).toBeLessThanOrEqual(afterTime);
     });
@@ -367,26 +386,34 @@ describe('Enhanced Blockchain Fork Handling (NO BACKWARDS COMPATIBILITY)', () =>
 
   describe('integration with existing blockchain features', () => {
     it('should maintain UTXO set consistency during forks', async () => {
-      const initialBalance = blockchain.getBalance('lora1initial000000000000000000000000000000');
+      const initialBalance = blockchain.getBalance(
+        'lora1initial000000000000000000000000000000'
+      );
       expect(initialBalance).toBe(1000000); // From genesis allocation
 
       // Mine some blocks and check UTXO consistency
       blockchain.minePendingUTXOTransactions('test-miner');
-      const finalBalance = blockchain.getBalance('lora1initial000000000000000000000000000000');
-      
+      const finalBalance = blockchain.getBalance(
+        'lora1initial000000000000000000000000000000'
+      );
+
       // Balance should remain consistent
       expect(finalBalance).toBe(initialBalance);
     });
 
     it('should preserve difficulty adjustment during reorganization', async () => {
       const initialDifficulty = blockchain.getDifficulty();
-      
+
       // Create competing branches with different difficulties
       const block1 = blockchain.minePendingUTXOTransactions('miner1');
-      const competingFork = createMockUTXOBlock(2, block1!.hash, initialDifficulty + 2);
-      
+      const competingFork = createMockUTXOBlock(
+        2,
+        block1!.hash,
+        initialDifficulty + 2
+      );
+
       await blockchain.addBlock(competingFork);
-      
+
       // Difficulty should be preserved or properly adjusted
       const currentDifficulty = blockchain.getDifficulty();
       expect(currentDifficulty).toBeGreaterThan(0);
@@ -394,38 +421,49 @@ describe('Enhanced Blockchain Fork Handling (NO BACKWARDS COMPATIBILITY)', () =>
 
     it('should maintain genesis configuration integrity', async () => {
       const genesisConfig = await blockchain.getGenesisConfig();
-      
+
       expect(genesisConfig).toBeDefined();
       expect(genesisConfig!.chainId).toBe('fork-test-chain-v1');
       expect(genesisConfig!.totalSupply).toBe(21000000);
-      
+
       // Even after forks, genesis config should remain intact
       const block1 = blockchain.minePendingUTXOTransactions('miner');
       const fork = createMockUTXOBlock(2, block1!.hash, 3);
       await blockchain.addBlock(fork);
-      
+
       const postForkConfig = await blockchain.getGenesisConfig();
       expect(postForkConfig).toEqual(genesisConfig);
     });
   });
 
   // Mock helper functions
-  function createMockUTXOBlock(index: number, previousHash: string, difficulty: number): Block {
+  function createMockUTXOBlock(
+    index: number,
+    previousHash: string,
+    difficulty: number
+  ): Block {
     const utxoTransaction: UTXOTransaction = {
       id: `fork-tx-${index}-${Math.random()}`,
-      inputs: index > 0 ? [{
-        previousTxId: `prev-fork-tx-${index - 1}`,
-        outputIndex: 0,
-        unlockingScript: 'test-signature'
-      }] : [],
-      outputs: [{
-        value: 50,
-        lockingScript: `fork-address-${index}`,
-        outputIndex: 0
-      }],
+      inputs:
+        index > 0
+          ? [
+              {
+                previousTxId: `prev-fork-tx-${index - 1}`,
+                outputIndex: 0,
+                unlockingScript: 'test-signature',
+              },
+            ]
+          : [],
+      outputs: [
+        {
+          value: 50,
+          lockingScript: `fork-address-${index}`,
+          outputIndex: 0,
+        },
+      ],
       lockTime: 0,
       timestamp: Date.now(),
-      fee: 1
+      fee: 1,
     };
 
     return {
@@ -437,30 +475,36 @@ describe('Enhanced Blockchain Fork Handling (NO BACKWARDS COMPATIBILITY)', () =>
       merkleRoot: `fork-merkle-${index}`,
       nonce: 12345,
       difficulty,
-      validator: `fork-validator-${index}`
+      validator: `fork-validator-${index}`,
     };
   }
 
-  function createMockLegacyBlock(index: number, previousHash: string, difficulty: number): Block {
+  function createMockLegacyBlock(
+    index: number,
+    previousHash: string,
+    difficulty: number
+  ): Block {
     return {
       index,
       timestamp: Date.now(),
-      transactions: [{
-        id: `legacy-tx-${index}`,
-        from: 'legacy-from',
-        to: 'legacy-to',
-        amount: 50,
-        fee: 1,
-        timestamp: Date.now(),
-        signature: 'legacy-signature',
-        nonce: 0
-      }],
+      transactions: [
+        {
+          id: `legacy-tx-${index}`,
+          from: 'legacy-from',
+          to: 'legacy-to',
+          amount: 50,
+          fee: 1,
+          timestamp: Date.now(),
+          signature: 'legacy-signature',
+          nonce: 0,
+        },
+      ],
       previousHash,
       hash: `legacy-block-${index}`,
       merkleRoot: `legacy-merkle-${index}`,
       nonce: 12345,
       difficulty,
-      validator: 'legacy-validator'
+      validator: 'legacy-validator',
     };
   }
 });

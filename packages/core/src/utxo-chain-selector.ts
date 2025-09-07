@@ -5,26 +5,26 @@ import {
   IUTXOChainSelector,
   Block,
   UTXOTransaction,
-  UTXOMessageType
+  UTXOMessageType,
 } from './types.js';
 import { DifficultyManager } from './difficulty.js';
 import { UTXOCompressionManager } from './utxo-compression-manager.js';
 
 /**
- * UTXO Chain Selector - NO BACKWARDS COMPATIBILITY  
- * 
+ * UTXO Chain Selector - NO BACKWARDS COMPATIBILITY
+ *
  * Selects the best blockchain branch using UTXO-only cumulative difficulty comparison.
  * Integrates with existing DifficultyManager and compression infrastructure.
- * 
+ *
  * Key Features:
- * - UTXO-only branch validation (no legacy transaction support) 
+ * - UTXO-only branch validation (no legacy transaction support)
  * - Cumulative difficulty comparison using existing DifficultyManager
  * - Deterministic tie-breaking with UTXO set hashes
  * - LoRa constraint validation using existing UTXOCompressionManager
  * - Performance-optimized branch comparison algorithms
  */
 export class UTXOChainSelector implements IUTXOChainSelector {
-  private readonly logger: Logger;
+  private readonly logger = console;
   private readonly config: UTXOChainConfig;
   private readonly difficultyManager: DifficultyManager;
   private readonly compressionManager: UTXOCompressionManager;
@@ -38,7 +38,6 @@ export class UTXOChainSelector implements IUTXOChainSelector {
     difficultyManager: DifficultyManager,
     compressionManager: UTXOCompressionManager
   ) {
-    this.logger = new Logger('UTXOChainSelector');
     this.config = config;
     this.difficultyManager = difficultyManager;
     this.compressionManager = compressionManager;
@@ -50,33 +49,49 @@ export class UTXOChainSelector implements IUTXOChainSelector {
    * Select best UTXO chain from competing branches
    * Primary rule: Highest cumulative difficulty using existing DifficultyManager
    */
-  selectBestUTXOChain(branches: Map<string, UTXOChainBranch>): UTXOChainBranch {
+  async selectBestUTXOChain(
+    branches: Map<string, UTXOChainBranch>
+  ): Promise<UTXOChainBranch> {
     const startTime = Date.now();
-    this.logger.info(`Selecting best UTXO chain from ${branches.size} branches`);
+    this.logger.info(
+      `Selecting best UTXO chain from ${branches.size} branches`
+    );
 
     if (branches.size === 0) {
       throw new Error('No branches available for selection');
     }
 
-    const validUTXOBranches = Array.from(branches.values())
-      .filter(branch => this.isValidUTXOBranch(branch));
+    const branchArray = Array.from(branches.values());
+    const validUTXOBranches: UTXOChainBranch[] = [];
+
+    for (const branch of branchArray) {
+      if (await this.isValidUTXOBranch(branch)) {
+        validUTXOBranches.push(branch);
+      }
+    }
 
     if (validUTXOBranches.length === 0) {
-      throw new Error('No valid UTXO branches available - legacy branches not supported');
+      throw new Error(
+        'No valid UTXO branches available - legacy branches not supported'
+      );
     }
 
     // Sort branches by comparison result (best first)
     validUTXOBranches.sort((a, b) => this.compareUTXOBranches(b, a));
-    
+
     const bestBranch = validUTXOBranches[0];
     const processingTime = Date.now() - startTime;
-    
-    this.logger.info(`Selected best UTXO chain: ${bestBranch.id} (height: ${bestBranch.height}, difficulty: ${bestBranch.cumulativeDifficulty}) in ${processingTime}ms`);
-    
+
+    this.logger.info(
+      `Selected best UTXO chain: ${bestBranch.id} (height: ${bestBranch.height}, difficulty: ${bestBranch.cumulativeDifficulty}) in ${processingTime}ms`
+    );
+
     // Log comparison details for debugging
     if (validUTXOBranches.length > 1) {
       const runnerUp = validUTXOBranches[1];
-      this.logger.debug(`Runner-up: ${runnerUp.id} (height: ${runnerUp.height}, difficulty: ${runnerUp.cumulativeDifficulty})`);
+      this.logger.debug(
+        `Runner-up: ${runnerUp.id} (height: ${runnerUp.height}, difficulty: ${runnerUp.cumulativeDifficulty})`
+      );
     }
 
     return bestBranch;
@@ -86,17 +101,24 @@ export class UTXOChainSelector implements IUTXOChainSelector {
    * Compare UTXO branches using cumulative difficulty with deterministic tie-breaking
    * Returns: 1 if branchA > branchB, -1 if branchA < branchB, 0 if equal
    */
-  compareUTXOBranches(branchA: UTXOChainBranch, branchB: UTXOChainBranch): number {
+  compareUTXOBranches(
+    branchA: UTXOChainBranch,
+    branchB: UTXOChainBranch
+  ): number {
     // Primary comparison: Cumulative difficulty using existing DifficultyManager
     const difficultyA = this.calculateCumulativeDifficulty(branchA.utxoBlocks);
     const difficultyB = this.calculateCumulativeDifficulty(branchB.utxoBlocks);
-    
+
     if (difficultyA > difficultyB) {
-      this.logger.debug(`Branch ${branchA.id} selected by higher difficulty: ${difficultyA} > ${difficultyB}`);
+      this.logger.debug(
+        `Branch ${branchA.id} selected by higher difficulty: ${difficultyA} > ${difficultyB}`
+      );
       return 1;
     }
     if (difficultyA < difficultyB) {
-      this.logger.debug(`Branch ${branchB.id} selected by higher difficulty: ${difficultyB} > ${difficultyA}`);
+      this.logger.debug(
+        `Branch ${branchB.id} selected by higher difficulty: ${difficultyB} > ${difficultyA}`
+      );
       return -1;
     }
 
@@ -104,7 +126,9 @@ export class UTXOChainSelector implements IUTXOChainSelector {
     if (branchA.utxoSetHash !== branchB.utxoSetHash) {
       const comparison = branchA.utxoSetHash.localeCompare(branchB.utxoSetHash);
       if (comparison !== 0) {
-        this.logger.debug(`Branch selected by UTXO set hash comparison: ${comparison > 0 ? branchA.id : branchB.id}`);
+        this.logger.debug(
+          `Branch selected by UTXO set hash comparison: ${comparison > 0 ? branchA.id : branchB.id}`
+        );
         return comparison;
       }
     }
@@ -112,28 +136,38 @@ export class UTXOChainSelector implements IUTXOChainSelector {
     // Tie-breaker 2: Higher block count (longer chain preference)
     if (branchA.height !== branchB.height) {
       const comparison = branchA.height - branchB.height;
-      this.logger.debug(`Branch selected by height: ${comparison > 0 ? branchA.id : branchB.id} (${Math.abs(comparison)} blocks difference)`);
+      this.logger.debug(
+        `Branch selected by height: ${comparison > 0 ? branchA.id : branchB.id} (${Math.abs(comparison)} blocks difference)`
+      );
       return comparison;
     }
 
     // Tie-breaker 3: Lexicographically smaller last block hash (deterministic)
-    const hashComparison = branchA.lastBlockHash.localeCompare(branchB.lastBlockHash);
+    const hashComparison = branchA.lastBlockHash.localeCompare(
+      branchB.lastBlockHash
+    );
     if (hashComparison !== 0) {
-      this.logger.debug(`Branch selected by last block hash comparison: ${hashComparison < 0 ? branchA.id : branchB.id}`);
+      this.logger.debug(
+        `Branch selected by last block hash comparison: ${hashComparison < 0 ? branchA.id : branchB.id}`
+      );
       return hashComparison;
     }
 
     // Tie-breaker 4: Earlier timestamp (prefer older branch)
     const timestampComparison = branchA.timestamp - branchB.timestamp;
     if (timestampComparison !== 0) {
-      this.logger.debug(`Branch selected by timestamp: ${timestampComparison < 0 ? branchA.id : branchB.id}`);
+      this.logger.debug(
+        `Branch selected by timestamp: ${timestampComparison < 0 ? branchA.id : branchB.id}`
+      );
       return timestampComparison;
     }
 
     // Final tie-breaker: Branch ID lexicographic comparison
     const idComparison = branchA.id.localeCompare(branchB.id);
-    this.logger.debug(`Branch selected by ID comparison: ${idComparison < 0 ? branchA.id : branchB.id}`);
-    
+    this.logger.debug(
+      `Branch selected by ID comparison: ${idComparison < 0 ? branchA.id : branchB.id}`
+    );
+
     return idComparison;
   }
 
@@ -148,28 +182,39 @@ export class UTXOChainSelector implements IUTXOChainSelector {
 
     // Create cache key from block hashes
     const cacheKey = blocks.map(b => b.hash).join('-');
-    
+
     if (this.difficultyCache.has(cacheKey)) {
       return this.difficultyCache.get(cacheKey)!;
     }
 
     let cumulativeDifficulty = 0n;
-    
+
     // Use existing difficulty manager for proper difficulty calculations
     for (const block of blocks) {
       // Validate difficulty bounds using existing infrastructure
-      if (!this.difficultyManager.validateDifficultyBounds(block.difficulty)) {
-        this.logger.warn(`Invalid difficulty in block ${block.hash}: ${block.difficulty}`);
-        continue;
+      const currentDifficulty =
+        cumulativeDifficulty > 0n ? Number(cumulativeDifficulty) : 1;
+      const validatedDifficulty =
+        this.difficultyManager.validateDifficultyBounds(
+          block.difficulty,
+          currentDifficulty
+        );
+
+      if (validatedDifficulty !== block.difficulty) {
+        this.logger.warn(
+          `Difficulty adjusted in block ${block.hash}: ${block.difficulty} -> ${validatedDifficulty}`
+        );
       }
 
-      cumulativeDifficulty += BigInt(block.difficulty);
+      cumulativeDifficulty += BigInt(validatedDifficulty);
     }
 
     // Cache the result for future use
     this.difficultyCache.set(cacheKey, cumulativeDifficulty);
-    
-    this.logger.debug(`Calculated cumulative difficulty: ${cumulativeDifficulty} for ${blocks.length} blocks`);
+
+    this.logger.debug(
+      `Calculated cumulative difficulty: ${cumulativeDifficulty} for ${blocks.length} blocks`
+    );
     return cumulativeDifficulty;
   }
 
@@ -177,31 +222,32 @@ export class UTXOChainSelector implements IUTXOChainSelector {
    * Validate UTXO branch contains only valid UTXO transactions
    * NO LEGACY SUPPORT - strict UTXO-only validation
    */
-  isValidUTXOBranch(branch: UTXOChainBranch): boolean {
+  async isValidUTXOBranch(branch: UTXOChainBranch): Promise<boolean> {
     const cacheKey = `${branch.id}-${branch.lastBlockHash}`;
-    
+
     if (this.validationCache.has(cacheKey)) {
       return this.validationCache.get(cacheKey)!;
     }
 
     try {
       // Validate branch contains only UTXO blocks
-      const isValid = (
+      const isValid =
         branch.utxoBlocks.every(block => this.isUTXOOnlyBlock(block)) &&
         this.isValidUTXOChain(branch) &&
-        this.meetsLoRaConstraints(branch)
-      );
+        (await this.meetsLoRaConstraints(branch));
 
       // Cache the validation result
       this.validationCache.set(cacheKey, isValid);
-      
+
       if (!isValid) {
         this.logger.warn(`Invalid UTXO branch detected: ${branch.id}`);
       }
 
       return isValid;
     } catch (error) {
-      this.logger.error(`Error validating UTXO branch ${branch.id}: ${error.message}`);
+      this.logger.error(
+        `Error validating UTXO branch ${branch.id}: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
       return false;
     }
   }
@@ -209,26 +255,41 @@ export class UTXOChainSelector implements IUTXOChainSelector {
   /**
    * Check LoRa constraints using existing compression infrastructure
    */
-  meetsLoRaConstraints(branch: UTXOChainBranch): boolean {
+  async meetsLoRaConstraints(branch: UTXOChainBranch): Promise<boolean> {
     // Check if branch blocks can be transmitted over LoRa network
-    return branch.utxoBlocks.every(block => {
+    for (const block of branch.utxoBlocks) {
       try {
         // Use existing compression manager to estimate transmission size
-        const compressionResult = this.compressionManager.compressIfBeneficial(
-          Buffer.from(JSON.stringify(block)),
-          UTXOMessageType.BLOCK
-        );
+        const blockData = JSON.stringify(block);
+        const compressionResult =
+          await this.compressionManager.compressIfBeneficial(
+            blockData,
+            UTXOMessageType.BLOCK
+          );
 
-        const estimatedSize = compressionResult.compressedData?.length || 
-                            Buffer.from(JSON.stringify(block)).length;
+        const estimatedSize = compressionResult.isCompressed
+          ? typeof compressionResult.data === 'string'
+            ? Buffer.from(compressionResult.data).length
+            : compressionResult.data.length
+          : Buffer.from(JSON.stringify(block)).length;
 
         // Allow blocks that fit in one message OR can be fragmented
-        return estimatedSize <= this.config.maxMessageSize || this.canFragment(block);
+        if (
+          !(
+            estimatedSize <= this.config.maxMessageSize ||
+            this.canFragment(block)
+          )
+        ) {
+          return false;
+        }
       } catch (error) {
-        this.logger.warn(`Failed to check LoRa constraints for block ${block.hash}: ${error.message}`);
+        this.logger.warn(
+          `Failed to check LoRa constraints for block ${block.hash}: ${error instanceof Error ? error.message : 'Unknown error'}`
+        );
         return false; // Reject blocks that can't be analyzed
       }
-    });
+    }
+    return true;
   }
 
   /**
@@ -237,7 +298,7 @@ export class UTXOChainSelector implements IUTXOChainSelector {
   private canFragment(block: Block): boolean {
     // Blocks can be fragmented if they have valid UTXO transactions
     // and don't exceed maximum fragmentation limits
-    
+
     if (!this.isUTXOOnlyBlock(block)) {
       return false;
     }
@@ -267,20 +328,24 @@ export class UTXOChainSelector implements IUTXOChainSelector {
    */
   private isValidUTXOChain(branch: UTXOChainBranch): boolean {
     const blocks = branch.utxoBlocks;
-    
+
     if (blocks.length === 0) {
       return false; // Empty chain is invalid
     }
 
     // Validate chain continuity
     for (let i = 1; i < blocks.length; i++) {
-      if (blocks[i].previousHash !== blocks[i-1].hash) {
-        this.logger.warn(`Chain discontinuity in branch ${branch.id} at height ${blocks[i].index}`);
+      if (blocks[i].previousHash !== blocks[i - 1].hash) {
+        this.logger.warn(
+          `Chain discontinuity in branch ${branch.id} at height ${blocks[i].index}`
+        );
         return false;
       }
-      
-      if (blocks[i].index !== blocks[i-1].index + 1) {
-        this.logger.warn(`Height discontinuity in branch ${branch.id}: ${blocks[i-1].index} -> ${blocks[i].index}`);
+
+      if (blocks[i].index !== blocks[i - 1].index + 1) {
+        this.logger.warn(
+          `Height discontinuity in branch ${branch.id}: ${blocks[i - 1].index} -> ${blocks[i].index}`
+        );
         return false;
       }
     }
@@ -288,19 +353,25 @@ export class UTXOChainSelector implements IUTXOChainSelector {
     // Validate branch metadata consistency
     const lastBlock = blocks[blocks.length - 1];
     if (branch.height !== lastBlock.index) {
-      this.logger.warn(`Branch height mismatch: ${branch.height} != ${lastBlock.index}`);
+      this.logger.warn(
+        `Branch height mismatch: ${branch.height} != ${lastBlock.index}`
+      );
       return false;
     }
 
     if (branch.lastBlockHash !== lastBlock.hash) {
-      this.logger.warn(`Branch last hash mismatch: ${branch.lastBlockHash} != ${lastBlock.hash}`);
+      this.logger.warn(
+        `Branch last hash mismatch: ${branch.lastBlockHash} != ${lastBlock.hash}`
+      );
       return false;
     }
 
     // Validate cumulative difficulty matches calculated value
     const calculatedDifficulty = this.calculateCumulativeDifficulty(blocks);
     if (branch.cumulativeDifficulty !== calculatedDifficulty) {
-      this.logger.warn(`Branch cumulative difficulty mismatch: ${branch.cumulativeDifficulty} != ${calculatedDifficulty}`);
+      this.logger.warn(
+        `Branch cumulative difficulty mismatch: ${branch.cumulativeDifficulty} != ${calculatedDifficulty}`
+      );
       return false;
     }
 
@@ -312,7 +383,7 @@ export class UTXOChainSelector implements IUTXOChainSelector {
    */
   private isUTXOTransaction(tx: any): boolean {
     const utxoTx = tx as UTXOTransaction;
-    
+
     return (
       utxoTx &&
       typeof utxoTx.id === 'string' &&
@@ -344,7 +415,7 @@ export class UTXOChainSelector implements IUTXOChainSelector {
   } {
     return {
       difficultyCacheSize: this.difficultyCache.size,
-      validationCacheSize: this.validationCache.size
+      validationCacheSize: this.validationCache.size,
     };
   }
 }

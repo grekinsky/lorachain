@@ -6,7 +6,7 @@ import type {
   Block,
   UTXOChainBranch,
   UTXOChainConfig,
-  UTXOTransaction
+  UTXOTransaction,
 } from '../../src/types.js';
 
 describe('UTXOChainSelector (NO BACKWARDS COMPATIBILITY)', () => {
@@ -23,7 +23,7 @@ describe('UTXOChainSelector (NO BACKWARDS COMPATIBILITY)', () => {
       maxMessageSize: 256,
       forkDetectionEnabled: true,
       attackDetectionEnabled: true,
-      minConfirmationsForFinality: 6
+      minConfirmationsForFinality: 6,
     };
 
     difficultyManager = new DifficultyManager({
@@ -31,11 +31,21 @@ describe('UTXOChainSelector (NO BACKWARDS COMPATIBILITY)', () => {
       adjustmentPeriod: 10,
       maxDifficultyRatio: 4,
       minDifficulty: 1,
-      maxDifficulty: 1000000
+      maxDifficulty: 1000000,
     });
 
-    compressionManager = new UTXOCompressionManager();
-    
+    compressionManager = new UTXOCompressionManager({
+      defaultAlgorithm: 'gzip' as const,
+      compressionLevel: 'balanced' as const,
+      enableDictionary: false,
+      maxCompressionMemory: 512 * 1024,
+      enableAdaptive: true,
+      compressionThreshold: 64,
+      dutyCycleIntegration: false,
+      utxoOptimization: true,
+      regionalCompliance: 'US',
+    });
+
     chainSelector = new UTXOChainSelector(
       config,
       difficultyManager,
@@ -46,7 +56,7 @@ describe('UTXOChainSelector (NO BACKWARDS COMPATIBILITY)', () => {
   describe('selectBestUTXOChain', () => {
     it('should throw error for empty branch map', () => {
       const branches = new Map<string, UTXOChainBranch>();
-      
+
       expect(() => {
         chainSelector.selectBestUTXOChain(branches);
       }).toThrow('No branches available for selection');
@@ -55,17 +65,17 @@ describe('UTXOChainSelector (NO BACKWARDS COMPATIBILITY)', () => {
     it('should select branch with highest cumulative difficulty', () => {
       const branch1 = createMockBranch('branch1', [
         createMockBlock(0, 'genesis', 2),
-        createMockBlock(1, 'block0', 2)
+        createMockBlock(1, 'block0', 2),
       ]);
 
       const branch2 = createMockBranch('branch2', [
         createMockBlock(0, 'genesis', 2),
-        createMockBlock(1, 'block0', 4) // Higher difficulty
+        createMockBlock(1, 'block0', 4), // Higher difficulty
       ]);
 
       const branches = new Map([
         ['branch1', branch1],
-        ['branch2', branch2]
+        ['branch2', branch2],
       ]);
 
       const result = chainSelector.selectBestUTXOChain(branches);
@@ -77,19 +87,19 @@ describe('UTXOChainSelector (NO BACKWARDS COMPATIBILITY)', () => {
     it('should use tie-breaker rules for equal difficulty', () => {
       const branch1 = createMockBranch('branch1', [
         createMockBlock(0, 'genesis', 2),
-        createMockBlock(1, 'block0', 2)
+        createMockBlock(1, 'block0', 2),
       ]);
       branch1.utxoSetHash = 'aaaa';
 
       const branch2 = createMockBranch('branch2', [
         createMockBlock(0, 'genesis', 2),
-        createMockBlock(1, 'block0', 2)
+        createMockBlock(1, 'block0', 2),
       ]);
       branch2.utxoSetHash = 'bbbb';
 
       const branches = new Map([
         ['branch1', branch1],
-        ['branch2', branch2]
+        ['branch2', branch2],
       ]);
 
       const result = chainSelector.selectBestUTXOChain(branches);
@@ -100,17 +110,17 @@ describe('UTXOChainSelector (NO BACKWARDS COMPATIBILITY)', () => {
 
     it('should prefer longer chains when difficulty is equal', () => {
       const shortBranch = createMockBranch('short', [
-        createMockBlock(0, 'genesis', 4)
+        createMockBlock(0, 'genesis', 4),
       ]);
 
       const longBranch = createMockBranch('long', [
         createMockBlock(0, 'genesis', 2),
-        createMockBlock(1, 'block0', 2) // Same total difficulty but longer
+        createMockBlock(1, 'block0', 2), // Same total difficulty but longer
       ]);
 
       const branches = new Map([
         ['short', shortBranch],
-        ['long', longBranch]
+        ['long', longBranch],
       ]);
 
       const result = chainSelector.selectBestUTXOChain(branches);
@@ -121,14 +131,14 @@ describe('UTXOChainSelector (NO BACKWARDS COMPATIBILITY)', () => {
 
     it('should reject invalid UTXO branches', () => {
       const validBranch = createMockBranch('valid', [
-        createMockBlock(0, 'genesis', 2)
+        createMockBlock(0, 'genesis', 2),
       ]);
 
       const invalidBranch = createMockInvalidBranch('invalid');
 
       const branches = new Map([
         ['valid', validBranch],
-        ['invalid', invalidBranch]
+        ['invalid', invalidBranch],
       ]);
 
       const result = chainSelector.selectBestUTXOChain(branches);
@@ -142,7 +152,9 @@ describe('UTXOChainSelector (NO BACKWARDS COMPATIBILITY)', () => {
 
       expect(() => {
         chainSelector.selectBestUTXOChain(branches);
-      }).toThrow('No valid UTXO branches available - legacy branches not supported');
+      }).toThrow(
+        'No valid UTXO branches available - legacy branches not supported'
+      );
     });
   });
 
@@ -166,10 +178,12 @@ describe('UTXOChainSelector (NO BACKWARDS COMPATIBILITY)', () => {
     });
 
     it('should use height as tie-breaker', () => {
-      const shortBranch = createMockBranch('short', [createMockBlock(0, 'genesis', 4)]);
+      const shortBranch = createMockBranch('short', [
+        createMockBlock(0, 'genesis', 4),
+      ]);
       const longBranch = createMockBranch('long', [
         createMockBlock(0, 'genesis', 2),
-        createMockBlock(1, 'block0', 2)
+        createMockBlock(1, 'block0', 2),
       ]);
 
       const result = chainSelector.compareUTXOBranches(longBranch, shortBranch);
@@ -190,17 +204,24 @@ describe('UTXOChainSelector (NO BACKWARDS COMPATIBILITY)', () => {
     });
 
     it('should use timestamp as final tie-breaker', () => {
-      const olderBranch = createMockBranch('older', [createMockBlock(0, 'genesis', 2)]);
+      const olderBranch = createMockBranch('older', [
+        createMockBlock(0, 'genesis', 2),
+      ]);
       olderBranch.timestamp = 1000;
       olderBranch.utxoSetHash = 'same';
       olderBranch.lastBlockHash = 'same';
 
-      const newerBranch = createMockBranch('newer', [createMockBlock(0, 'genesis', 2)]);
+      const newerBranch = createMockBranch('newer', [
+        createMockBlock(0, 'genesis', 2),
+      ]);
       newerBranch.timestamp = 2000;
       newerBranch.utxoSetHash = 'same';
       newerBranch.lastBlockHash = 'same';
 
-      const result = chainSelector.compareUTXOBranches(olderBranch, newerBranch);
+      const result = chainSelector.compareUTXOBranches(
+        olderBranch,
+        newerBranch
+      );
 
       expect(result).toBeLessThan(0); // olderBranch wins due to earlier timestamp
     });
@@ -211,7 +232,7 @@ describe('UTXOChainSelector (NO BACKWARDS COMPATIBILITY)', () => {
       const blocks = [
         createMockBlock(0, 'genesis', 2),
         createMockBlock(1, 'block0', 4),
-        createMockBlock(2, 'block1', 6)
+        createMockBlock(2, 'block1', 6),
       ];
 
       const result = chainSelector.calculateCumulativeDifficulty(blocks);
@@ -240,7 +261,7 @@ describe('UTXOChainSelector (NO BACKWARDS COMPATIBILITY)', () => {
     it('should validate difficulty bounds', () => {
       const blocks = [
         createMockBlock(0, 'genesis', -1), // Invalid difficulty
-        createMockBlock(1, 'block0', 4)
+        createMockBlock(1, 'block0', 4),
       ];
 
       const result = chainSelector.calculateCumulativeDifficulty(blocks);
@@ -253,7 +274,7 @@ describe('UTXOChainSelector (NO BACKWARDS COMPATIBILITY)', () => {
     it('should validate correct UTXO branch', () => {
       const validBranch = createMockBranch('valid', [
         createMockBlock(0, 'genesis', 2),
-        createMockBlock(1, 'block0', 4)
+        createMockBlock(1, 'block0', 4),
       ]);
 
       const result = chainSelector.isValidUTXOBranch(validBranch);
@@ -264,7 +285,7 @@ describe('UTXOChainSelector (NO BACKWARDS COMPATIBILITY)', () => {
     it('should reject branch with invalid chain continuity', () => {
       const invalidBranch = createMockBranch('invalid', [
         createMockBlock(0, 'genesis', 2),
-        createMockBlock(1, 'wrong-parent', 4) // Wrong previous hash
+        createMockBlock(1, 'wrong-parent', 4), // Wrong previous hash
       ]);
 
       const result = chainSelector.isValidUTXOBranch(invalidBranch);
@@ -273,7 +294,9 @@ describe('UTXOChainSelector (NO BACKWARDS COMPATIBILITY)', () => {
     });
 
     it('should cache validation results', () => {
-      const branch = createMockBranch('test', [createMockBlock(0, 'genesis', 2)]);
+      const branch = createMockBranch('test', [
+        createMockBlock(0, 'genesis', 2),
+      ]);
 
       // First validation
       const result1 = chainSelector.isValidUTXOBranch(branch);
@@ -287,7 +310,7 @@ describe('UTXOChainSelector (NO BACKWARDS COMPATIBILITY)', () => {
     it('should handle validation errors gracefully', () => {
       const corruptBranch = {
         ...createMockBranch('corrupt', []),
-        utxoBlocks: null as any // Corrupt data
+        utxoBlocks: null as any, // Corrupt data
       };
 
       const result = chainSelector.isValidUTXOBranch(corruptBranch);
@@ -328,7 +351,7 @@ describe('UTXOChainSelector (NO BACKWARDS COMPATIBILITY)', () => {
   describe('cache management', () => {
     it('should clear caches when requested', () => {
       const blocks = [createMockBlock(0, 'genesis', 2)];
-      
+
       // Populate cache
       chainSelector.calculateCumulativeDifficulty(blocks);
 
@@ -352,7 +375,10 @@ describe('UTXOChainSelector (NO BACKWARDS COMPATIBILITY)', () => {
   // Mock helper functions
   function createMockBranch(id: string, blocks: Block[]): UTXOChainBranch {
     const lastBlock = blocks[blocks.length - 1];
-    const cumulativeDifficulty = blocks.reduce((sum, block) => sum + BigInt(block.difficulty), 0n);
+    const cumulativeDifficulty = blocks.reduce(
+      (sum, block) => sum + BigInt(block.difficulty),
+      0n
+    );
 
     return {
       id,
@@ -366,26 +392,37 @@ describe('UTXOChainSelector (NO BACKWARDS COMPATIBILITY)', () => {
       isActive: false,
       utxoSetHash: `utxo-${id}`,
       timestamp: Date.now(),
-      parentBranchId: undefined
+      parentBranchId: undefined,
     };
   }
 
-  function createMockBlock(index: number, previousHash: string, difficulty: number = 2): Block {
+  function createMockBlock(
+    index: number,
+    previousHash: string,
+    difficulty: number = 2
+  ): Block {
     const utxoTransaction: UTXOTransaction = {
       id: `tx-${index}`,
-      inputs: index > 0 ? [{
-        previousTxId: `prev-tx-${index - 1}`,
-        outputIndex: 0,
-        unlockingScript: 'signature'
-      }] : [],
-      outputs: [{
-        value: 50,
-        lockingScript: 'address',
-        outputIndex: 0
-      }],
+      inputs:
+        index > 0
+          ? [
+              {
+                previousTxId: `prev-tx-${index - 1}`,
+                outputIndex: 0,
+                unlockingScript: 'signature',
+              },
+            ]
+          : [],
+      outputs: [
+        {
+          value: 50,
+          lockingScript: 'address',
+          outputIndex: 0,
+        },
+      ],
       lockTime: 0,
       timestamp: Date.now(),
-      fee: 1
+      fee: 1,
     };
 
     return {
@@ -397,7 +434,7 @@ describe('UTXOChainSelector (NO BACKWARDS COMPATIBILITY)', () => {
       merkleRoot: `merkle${index}`,
       nonce: 12345,
       difficulty,
-      validator: 'test-validator'
+      validator: 'test-validator',
     };
   }
 
@@ -414,7 +451,7 @@ describe('UTXOChainSelector (NO BACKWARDS COMPATIBILITY)', () => {
       isActive: false,
       utxoSetHash: `invalid-${id}`,
       timestamp: Date.now(),
-      parentBranchId: undefined
+      parentBranchId: undefined,
     };
   }
 
@@ -422,80 +459,95 @@ describe('UTXOChainSelector (NO BACKWARDS COMPATIBILITY)', () => {
     return {
       index,
       timestamp: Date.now(),
-      transactions: [{
-        id: `small-tx-${index}`,
-        inputs: [],
-        outputs: [{
-          value: 50,
-          lockingScript: 'addr',
-          outputIndex: 0
-        }],
-        lockTime: 0,
-        timestamp: Date.now(),
-        fee: 0
-      } as any],
+      transactions: [
+        {
+          id: `small-tx-${index}`,
+          inputs: [],
+          outputs: [
+            {
+              value: 50,
+              lockingScript: 'addr',
+              outputIndex: 0,
+            },
+          ],
+          lockTime: 0,
+          timestamp: Date.now(),
+          fee: 0,
+        } as any,
+      ],
       previousHash,
       hash: `small${index}`,
       merkleRoot: `merkle${index}`,
       nonce: 123,
       difficulty: 2,
-      validator: 'test'
+      validator: 'test',
     };
   }
 
   function createMockLargeBlock(index: number, previousHash: string): Block {
     // Create a block that would exceed LoRa 256-byte limit
     const largeData = 'x'.repeat(500); // Large payload
-    
+
     return {
       index,
       timestamp: Date.now(),
-      transactions: [{
-        id: `large-tx-${index}-${largeData}`,
-        inputs: [],
-        outputs: [{
-          value: 50,
-          lockingScript: `large-address-${largeData}`,
-          outputIndex: 0
-        }],
-        lockTime: 0,
-        timestamp: Date.now(),
-        fee: 0
-      } as any],
+      transactions: [
+        {
+          id: `large-tx-${index}-${largeData}`,
+          inputs: [],
+          outputs: [
+            {
+              value: 50,
+              lockingScript: `large-address-${largeData}`,
+              outputIndex: 0,
+            },
+          ],
+          lockTime: 0,
+          timestamp: Date.now(),
+          fee: 0,
+        } as any,
+      ],
       previousHash,
       hash: `large${index}`,
       merkleRoot: `merkle${index}`,
       nonce: 12345,
       difficulty: 2,
-      validator: 'test-validator'
+      validator: 'test-validator',
     };
   }
 
-  function createMockCompressibleBlock(index: number, previousHash: string): Block {
+  function createMockCompressibleBlock(
+    index: number,
+    previousHash: string
+  ): Block {
     // Create a block with repetitive data that compresses well
     const repetitiveData = 'abcabc'.repeat(50);
-    
+
     return {
       index,
       timestamp: Date.now(),
-      transactions: [{
-        id: `compress-tx-${index}`,
-        inputs: [],
-        outputs: [{
-          value: 50,
-          lockingScript: repetitiveData,
-          outputIndex: 0
-        }],
-        lockTime: 0,
-        timestamp: Date.now(),
-        fee: 0
-      } as any],
+      transactions: [
+        {
+          id: `compress-tx-${index}`,
+          inputs: [],
+          outputs: [
+            {
+              value: 50,
+              lockingScript: repetitiveData,
+              outputIndex: 0,
+            },
+          ],
+          lockTime: 0,
+          timestamp: Date.now(),
+          fee: 0,
+        } as any,
+      ],
       previousHash,
       hash: `compress${index}`,
       merkleRoot: `merkle${index}`,
       nonce: 12345,
       difficulty: 2,
-      validator: 'test-validator'
+      validator: 'test-validator',
     };
   }
 });

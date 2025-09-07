@@ -7,17 +7,17 @@ import {
   IUTXOReorganizationManager,
   Block,
   UTXO,
-  UTXOTransaction
+  UTXOTransaction,
 } from './types.js';
 import { UTXOManager } from './utxo.js';
 import { UTXOTransactionManager } from './utxo-transaction.js';
 
 /**
  * UTXO Reorganization Manager - NO BACKWARDS COMPATIBILITY
- * 
+ *
  * Manages safe blockchain reorganizations with UTXO-only support.
  * Integrates with existing UTXOPersistenceManager and UTXOTransactionManager.
- * 
+ *
  * Key Features:
  * - Safe UTXO chain switching with atomic operations
  * - Integration with existing UTXOManager for UTXO set management
@@ -27,7 +27,7 @@ import { UTXOTransactionManager } from './utxo-transaction.js';
  * - Rollback capabilities for failed reorganizations
  */
 export class UTXOReorganizationManager implements IUTXOReorganizationManager {
-  private readonly logger: Logger;
+  private readonly logger = console;
   private readonly config: UTXOChainConfig;
   private readonly utxoManager: UTXOManager;
   private readonly utxoTransactionManager: UTXOTransactionManager;
@@ -45,12 +45,13 @@ export class UTXOReorganizationManager implements IUTXOReorganizationManager {
     utxoManager: UTXOManager,
     utxoTransactionManager: UTXOTransactionManager
   ) {
-    this.logger = new Logger('UTXOReorganizationManager');
     this.config = config;
     this.utxoManager = utxoManager;
     this.utxoTransactionManager = utxoTransactionManager;
 
-    this.logger.info('UTXOReorganizationManager initialized with UTXO-only support');
+    this.logger.info(
+      'UTXOReorganizationManager initialized with UTXO-only support'
+    );
   }
 
   /**
@@ -62,14 +63,16 @@ export class UTXOReorganizationManager implements IUTXOReorganizationManager {
     newBranch: UTXOChainBranch
   ): Promise<UTXOReorganizationResult> {
     const startTime = Date.now();
-    this.logger.info(`Executing UTXO reorganization: ${currentBranch.id} -> ${newBranch.id}`);
+    this.logger.info(
+      `Executing UTXO reorganization: ${currentBranch.id} -> ${newBranch.id}`
+    );
 
     // Prevent concurrent reorganizations
     if (this.reorganizationInProgress) {
       return {
         success: false,
         reason: 'Reorganization already in progress',
-        timestamp: Date.now()
+        timestamp: Date.now(),
       };
     }
 
@@ -81,7 +84,7 @@ export class UTXOReorganizationManager implements IUTXOReorganizationManager {
         return {
           success: false,
           reason: 'Reorganization safety validation failed',
-          timestamp: Date.now()
+          timestamp: Date.now(),
         };
       }
 
@@ -95,7 +98,7 @@ export class UTXOReorganizationManager implements IUTXOReorganizationManager {
           success: false,
           reason: `Reorganization depth ${reorgDepth} exceeds maximum ${this.config.maxReorganizationDepth}`,
           reorgDepth,
-          timestamp: Date.now()
+          timestamp: Date.now(),
         };
       }
 
@@ -110,13 +113,22 @@ export class UTXOReorganizationManager implements IUTXOReorganizationManager {
       const appliedBlocks = newBranch.utxoBlocks.slice(branchPoint);
 
       // Step 7: Execute reorganization plan atomically
-      await this.executeReorganizationPlan(revertedBlocks, appliedBlocks, utxoSetDelta);
+      await this.executeReorganizationPlan(
+        revertedBlocks,
+        appliedBlocks,
+        utxoSetDelta
+      );
 
       // Step 8: Update transaction pool
-      const transactionPoolUpdates = await this.updateTransactionPool(revertedBlocks, appliedBlocks);
+      const transactionPoolUpdates = await this.updateTransactionPool(
+        revertedBlocks,
+        appliedBlocks
+      );
 
       const processingTime = Date.now() - startTime;
-      this.logger.info(`UTXO reorganization completed successfully in ${processingTime}ms`);
+      this.logger.info(
+        `UTXO reorganization completed successfully in ${processingTime}ms`
+      );
 
       return {
         success: true,
@@ -128,19 +140,20 @@ export class UTXOReorganizationManager implements IUTXOReorganizationManager {
         utxoSetDelta,
         transactionPoolUpdates,
         persistenceUpdates: true,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       };
-
     } catch (error) {
-      this.logger.error(`UTXO reorganization failed: ${error.message}`);
-      
+      this.logger.error(
+        `UTXO reorganization failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+
       // Attempt rollback on failure
       await this.rollbackReorganization();
 
       return {
         success: false,
-        reason: `Reorganization failed: ${error.message}`,
-        timestamp: Date.now()
+        reason: `Reorganization failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        timestamp: Date.now(),
       };
     } finally {
       this.reorganizationInProgress = false;
@@ -155,11 +168,18 @@ export class UTXOReorganizationManager implements IUTXOReorganizationManager {
     currentBranch: UTXOChainBranch,
     newBranch: UTXOChainBranch
   ): boolean {
-    this.logger.debug(`Validating reorganization safety: current=${currentBranch.height}, new=${newBranch.height}`);
+    this.logger.debug(
+      `Validating reorganization safety: current=${currentBranch.height}, new=${newBranch.height}`
+    );
 
     // Validate branch structures
-    if (!this.validateBranchStructure(currentBranch) || !this.validateBranchStructure(newBranch)) {
-      this.logger.warn('Invalid branch structure detected during safety validation');
+    if (
+      !this.validateBranchStructure(currentBranch) ||
+      !this.validateBranchStructure(newBranch)
+    ) {
+      this.logger.warn(
+        'Invalid branch structure detected during safety validation'
+      );
       return false;
     }
 
@@ -169,21 +189,34 @@ export class UTXOReorganizationManager implements IUTXOReorganizationManager {
 
     // Check reorganization depth limits
     if (reorgDepth > this.config.maxReorganizationDepth) {
-      this.logger.warn(`Reorganization depth ${reorgDepth} exceeds limit ${this.config.maxReorganizationDepth}`);
+      this.logger.warn(
+        `Reorganization depth ${reorgDepth} exceeds limit ${this.config.maxReorganizationDepth}`
+      );
       return false;
     }
 
     // Check finality protection - blocks before consensus threshold should not be reorganized
-    const finalizedHeight = Math.max(0, currentBranch.height - this.config.consensusThreshold);
+    const consensusThreshold =
+      this.config.consensusThreshold || this.config.minConfirmationsForFinality;
+    const finalizedHeight = Math.max(
+      0,
+      currentBranch.height - consensusThreshold
+    );
     if (branchPoint < finalizedHeight) {
-      this.logger.warn(`Reorganization would affect finalized blocks (branch point: ${branchPoint}, finalized height: ${finalizedHeight})`);
+      this.logger.warn(
+        `Reorganization would affect finalized blocks (branch point: ${branchPoint}, finalized height: ${finalizedHeight})`
+      );
       return false;
     }
 
     // Validate new branch has higher cumulative difficulty or work
-    if (newBranch.cumulativeDifficulty <= currentBranch.cumulativeDifficulty &&
-        newBranch.height <= currentBranch.height) {
-      this.logger.warn('New branch does not have higher difficulty or height - reorganization not beneficial');
+    if (
+      newBranch.cumulativeDifficulty <= currentBranch.cumulativeDifficulty &&
+      newBranch.height <= currentBranch.height
+    ) {
+      this.logger.warn(
+        'New branch does not have higher difficulty or height - reorganization not beneficial'
+      );
       return false;
     }
 
@@ -200,14 +233,19 @@ export class UTXOReorganizationManager implements IUTXOReorganizationManager {
   /**
    * Create UTXO set delta between two branches
    */
-  createUTXOSetDelta(fromBranch: UTXOChainBranch, toBranch: UTXOChainBranch): UTXOSetDelta {
-    this.logger.debug(`Creating UTXO set delta: ${fromBranch.id} -> ${toBranch.id}`);
+  createUTXOSetDelta(
+    fromBranch: UTXOChainBranch,
+    toBranch: UTXOChainBranch
+  ): UTXOSetDelta {
+    this.logger.debug(
+      `Creating UTXO set delta: ${fromBranch.id} -> ${toBranch.id}`
+    );
 
     const branchPoint = this.findCommonAncestor(fromBranch, toBranch);
-    
+
     // Get blocks that will be reverted (from current branch)
     const revertedBlocks = fromBranch.utxoBlocks.slice(branchPoint);
-    
+
     // Get blocks that will be applied (from new branch)
     const appliedBlocks = toBranch.utxoBlocks.slice(branchPoint);
 
@@ -226,7 +264,7 @@ export class UTXOReorganizationManager implements IUTXOReorganizationManager {
         for (const [index] of utxoTx.outputs.entries()) {
           removedUTXOs.push({
             txId: utxoTx.id,
-            outputIndex: index
+            outputIndex: index,
           });
         }
 
@@ -234,7 +272,9 @@ export class UTXOReorganizationManager implements IUTXOReorganizationManager {
         for (const input of utxoTx.inputs) {
           // In a full implementation, we'd look up the original UTXO
           // For now, we'll track that these need to be restored
-          this.logger.debug(`Need to restore UTXO: ${input.previousTxId}:${input.outputIndex}`);
+          this.logger.debug(
+            `Need to restore UTXO: ${input.previousTxId}:${input.outputIndex}`
+          );
         }
       }
     }
@@ -243,7 +283,7 @@ export class UTXOReorganizationManager implements IUTXOReorganizationManager {
     for (const block of appliedBlocks) {
       for (const tx of block.transactions) {
         const utxoTx = tx as unknown as UTXOTransaction;
-        
+
         if (!transactionsAffected.includes(utxoTx.id)) {
           transactionsAffected.push(utxoTx.id);
         }
@@ -256,7 +296,7 @@ export class UTXOReorganizationManager implements IUTXOReorganizationManager {
             value: output.value,
             lockingScript: output.lockingScript,
             blockHeight: block.index,
-            isSpent: false
+            isSpent: false,
           };
           addedUTXOs.push(utxo);
           totalValueChange += output.value;
@@ -269,11 +309,13 @@ export class UTXOReorganizationManager implements IUTXOReorganizationManager {
       removedUTXOs,
       modifiedUTXOs: [], // Calculated during actual reorganization
       totalValueChange,
-      transactionsAffected
+      transactionsAffected,
     };
 
-    this.logger.debug(`UTXO set delta created: +${addedUTXOs.length} UTXOs, -${removedUTXOs.length} UTXOs, ${transactionsAffected.length} transactions affected`);
-    
+    this.logger.debug(
+      `UTXO set delta created: +${addedUTXOs.length} UTXOs, -${removedUTXOs.length} UTXOs, ${transactionsAffected.length} transactions affected`
+    );
+
     return delta;
   }
 
@@ -284,7 +326,10 @@ export class UTXOReorganizationManager implements IUTXOReorganizationManager {
   async updateTransactionPool(
     revertedBlocks: Block[],
     appliedBlocks: Block[]
-  ): Promise<{ addedTransactions: UTXOTransaction[]; removedTransactions: string[] }> {
+  ): Promise<{
+    addedTransactions: UTXOTransaction[];
+    removedTransactions: string[];
+  }> {
     this.logger.debug('Updating transaction pool after reorganization');
 
     const addedTransactions: UTXOTransaction[] = [];
@@ -294,23 +339,26 @@ export class UTXOReorganizationManager implements IUTXOReorganizationManager {
     for (const block of revertedBlocks) {
       for (const tx of block.transactions) {
         const utxoTx = tx as unknown as UTXOTransaction;
-        
+
         // Skip coinbase transactions (they have no inputs)
         if (utxoTx.inputs.length === 0) {
           continue;
         }
 
         // Validate transaction is still valid in new chain context
-        const validationResult = await this.utxoTransactionManager.validateTransaction(
-          utxoTx,
-          this.utxoManager
-        );
+        const validationResult =
+          await this.utxoTransactionManager.validateTransaction(
+            utxoTx,
+            this.utxoManager
+          );
 
         if (validationResult.isValid) {
           addedTransactions.push(utxoTx);
           this.logger.debug(`Returned transaction to pool: ${utxoTx.id}`);
         } else {
-          this.logger.debug(`Invalid reverted transaction not returned to pool: ${utxoTx.id} - ${validationResult.errors.join(', ')}`);
+          this.logger.debug(
+            `Invalid reverted transaction not returned to pool: ${utxoTx.id} - ${validationResult.errors.join(', ')}`
+          );
         }
       }
     }
@@ -320,21 +368,28 @@ export class UTXOReorganizationManager implements IUTXOReorganizationManager {
       for (const tx of block.transactions) {
         const utxoTx = tx as unknown as UTXOTransaction;
         removedTransactions.push(utxoTx.id);
-        this.logger.debug(`Removed confirmed transaction from pool: ${utxoTx.id}`);
+        this.logger.debug(
+          `Removed confirmed transaction from pool: ${utxoTx.id}`
+        );
       }
     }
 
-    this.logger.debug(`Transaction pool updated: +${addedTransactions.length} transactions, -${removedTransactions.length} transactions`);
-    
+    this.logger.debug(
+      `Transaction pool updated: +${addedTransactions.length} transactions, -${removedTransactions.length} transactions`
+    );
+
     return { addedTransactions, removedTransactions };
   }
 
   /**
    * Find common ancestor block between two branches
    */
-  private findCommonAncestor(branchA: UTXOChainBranch, branchB: UTXOChainBranch): number {
+  private findCommonAncestor(
+    branchA: UTXOChainBranch,
+    branchB: UTXOChainBranch
+  ): number {
     const hashesA = new Set(branchA.utxoBlocks.map(b => b.hash));
-    
+
     // Find the highest block in branchB that exists in branchA
     for (let i = branchB.utxoBlocks.length - 1; i >= 0; i--) {
       const block = branchB.utxoBlocks[i];
@@ -351,18 +406,20 @@ export class UTXOReorganizationManager implements IUTXOReorganizationManager {
    * Create reorganization snapshot for rollback capability
    */
   private async createReorganizationSnapshot(): Promise<void> {
-    this.logger.debug('Creating reorganization snapshot for rollback capability');
+    this.logger.debug(
+      'Creating reorganization snapshot for rollback capability'
+    );
 
     // Create UTXO set backup
     const utxoSetBackup = this.utxoManager.getUTXOSetSnapshot();
-    
+
     // Create transaction pool backup (simplified)
     const transactionPoolBackup: UTXOTransaction[] = []; // In full implementation, get from transaction pool
 
     this.reorganizationSnapshot = {
       utxoSetBackup,
       transactionPoolBackup,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     };
 
     this.logger.debug('Reorganization snapshot created');
@@ -411,7 +468,9 @@ export class UTXOReorganizationManager implements IUTXOReorganizationManager {
       // Restore UTXOs consumed by inputs
       for (const input of utxoTx.inputs) {
         // In a full implementation, we'd restore the original UTXO from storage
-        this.logger.debug(`Need to restore UTXO: ${input.previousTxId}:${input.outputIndex}`);
+        this.logger.debug(
+          `Need to restore UTXO: ${input.previousTxId}:${input.outputIndex}`
+        );
       }
     }
   }
@@ -439,7 +498,7 @@ export class UTXOReorganizationManager implements IUTXOReorganizationManager {
           value: output.value,
           lockingScript: output.lockingScript,
           blockHeight: block.index,
-          isSpent: false
+          isSpent: false,
         };
         this.utxoManager.addUTXO(utxo);
       }
@@ -468,7 +527,9 @@ export class UTXOReorganizationManager implements IUTXOReorganizationManager {
 
       this.logger.info('Reorganization rollback completed');
     } catch (error) {
-      this.logger.error(`Rollback failed: ${error.message}`);
+      this.logger.error(
+        `Rollback failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
       throw error;
     }
   }
@@ -478,17 +539,17 @@ export class UTXOReorganizationManager implements IUTXOReorganizationManager {
    */
   private validateBranchStructure(branch: UTXOChainBranch): boolean {
     const blocks = branch.utxoBlocks;
-    
+
     if (blocks.length === 0) {
       return false;
     }
 
     // Validate chain continuity
     for (let i = 1; i < blocks.length; i++) {
-      if (blocks[i].previousHash !== blocks[i-1].hash) {
+      if (blocks[i].previousHash !== blocks[i - 1].hash) {
         return false;
       }
-      if (blocks[i].index !== blocks[i-1].index + 1) {
+      if (blocks[i].index !== blocks[i - 1].index + 1) {
         return false;
       }
     }
@@ -506,8 +567,8 @@ export class UTXOReorganizationManager implements IUTXOReorganizationManager {
    */
   private validateUTXOConsistency(branch: UTXOChainBranch): boolean {
     // Simplified validation - in full implementation, would validate all UTXO references
-    return branch.utxoBlocks.every(block => 
-      block.transactions.every(tx => 
+    return branch.utxoBlocks.every(block =>
+      block.transactions.every(tx =>
         this.isValidUTXOTransaction(tx as unknown as UTXOTransaction)
       )
     );

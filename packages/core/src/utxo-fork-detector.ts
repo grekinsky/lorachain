@@ -4,12 +4,13 @@ import {
   UTXOChainState,
   UTXOChainBranch,
   UTXOForkDetectionResult,
+  UTXOForkDetectionState,
   UTXOSetDelta,
   UTXOChainConfig,
   IUTXOForkDetector,
   UTXOTransaction,
   UTXO,
-  UTXOMessageType
+  UTXOMessageType,
 } from './types.js';
 import { UTXOCompressionManager } from './utxo-compression-manager.js';
 import { UTXOReliableDeliveryManager } from './utxo-reliable-delivery-manager.js';
@@ -17,18 +18,18 @@ import { UTXOManager } from './utxo.js';
 
 /**
  * UTXO Fork Detector - NO BACKWARDS COMPATIBILITY
- * 
+ *
  * Detects and classifies competing blockchain branches using UTXO-only validation.
  * Integrates with existing LoRa infrastructure for optimization and compliance.
- * 
+ *
  * Key Features:
  * - UTXO-only block validation (no legacy transaction support)
- * - LoRa fragmentation analysis using existing UTXOCompressionManager  
+ * - LoRa fragmentation analysis using existing UTXOCompressionManager
  * - Integration with existing UTXOReliableDeliveryManager
  * - Cryptographic fork detection with existing infrastructure
  */
 export class UTXOForkDetector implements IUTXOForkDetector {
-  private readonly logger: Logger;
+  private readonly logger = console;
   private readonly config: UTXOChainConfig;
   private readonly compressionManager: UTXOCompressionManager;
   private readonly reliableDelivery: UTXOReliableDeliveryManager;
@@ -44,7 +45,6 @@ export class UTXOForkDetector implements IUTXOForkDetector {
     reliableDelivery: UTXOReliableDeliveryManager,
     utxoManager: UTXOManager
   ) {
-    this.logger = new Logger('UTXOForkDetector');
     this.config = config;
     this.compressionManager = compressionManager;
     this.reliableDelivery = reliableDelivery;
@@ -57,37 +57,60 @@ export class UTXOForkDetector implements IUTXOForkDetector {
    * Detect UTXO fork with LoRa optimization analysis
    * NO LEGACY SUPPORT - only UTXO transactions
    */
-  detectUTXOFork(newBlock: Block, chainState: UTXOChainState): UTXOForkDetectionResult {
+  async detectUTXOFork(
+    newBlock: Block,
+    chainState: UTXOForkDetectionState
+  ): Promise<UTXOForkDetectionResult> {
     const startTime = Date.now();
-    this.logger.info(`Detecting UTXO fork for block ${newBlock.hash} at height ${newBlock.index}`);
+    this.logger.info(
+      `Detecting UTXO fork for block ${newBlock.hash} at height ${newBlock.index}`
+    );
 
     try {
       // CRITICAL: Validate block contains only UTXO transactions - NO LEGACY SUPPORT
       if (!this.isUTXOOnlyBlock(newBlock)) {
-        throw new Error('Fork detection failed: Non-UTXO transactions detected - breaking change from legacy support');
+        throw new Error(
+          'Fork detection failed: Non-UTXO transactions detected - breaking change from legacy support'
+        );
       }
 
       const parentBlock = this.findParentUTXOBlock(newBlock, chainState);
-      
+
       if (!parentBlock) {
-        return this.createOrphanResult(newBlock, chainState);
+        return await this.createOrphanResult(newBlock, chainState);
       }
 
-      const activeTip = chainState.activeBranch.utxoBlocks[chainState.activeBranch.utxoBlocks.length - 1];
-      
+      const activeTip =
+        chainState.activeBranch.utxoBlocks[
+          chainState.activeBranch.utxoBlocks.length - 1
+        ];
+
       if (newBlock.previousHash === activeTip.hash) {
         // Block extends active UTXO chain - simple extension
-        return this.createExtensionResult(newBlock, chainState);
+        return await this.createExtensionResult(newBlock, chainState);
       }
 
       // UTXO fork detected - find branch point and analyze
-      const branchPoint = this.findUTXOBranchPoint(newBlock, chainState.activeBranch);
-      const competingBranch = this.createCompetingUTXOBranch(newBlock, branchPoint, chainState);
+      const branchPoint = this.findUTXOBranchPoint(
+        newBlock,
+        chainState.activeBranch
+      );
+      const competingBranch = this.createCompetingUTXOBranch(
+        newBlock,
+        branchPoint,
+        chainState
+      );
 
-      return this.createForkResult(newBlock, branchPoint, competingBranch, chainState);
-
+      return await this.createForkResult(
+        newBlock,
+        branchPoint,
+        competingBranch,
+        chainState
+      );
     } catch (error) {
-      this.logger.error(`UTXO fork detection failed: ${error.message}`);
+      this.logger.error(
+        `UTXO fork detection failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
       throw error;
     } finally {
       const processingTime = Date.now() - startTime;
@@ -101,27 +124,35 @@ export class UTXOForkDetector implements IUTXOForkDetector {
    */
   findUTXOBranchPoint(block: Block, mainBranch: UTXOChainBranch): number {
     const cacheKey = `${block.hash}-${mainBranch.id}`;
-    
+
     if (this.branchPointCache.has(cacheKey)) {
       return this.branchPointCache.get(cacheKey)!;
     }
 
     let currentBlock = block;
     const mainBlockHashes = new Set(mainBranch.utxoBlocks.map(b => b.hash));
-    
+
     // Trace back until we find a common UTXO ancestor
     let depth = 0;
-    while (currentBlock && !mainBlockHashes.has(currentBlock.previousHash) && depth < this.config.maxReorganizationDepth) {
-      currentBlock = this.findUTXOBlockByHash(currentBlock.previousHash);
+    while (
+      currentBlock &&
+      !mainBlockHashes.has(currentBlock.previousHash) &&
+      depth < this.config.maxReorganizationDepth
+    ) {
+      const parentBlock = this.findUTXOBlockByHash(currentBlock.previousHash);
+      if (!parentBlock) break;
+      currentBlock = parentBlock;
       depth++;
     }
-    
+
     const branchPoint = currentBlock ? currentBlock.index : 0;
-    
+
     // Cache the result for future lookups
     this.branchPointCache.set(cacheKey, branchPoint);
-    
-    this.logger.debug(`Found UTXO branch point at height ${branchPoint} after ${depth} steps`);
+
+    this.logger.debug(
+      `Found UTXO branch point at height ${branchPoint} after ${depth} steps`
+    );
     return branchPoint;
   }
 
@@ -162,26 +193,36 @@ export class UTXOForkDetector implements IUTXOForkDetector {
   /**
    * Estimate LoRa fragmentation requirements using existing compression infrastructure
    */
-  estimateLoRaFragmentation(block: Block): boolean {
+  async estimateLoRaFragmentation(block: Block): Promise<boolean> {
     try {
       // Use existing compression manager to estimate compressed size
-      const compressionResult = this.compressionManager.compressIfBeneficial(
-        Buffer.from(JSON.stringify(block)),
-        UTXOMessageType.BLOCK
-      );
+      const blockData = JSON.stringify(block);
+      const compressionResult =
+        await this.compressionManager.compressIfBeneficial(
+          blockData,
+          UTXOMessageType.BLOCK
+        );
 
-      const estimatedSize = compressionResult.compressedData?.length || Buffer.from(JSON.stringify(block)).length;
-      
+      const estimatedSize = compressionResult.isCompressed
+        ? typeof compressionResult.data === 'string'
+          ? Buffer.from(compressionResult.data).length
+          : compressionResult.data.length
+        : Buffer.from(JSON.stringify(block)).length;
+
       // Check if block exceeds LoRa 256-byte limit and requires fragmentation
       const fragmentationRequired = estimatedSize > this.config.maxMessageSize;
-      
+
       if (fragmentationRequired) {
-        this.logger.debug(`Block ${block.hash} requires fragmentation: ${estimatedSize} > ${this.config.maxMessageSize} bytes`);
+        this.logger.debug(
+          `Block ${block.hash} requires fragmentation: ${estimatedSize} > ${this.config.maxMessageSize} bytes`
+        );
       }
 
       return fragmentationRequired;
     } catch (error) {
-      this.logger.warn(`Failed to estimate LoRa fragmentation for block ${block.hash}: ${error.message}`);
+      this.logger.warn(
+        `Failed to estimate LoRa fragmentation for block ${block.hash}: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
       return true; // Assume fragmentation required on error (safe default)
     }
   }
@@ -189,25 +230,31 @@ export class UTXOForkDetector implements IUTXOForkDetector {
   /**
    * Create orphan block result with compression analysis
    */
-  private createOrphanResult(block: Block, chainState: UTXOChainState): UTXOForkDetectionResult {
-    const compressionInfo = this.analyzeBlockCompression(block);
-    
+  private async createOrphanResult(
+    block: Block,
+    chainState: UTXOForkDetectionState
+  ): Promise<UTXOForkDetectionResult> {
+    const compressionInfo = await this.analyzeBlockCompression(block);
+
     return {
       type: 'orphan',
       utxoBlock: block,
       reason: 'Parent UTXO block not found in chain state',
       compressionInfo,
-      fragmentationRequired: this.estimateLoRaFragmentation(block),
-      timestamp: Date.now()
+      fragmentationRequired: await this.estimateLoRaFragmentation(block),
+      timestamp: Date.now(),
     };
   }
 
   /**
    * Create chain extension result with UTXO delta analysis
    */
-  private createExtensionResult(block: Block, chainState: UTXOChainState): UTXOForkDetectionResult {
+  private async createExtensionResult(
+    block: Block,
+    chainState: UTXOForkDetectionState
+  ): Promise<UTXOForkDetectionResult> {
     const utxoSetDelta = this.calculateUTXOSetDelta(block, chainState);
-    const compressionInfo = this.analyzeBlockCompression(block);
+    const compressionInfo = await this.analyzeBlockCompression(block);
 
     return {
       type: 'extension',
@@ -215,22 +262,25 @@ export class UTXOForkDetector implements IUTXOForkDetector {
       branch: chainState.activeBranch,
       utxoSetDelta,
       compressionInfo,
-      fragmentationRequired: this.estimateLoRaFragmentation(block),
-      timestamp: Date.now()
+      fragmentationRequired: await this.estimateLoRaFragmentation(block),
+      timestamp: Date.now(),
     };
   }
 
   /**
    * Create fork result with competing branch analysis
    */
-  private createForkResult(
+  private async createForkResult(
     block: Block,
     branchPoint: number,
     competingBranch: UTXOChainBranch,
-    chainState: UTXOChainState
-  ): UTXOForkDetectionResult {
-    const compressionInfo = this.analyzeBlockCompression(block);
-    const utxoSetDelta = this.calculateBranchUTXODelta(competingBranch, chainState.activeBranch);
+    chainState: UTXOForkDetectionState
+  ): Promise<UTXOForkDetectionResult> {
+    const compressionInfo = await this.analyzeBlockCompression(block);
+    const utxoSetDelta = this.calculateBranchUTXODelta(
+      competingBranch,
+      chainState.activeBranch
+    );
 
     return {
       type: 'fork',
@@ -239,8 +289,8 @@ export class UTXOForkDetector implements IUTXOForkDetector {
       competingBranch,
       utxoSetDelta,
       compressionInfo,
-      fragmentationRequired: this.estimateLoRaFragmentation(block),
-      timestamp: Date.now()
+      fragmentationRequired: await this.estimateLoRaFragmentation(block),
+      timestamp: Date.now(),
     };
   }
 
@@ -250,18 +300,19 @@ export class UTXOForkDetector implements IUTXOForkDetector {
   private createCompetingUTXOBranch(
     newBlock: Block,
     branchPoint: number,
-    chainState: UTXOChainState
+    chainState: UTXOForkDetectionState
   ): UTXOChainBranch {
     const branchId = `branch-${newBlock.hash}-${Date.now()}`;
-    
+
     // Get blocks from branch point to new block
     const branchBlocks = this.collectBranchBlocks(newBlock, branchPoint);
-    
+
     return {
       id: branchId,
       utxoBlocks: branchBlocks,
       height: newBlock.index,
-      cumulativeDifficulty: this.calculateBranchCumulativeDifficulty(branchBlocks),
+      cumulativeDifficulty:
+        this.calculateBranchCumulativeDifficulty(branchBlocks),
       totalWork: this.calculateBranchTotalWork(branchBlocks),
       utxoMerkleRoot: newBlock.merkleRoot,
       lastBlockHash: newBlock.hash,
@@ -269,7 +320,7 @@ export class UTXOForkDetector implements IUTXOForkDetector {
       isActive: false,
       utxoSetHash: this.calculateUTXOSetHash(branchBlocks),
       timestamp: Date.now(),
-      parentBranchId: chainState.activeBranch.id
+      parentBranchId: chainState.activeBranch.id,
     };
   }
 
@@ -282,7 +333,9 @@ export class UTXOForkDetector implements IUTXOForkDetector {
 
     while (currentBlock && currentBlock.index > branchPoint) {
       blocks.unshift(currentBlock); // Add to beginning to maintain order
-      currentBlock = this.findUTXOBlockByHash(currentBlock.previousHash);
+      const parentBlock = this.findUTXOBlockByHash(currentBlock.previousHash);
+      if (!parentBlock) break;
+      currentBlock = parentBlock;
     }
 
     return blocks;
@@ -291,7 +344,10 @@ export class UTXOForkDetector implements IUTXOForkDetector {
   /**
    * Calculate UTXO set delta for a single block
    */
-  private calculateUTXOSetDelta(block: Block, chainState: UTXOChainState): UTXOSetDelta {
+  private calculateUTXOSetDelta(
+    block: Block,
+    chainState: UTXOForkDetectionState
+  ): UTXOSetDelta {
     const addedUTXOs: UTXO[] = [];
     const removedUTXOs: Array<{ txId: string; outputIndex: number }> = [];
     const transactionsAffected: string[] = [];
@@ -310,7 +366,7 @@ export class UTXOForkDetector implements IUTXOForkDetector {
           value: output.value,
           lockingScript: output.lockingScript,
           blockHeight: block.index,
-          isSpent: false
+          isSpent: false,
         };
         addedUTXOs.push(utxo);
         totalValueChange += output.value;
@@ -320,7 +376,7 @@ export class UTXOForkDetector implements IUTXOForkDetector {
       for (const input of utxoTx.inputs) {
         removedUTXOs.push({
           txId: input.previousTxId,
-          outputIndex: input.outputIndex
+          outputIndex: input.outputIndex,
         });
         // Note: We don't subtract value here as we'd need to look up the UTXO
       }
@@ -331,19 +387,22 @@ export class UTXOForkDetector implements IUTXOForkDetector {
       removedUTXOs,
       modifiedUTXOs: [], // Not applicable for single block delta
       totalValueChange,
-      transactionsAffected
+      transactionsAffected,
     };
   }
 
   /**
    * Calculate UTXO delta between two branches
    */
-  private calculateBranchUTXODelta(branchA: UTXOChainBranch, branchB: UTXOChainBranch): UTXOSetDelta {
+  private calculateBranchUTXODelta(
+    branchA: UTXOChainBranch,
+    branchB: UTXOChainBranch
+  ): UTXOSetDelta {
     // This is a simplified implementation
     // In a full implementation, we'd need to calculate the actual UTXO set differences
-    
+
     const transactionsAffected: string[] = [];
-    
+
     // Collect all affected transactions from both branches
     for (const block of [...branchA.utxoBlocks, ...branchB.utxoBlocks]) {
       for (const tx of block.transactions) {
@@ -359,44 +418,53 @@ export class UTXOForkDetector implements IUTXOForkDetector {
       removedUTXOs: [],
       modifiedUTXOs: [],
       totalValueChange: 0,
-      transactionsAffected
+      transactionsAffected,
     };
   }
 
   /**
    * Analyze block compression for LoRa optimization
    */
-  private analyzeBlockCompression(block: Block): {
+  private async analyzeBlockCompression(block: Block): Promise<{
     algorithm: string;
     compressedSize: number;
     compressionRatio: number;
     fragmentationRequired: boolean;
-  } {
+  }> {
     try {
       const originalSize = Buffer.from(JSON.stringify(block)).length;
-      const compressionResult = this.compressionManager.compressIfBeneficial(
-        Buffer.from(JSON.stringify(block)),
-        UTXOMessageType.BLOCK
-      );
+      const blockData = JSON.stringify(block);
+      const compressionResult =
+        await this.compressionManager.compressIfBeneficial(
+          blockData,
+          UTXOMessageType.BLOCK
+        );
 
-      const compressedSize = compressionResult.compressedData?.length || originalSize;
-      const algorithm = compressionResult.algorithm || 'none';
-      const compressionRatio = originalSize > 0 ? compressedSize / originalSize : 1;
+      const compressedSize = compressionResult.isCompressed
+        ? typeof compressionResult.data === 'string'
+          ? Buffer.from(compressionResult.data).length
+          : compressionResult.data.length
+        : originalSize;
+      const algorithm = compressionResult.isCompressed ? 'compressed' : 'none';
+      const compressionRatio =
+        originalSize > 0 ? compressedSize / originalSize : 1;
       const fragmentationRequired = compressedSize > this.config.maxMessageSize;
 
       return {
         algorithm,
         compressedSize,
         compressionRatio,
-        fragmentationRequired
+        fragmentationRequired,
       };
     } catch (error) {
-      this.logger.warn(`Failed to analyze block compression: ${error.message}`);
+      this.logger.warn(
+        `Failed to analyze block compression: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
       return {
         algorithm: 'none',
         compressedSize: Buffer.from(JSON.stringify(block)).length,
         compressionRatio: 1,
-        fragmentationRequired: true
+        fragmentationRequired: true,
       };
     }
   }
@@ -417,36 +485,49 @@ export class UTXOForkDetector implements IUTXOForkDetector {
   /**
    * Find parent UTXO block in chain state
    */
-  private findParentUTXOBlock(block: Block, chainState: UTXOChainState): Block | null {
+  private findParentUTXOBlock(
+    block: Block,
+    chainState: UTXOForkDetectionState
+  ): Block | null {
     // Check active branch first
     const activeBlocks = chainState.activeBranch.utxoBlocks;
-    const parentInActiveBranch = activeBlocks.find(b => b.hash === block.previousHash);
-    
+    const parentInActiveBranch = activeBlocks.find(
+      b => b.hash === block.previousHash
+    );
+
     if (parentInActiveBranch) {
       return parentInActiveBranch;
     }
 
     // Check other branches
     for (const branch of chainState.branches.values()) {
-      const parentInBranch = branch.utxoBlocks.find(b => b.hash === block.previousHash);
+      const parentInBranch = branch.utxoBlocks.find(
+        b => b.hash === block.previousHash
+      );
       if (parentInBranch) {
         return parentInBranch;
       }
     }
 
     // Check orphan blocks
-    return chainState.orphanUTXOBlocks.find(b => b.hash === block.previousHash) || null;
+    return (
+      chainState.orphanUTXOBlocks.find(b => b.hash === block.previousHash) ||
+      null
+    );
   }
 
   /**
    * Calculate cumulative difficulty for branch blocks
    */
   private calculateBranchCumulativeDifficulty(blocks: Block[]): bigint {
-    return blocks.reduce((total, block) => total + BigInt(block.difficulty), 0n);
+    return blocks.reduce(
+      (total, block) => total + BigInt(block.difficulty),
+      0n
+    );
   }
 
   /**
-   * Calculate total work for branch blocks  
+   * Calculate total work for branch blocks
    */
   private calculateBranchTotalWork(blocks: Block[]): bigint {
     // For simplicity, using same as cumulative difficulty

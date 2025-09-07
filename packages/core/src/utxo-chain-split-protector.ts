@@ -6,16 +6,16 @@ import {
   IUTXOChainSplitProtector,
   EnhancedNetworkTopology,
   Block,
-  UTXOTransaction
+  UTXOTransaction,
 } from './types.js';
 import { NodeDiscoveryProtocol } from './node-discovery-protocol.js';
 
 /**
  * UTXO Chain Split Protector - NO BACKWARDS COMPATIBILITY
- * 
+ *
  * Detects and analyzes blockchain attacks and suspicious chain splits.
  * Integrates with existing NodeDiscoveryProtocol for network topology awareness.
- * 
+ *
  * Key Features:
  * - Attack detection: selfish mining, eclipse attacks, long-range attacks
  * - Chain split analysis with security risk assessment
@@ -25,36 +25,41 @@ import { NodeDiscoveryProtocol } from './node-discovery-protocol.js';
  * - Security recommendations based on threat analysis
  */
 export class UTXOChainSplitProtector implements IUTXOChainSplitProtector {
-  private readonly logger: Logger;
+  private readonly logger = console;
   private readonly config: UTXOChainConfig;
   private readonly nodeDiscovery?: NodeDiscoveryProtocol;
 
   // Security analysis caches and history
   private readonly analysisCache = new Map<string, UTXOChainSplitAnalysis>();
-  private readonly minerHistoryCache = new Map<string, { blocks: number; lastSeen: number }>();
+  private readonly minerHistoryCache = new Map<
+    string,
+    { blocks: number; lastSeen: number }
+  >();
   private readonly suspiciousPatterns = new Set<string>();
 
-  constructor(
-    config: UTXOChainConfig,
-    nodeDiscovery?: NodeDiscoveryProtocol
-  ) {
-    this.logger = new Logger('UTXOChainSplitProtector');
+  constructor(config: UTXOChainConfig, nodeDiscovery?: NodeDiscoveryProtocol) {
     this.config = config;
     this.nodeDiscovery = nodeDiscovery;
 
-    this.logger.info('UTXOChainSplitProtector initialized with UTXO-only security monitoring');
+    this.logger.info(
+      'UTXOChainSplitProtector initialized with UTXO-only security monitoring'
+    );
   }
 
   /**
    * Analyze UTXO chain split for security threats
    * Integrates with existing NodeDiscoveryProtocol for topology awareness
    */
-  analyzeUTXOChainSplit(branches: Map<string, UTXOChainBranch>): UTXOChainSplitAnalysis {
+  analyzeUTXOChainSplit(
+    branches: Map<string, UTXOChainBranch>
+  ): UTXOChainSplitAnalysis {
     const startTime = Date.now();
-    this.logger.info(`Analyzing UTXO chain split across ${branches.size} branches`);
+    this.logger.info(
+      `Analyzing UTXO chain split across ${branches.size} branches`
+    );
 
     const cacheKey = Array.from(branches.keys()).sort().join('-');
-    
+
     // Check cache first
     if (this.analysisCache.has(cacheKey)) {
       const cachedAnalysis = this.analysisCache.get(cacheKey)!;
@@ -70,7 +75,7 @@ export class UTXOChainSplitProtector implements IUTXOChainSplitProtector {
       competingBranches: [],
       riskLevel: 'low',
       recommendations: [],
-      timestamp: Date.now()
+      timestamp: Date.now(),
     };
 
     try {
@@ -87,7 +92,9 @@ export class UTXOChainSplitProtector implements IUTXOChainSplitProtector {
       if (sortedBranches.length === 0) {
         analysis.riskLevel = 'high';
         analysis.isSuspicious = true;
-        analysis.recommendations.push('No valid UTXO branches found - potential data corruption');
+        analysis.recommendations.push(
+          'No valid UTXO branches found - potential data corruption'
+        );
         return this.cacheAndReturn(cacheKey, analysis);
       }
 
@@ -98,25 +105,39 @@ export class UTXOChainSplitProtector implements IUTXOChainSplitProtector {
 
       // Calculate split depth
       if (secondaryBranch) {
-        analysis.splitDepth = Math.abs(primaryBranch.height - secondaryBranch.height);
+        analysis.splitDepth = Math.abs(
+          primaryBranch.height - secondaryBranch.height
+        );
       }
 
       // Detect suspicious patterns
       this.detectDeepSplit(analysis, primaryBranch, secondaryBranch);
       this.detectEqualLengthChains(analysis, sortedBranches);
       this.analyzeMiningDistribution(analysis, sortedBranches);
-      
+
       // Advanced attack detection
       if (this.detectSelfishMining(sortedBranches)) {
-        this.addSecurityThreat(analysis, 'Selfish mining pattern detected', 'high');
+        this.addSecurityThreat(
+          analysis,
+          'Selfish mining pattern detected',
+          'high'
+        );
       }
 
       if (this.detectEclipseAttack(sortedBranches, this.getNetworkTopology())) {
-        this.addSecurityThreat(analysis, 'Potential eclipse attack detected', 'high');
+        this.addSecurityThreat(
+          analysis,
+          'Potential eclipse attack detected',
+          'high'
+        );
       }
 
       if (this.detectLongRangeAttack(sortedBranches)) {
-        this.addSecurityThreat(analysis, 'Long-range attack pattern detected', 'high');
+        this.addSecurityThreat(
+          analysis,
+          'Long-range attack pattern detected',
+          'high'
+        );
       }
 
       // Network topology analysis
@@ -126,15 +147,20 @@ export class UTXOChainSplitProtector implements IUTXOChainSplitProtector {
       this.generateSecurityRecommendations(analysis);
 
       const processingTime = Date.now() - startTime;
-      this.logger.info(`Chain split analysis completed in ${processingTime}ms - Risk: ${analysis.riskLevel}`);
+      this.logger.info(
+        `Chain split analysis completed in ${processingTime}ms - Risk: ${analysis.riskLevel}`
+      );
 
       return this.cacheAndReturn(cacheKey, analysis);
-
     } catch (error) {
-      this.logger.error(`Chain split analysis failed: ${error.message}`);
+      this.logger.error(
+        `Chain split analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
       analysis.riskLevel = 'high';
       analysis.isSuspicious = true;
-      analysis.recommendations.push(`Analysis failed: ${error.message}`);
+      analysis.recommendations.push(
+        `Analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
       return analysis;
     }
   }
@@ -149,15 +175,19 @@ export class UTXOChainSplitProtector implements IUTXOChainSplitProtector {
     for (const branch of branches) {
       const recentBlocks = branch.utxoBlocks.slice(-20); // Last 20 blocks
       const blockIntervals = this.calculateBlockIntervals(recentBlocks);
-      
+
       if (this.hasAnomalousIntervals(blockIntervals)) {
-        this.logger.warn(`Anomalous block intervals detected in branch ${branch.id}`);
+        this.logger.warn(
+          `Anomalous block intervals detected in branch ${branch.id}`
+        );
         return true;
       }
 
       // Check for sudden difficulty spikes followed by normal mining
       if (this.detectDifficultyManipulation(recentBlocks)) {
-        this.logger.warn(`Difficulty manipulation detected in branch ${branch.id}`);
+        this.logger.warn(
+          `Difficulty manipulation detected in branch ${branch.id}`
+        );
         return true;
       }
     }
@@ -168,11 +198,16 @@ export class UTXOChainSplitProtector implements IUTXOChainSplitProtector {
   /**
    * Detect eclipse attack patterns
    */
-  detectEclipseAttack(branches: UTXOChainBranch[], topology?: EnhancedNetworkTopology): boolean {
+  detectEclipseAttack(
+    branches: UTXOChainBranch[],
+    topology?: EnhancedNetworkTopology
+  ): boolean {
     this.logger.debug('Analyzing for eclipse attack patterns');
 
     if (!topology) {
-      this.logger.debug('No network topology available for eclipse attack detection');
+      this.logger.debug(
+        'No network topology available for eclipse attack detection'
+      );
       return false;
     }
 
@@ -180,16 +215,22 @@ export class UTXOChainSplitProtector implements IUTXOChainSplitProtector {
     const connectedNodes = topology.nodes.size;
     const expectedNodes = this.config.nodeDiscoveryEnabled ? 10 : 5; // Estimated minimum
 
-    if (connectedNodes < expectedNodes * 0.3) { // Less than 30% of expected nodes
-      this.logger.warn(`Low node connectivity detected: ${connectedNodes} nodes (expected ~${expectedNodes})`);
+    if (connectedNodes < expectedNodes * 0.3) {
+      // Less than 30% of expected nodes
+      this.logger.warn(
+        `Low node connectivity detected: ${connectedNodes} nodes (expected ~${expectedNodes})`
+      );
       return true;
     }
 
     // Check for chains that are only known by a small subset of nodes
     for (const branch of branches) {
       const knownByNodes = this.countNodesKnowingBranch(branch, topology);
-      if (knownByNodes < connectedNodes * 0.1) { // Less than 10% of nodes know this chain
-        this.logger.warn(`Chain ${branch.id} known by only ${knownByNodes}/${connectedNodes} nodes`);
+      if (knownByNodes < connectedNodes * 0.1) {
+        // Less than 10% of nodes know this chain
+        this.logger.warn(
+          `Chain ${branch.id} known by only ${knownByNodes}/${connectedNodes} nodes`
+        );
         return true;
       }
     }
@@ -204,26 +245,34 @@ export class UTXOChainSplitProtector implements IUTXOChainSplitProtector {
     this.logger.debug('Analyzing for long-range attack patterns');
 
     const currentTime = Date.now();
-    
+
     for (const branch of branches) {
       // Check for very old branches with recent activity
       const oldestBlock = branch.utxoBlocks[0];
       const newestBlock = branch.utxoBlocks[branch.utxoBlocks.length - 1];
-      
+
       if (oldestBlock && newestBlock) {
         const branchSpan = newestBlock.timestamp - oldestBlock.timestamp;
         const timeSinceNewestBlock = currentTime - newestBlock.timestamp;
-        
+
         // Suspicious if branch spans a long time but has very recent activity
-        if (branchSpan > 24 * 60 * 60 * 1000 && timeSinceNewestBlock < 60 * 60 * 1000) { // 24h span, 1h recent
-          this.logger.warn(`Potential long-range attack: branch ${branch.id} spans ${branchSpan/1000/60/60}h but has recent activity`);
+        if (
+          branchSpan > 24 * 60 * 60 * 1000 &&
+          timeSinceNewestBlock < 60 * 60 * 1000
+        ) {
+          // 24h span, 1h recent
+          this.logger.warn(
+            `Potential long-range attack: branch ${branch.id} spans ${branchSpan / 1000 / 60 / 60}h but has recent activity`
+          );
           return true;
         }
       }
 
       // Check for rapid mining of old blocks
       if (this.detectRapidHistoricalMining(branch)) {
-        this.logger.warn(`Rapid historical mining detected in branch ${branch.id}`);
+        this.logger.warn(
+          `Rapid historical mining detected in branch ${branch.id}`
+        );
         return true;
       }
     }
@@ -245,9 +294,11 @@ export class UTXOChainSplitProtector implements IUTXOChainSplitProtector {
       for (let i = 1; i < branch.utxoBlocks.length; i++) {
         const prevBlock = branch.utxoBlocks[i - 1];
         const currentBlock = branch.utxoBlocks[i];
-        
+
         if (currentBlock.previousHash !== prevBlock.hash) {
-          this.logger.warn(`Chain discontinuity in branch ${branch.id} at height ${currentBlock.index}`);
+          this.logger.warn(
+            `Chain discontinuity in branch ${branch.id} at height ${currentBlock.index}`
+          );
           return false;
         }
       }
@@ -255,14 +306,18 @@ export class UTXOChainSplitProtector implements IUTXOChainSplitProtector {
       // Validate all blocks contain only UTXO transactions
       for (const block of branch.utxoBlocks) {
         if (!this.validateUTXOOnlyBlock(block)) {
-          this.logger.warn(`Non-UTXO block detected in branch ${branch.id} at height ${block.index}`);
+          this.logger.warn(
+            `Non-UTXO block detected in branch ${branch.id} at height ${block.index}`
+          );
           return false;
         }
       }
 
       return true;
     } catch (error) {
-      this.logger.error(`Chain integrity validation failed for branch ${branch.id}: ${error.message}`);
+      this.logger.error(
+        `Chain integrity validation failed for branch ${branch.id}: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
       return false;
     }
   }
@@ -278,9 +333,13 @@ export class UTXOChainSplitProtector implements IUTXOChainSplitProtector {
     if (!secondaryBranch) return;
 
     const splitDepth = Math.abs(primaryBranch.height - secondaryBranch.height);
-    
+
     if (splitDepth > this.config.suspiciousSplitThreshold) {
-      this.addSecurityThreat(analysis, `Deep chain split detected: ${splitDepth} blocks`, 'high');
+      this.addSecurityThreat(
+        analysis,
+        `Deep chain split detected: ${splitDepth} blocks`,
+        'high'
+      );
       analysis.splitDepth = splitDepth;
     }
   }
@@ -288,12 +347,17 @@ export class UTXOChainSplitProtector implements IUTXOChainSplitProtector {
   /**
    * Detect equal-length competing chains
    */
-  private detectEqualLengthChains(analysis: UTXOChainSplitAnalysis, branches: UTXOChainBranch[]): void {
+  private detectEqualLengthChains(
+    analysis: UTXOChainSplitAnalysis,
+    branches: UTXOChainBranch[]
+  ): void {
     if (branches.length < 2) return;
 
     const primaryHeight = branches[0].height;
-    const equalLengthBranches = branches.filter(b => b.height === primaryHeight);
-    
+    const equalLengthBranches = branches.filter(
+      b => b.height === primaryHeight
+    );
+
     if (equalLengthBranches.length > 1) {
       this.addSecurityThreat(
         analysis,
@@ -306,7 +370,10 @@ export class UTXOChainSplitProtector implements IUTXOChainSplitProtector {
   /**
    * Analyze mining distribution across branches
    */
-  private analyzeMiningDistribution(analysis: UTXOChainSplitAnalysis, branches: UTXOChainBranch[]): void {
+  private analyzeMiningDistribution(
+    analysis: UTXOChainSplitAnalysis,
+    branches: UTXOChainBranch[]
+  ): void {
     const minerCounts = new Map<string, number>();
     let totalBlocks = 0;
 
@@ -314,7 +381,10 @@ export class UTXOChainSplitProtector implements IUTXOChainSplitProtector {
     for (const branch of branches) {
       for (const block of branch.utxoBlocks) {
         if (block.validator) {
-          minerCounts.set(block.validator, (minerCounts.get(block.validator) || 0) + 1);
+          minerCounts.set(
+            block.validator,
+            (minerCounts.get(block.validator) || 0) + 1
+          );
           totalBlocks++;
         }
       }
@@ -322,14 +392,16 @@ export class UTXOChainSplitProtector implements IUTXOChainSplitProtector {
 
     if (totalBlocks === 0) return;
 
-    const sortedMiners = Array.from(minerCounts.entries())
-      .sort((a, b) => b[1] - a[1]);
+    const sortedMiners = Array.from(minerCounts.entries()).sort(
+      (a, b) => b[1] - a[1]
+    );
 
     const minerDistribution = {
       totalMiners: minerCounts.size,
       dominantMiner: sortedMiners[0]?.[0] || 'unknown',
-      dominantMinerPercentage: totalBlocks > 0 ? (sortedMiners[0]?.[1] || 0) / totalBlocks : 0,
-      minerDistribution: sortedMiners
+      dominantMinerPercentage:
+        totalBlocks > 0 ? (sortedMiners[0]?.[1] || 0) / totalBlocks : 0,
+      minerDistribution: sortedMiners,
     };
 
     analysis.minerDistribution = minerDistribution;
@@ -355,9 +427,11 @@ export class UTXOChainSplitProtector implements IUTXOChainSplitProtector {
    */
   private analyzeNetworkTopology(analysis: UTXOChainSplitAnalysis): void {
     const topology = this.getNetworkTopology();
-    
+
     if (!topology) {
-      analysis.recommendations.push('Enable node discovery for enhanced security monitoring');
+      analysis.recommendations.push(
+        'Enable node discovery for enhanced security monitoring'
+      );
       return;
     }
 
@@ -368,40 +442,65 @@ export class UTXOChainSplitProtector implements IUTXOChainSplitProtector {
     analysis.networkTopology = {
       connectedNodes,
       isolatedNodes,
-      partitionDetected
+      partitionDetected,
     };
 
     if (partitionDetected) {
-      this.addSecurityThreat(analysis, 'Network partition detected - potential eclipse attack', 'high');
+      this.addSecurityThreat(
+        analysis,
+        'Network partition detected - potential eclipse attack',
+        'high'
+      );
     }
 
     if (isolatedNodes > connectedNodes * 0.2) {
-      this.addSecurityThreat(analysis, `High number of isolated nodes: ${isolatedNodes}`, 'medium');
+      this.addSecurityThreat(
+        analysis,
+        `High number of isolated nodes: ${isolatedNodes}`,
+        'medium'
+      );
     }
   }
 
   /**
    * Generate security recommendations based on analysis
    */
-  private generateSecurityRecommendations(analysis: UTXOChainSplitAnalysis): void {
+  private generateSecurityRecommendations(
+    analysis: UTXOChainSplitAnalysis
+  ): void {
     if (analysis.riskLevel === 'low' && !analysis.isSuspicious) {
-      analysis.recommendations.push('Chain appears healthy - continue normal operations');
+      analysis.recommendations.push(
+        'Chain appears healthy - continue normal operations'
+      );
       return;
     }
 
     if (analysis.splitDepth > this.config.suspiciousSplitThreshold) {
-      analysis.recommendations.push('Wait for additional confirmations before considering transactions final');
-      analysis.recommendations.push('Monitor network for potential attack patterns');
+      analysis.recommendations.push(
+        'Wait for additional confirmations before considering transactions final'
+      );
+      analysis.recommendations.push(
+        'Monitor network for potential attack patterns'
+      );
     }
 
-    if (analysis.minerDistribution?.dominantMinerPercentage && analysis.minerDistribution.dominantMinerPercentage > 0.5) {
-      analysis.recommendations.push('Critical: Single entity controls majority of mining - consider network unsafe');
+    if (
+      analysis.minerDistribution?.dominantMinerPercentage &&
+      analysis.minerDistribution.dominantMinerPercentage > 0.5
+    ) {
+      analysis.recommendations.push(
+        'Critical: Single entity controls majority of mining - consider network unsafe'
+      );
       analysis.recommendations.push('Implement emergency response procedures');
     }
 
     if (analysis.networkTopology?.partitionDetected) {
-      analysis.recommendations.push('Network partition detected - verify connectivity to honest nodes');
-      analysis.recommendations.push('Consider waiting for network healing before processing transactions');
+      analysis.recommendations.push(
+        'Network partition detected - verify connectivity to honest nodes'
+      );
+      analysis.recommendations.push(
+        'Consider waiting for network healing before processing transactions'
+      );
     }
   }
 
@@ -415,9 +514,12 @@ export class UTXOChainSplitProtector implements IUTXOChainSplitProtector {
   ): void {
     analysis.isSuspicious = true;
     analysis.recommendations.push(message);
-    
+
     // Escalate risk level if necessary
-    if (riskLevel === 'high' || (riskLevel === 'medium' && analysis.riskLevel === 'low')) {
+    if (
+      riskLevel === 'high' ||
+      (riskLevel === 'medium' && analysis.riskLevel === 'low')
+    ) {
       analysis.riskLevel = riskLevel;
     }
   }
@@ -428,17 +530,18 @@ export class UTXOChainSplitProtector implements IUTXOChainSplitProtector {
   private calculateBlockIntervals(blocks: Block[]): number[] {
     const intervals: number[] = [];
     for (let i = 1; i < blocks.length; i++) {
-      intervals.push(blocks[i].timestamp - blocks[i-1].timestamp);
+      intervals.push(blocks[i].timestamp - blocks[i - 1].timestamp);
     }
     return intervals;
   }
 
   private hasAnomalousIntervals(intervals: number[]): boolean {
     if (intervals.length < 5) return false;
-    
-    const avgInterval = intervals.reduce((sum, interval) => sum + interval, 0) / intervals.length;
+
+    const avgInterval =
+      intervals.reduce((sum, interval) => sum + interval, 0) / intervals.length;
     const threshold = avgInterval * 0.1; // Very fast blocks (10% of average)
-    
+
     // Look for clusters of very fast blocks
     let fastBlockCount = 0;
     for (const interval of intervals) {
@@ -446,38 +549,47 @@ export class UTXOChainSplitProtector implements IUTXOChainSplitProtector {
         fastBlockCount++;
       }
     }
-    
+
     return fastBlockCount > intervals.length * 0.3; // More than 30% are suspiciously fast
   }
 
   private detectDifficultyManipulation(blocks: Block[]): boolean {
     if (blocks.length < 5) return false;
-    
+
     const difficulties = blocks.map(b => b.difficulty);
-    const avgDifficulty = difficulties.reduce((sum, diff) => sum + diff, 0) / difficulties.length;
-    
+    const avgDifficulty =
+      difficulties.reduce((sum, diff) => sum + diff, 0) / difficulties.length;
+
     // Look for sudden spikes followed by normal levels
     for (let i = 1; i < difficulties.length - 1; i++) {
-      if (difficulties[i] > avgDifficulty * 2 && difficulties[i+1] < avgDifficulty * 1.2) {
+      if (
+        difficulties[i] > avgDifficulty * 2 &&
+        difficulties[i + 1] < avgDifficulty * 1.2
+      ) {
         return true;
       }
     }
-    
+
     return false;
   }
 
   private detectRapidHistoricalMining(branch: UTXOChainBranch): boolean {
     if (branch.utxoBlocks.length < 10) return false;
-    
+
     // Check if recent blocks were mined much faster than they should have been
     const recentBlocks = branch.utxoBlocks.slice(-10);
-    const timeSpan = recentBlocks[recentBlocks.length - 1].timestamp - recentBlocks[0].timestamp;
+    const timeSpan =
+      recentBlocks[recentBlocks.length - 1].timestamp -
+      recentBlocks[0].timestamp;
     const expectedTimeSpan = 10 * 5 * 60 * 1000; // 10 blocks * 5 minutes * 60 seconds * 1000ms
-    
+
     return timeSpan < expectedTimeSpan * 0.3; // Much faster than expected
   }
 
-  private countNodesKnowingBranch(branch: UTXOChainBranch, topology: EnhancedNetworkTopology): number {
+  private countNodesKnowingBranch(
+    branch: UTXOChainBranch,
+    topology: EnhancedNetworkTopology
+  ): number {
     // Simplified implementation - in reality would check which nodes have this branch
     return topology.nodes.size;
   }
@@ -497,13 +609,17 @@ export class UTXOChainSplitProtector implements IUTXOChainSplitProtector {
     // Simplified partition detection - in reality would use graph algorithms
     const totalNodes = topology.nodes.size;
     const connectedComponents = this.findConnectedComponents(topology);
-    
+
     // Consider it a partition if the largest component has less than 80% of nodes
-    const largestComponentSize = Math.max(...connectedComponents.map(c => c.size));
+    const largestComponentSize = Math.max(
+      ...connectedComponents.map(c => c.size)
+    );
     return largestComponentSize < totalNodes * 0.8;
   }
 
-  private findConnectedComponents(topology: EnhancedNetworkTopology): Set<string>[] {
+  private findConnectedComponents(
+    topology: EnhancedNetworkTopology
+  ): Set<string>[] {
     // Simplified connected components - would use proper graph traversal in full implementation
     return [new Set(topology.nodes.keys())];
   }
@@ -526,12 +642,17 @@ export class UTXOChainSplitProtector implements IUTXOChainSplitProtector {
     return this.nodeDiscovery?.getNetworkTopology();
   }
 
-  private cacheAndReturn(cacheKey: string, analysis: UTXOChainSplitAnalysis): UTXOChainSplitAnalysis {
+  private cacheAndReturn(
+    cacheKey: string,
+    analysis: UTXOChainSplitAnalysis
+  ): UTXOChainSplitAnalysis {
     this.analysisCache.set(cacheKey, analysis);
     // Clean old cache entries
     if (this.analysisCache.size > 100) {
       const oldestKey = this.analysisCache.keys().next().value;
-      this.analysisCache.delete(oldestKey);
+      if (oldestKey !== undefined) {
+        this.analysisCache.delete(oldestKey);
+      }
     }
     return analysis;
   }
