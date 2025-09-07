@@ -9,6 +9,13 @@ import type {
   GenesisConfig,
   NetworkParameters,
   InitialAllocation,
+  UTXOChainBranch,
+  UTXOChainState,
+  UTXOForkDetectionResult,
+  UTXOChainConfig,
+  UTXOChainSplitAnalysis,
+  EnhancedNetworkTopology,
+  UTXOMessageType
 } from './types.js';
 import { BlockManager } from './block.js';
 import { UTXOManager } from './utxo.js';
@@ -21,6 +28,13 @@ import {
   type DifficultyState,
 } from './difficulty.js';
 import { GenesisConfigManager } from './genesis/index.js';
+import { UTXOForkDetector } from './utxo-fork-detector.js';
+import { UTXOChainSelector } from './utxo-chain-selector.js';
+import { UTXOReorganizationManager } from './utxo-reorganization-manager.js';
+import { UTXOChainSplitProtector } from './utxo-chain-split-protector.js';
+import { UTXOCompressionManager } from './utxo-compression-manager.js';
+import { UTXOReliableDeliveryManager } from './utxo-reliable-delivery-manager.js';
+import { NodeDiscoveryProtocol } from './node-discovery-protocol.js';
 
 // Simple logger for development
 class SimpleLogger {
@@ -56,11 +70,36 @@ export class Blockchain {
   private chainId?: string;
   private initializationPromise?: Promise<void>;
 
+  // UTXO Chain Selection Components - NO BACKWARDS COMPATIBILITY
+  private readonly utxoForkDetector: UTXOForkDetector;
+  private readonly utxoChainSelector: UTXOChainSelector;
+  private readonly utxoReorganizationManager: UTXOReorganizationManager;
+  private readonly utxoChainSplitProtector: UTXOChainSplitProtector;
+  
+  // Competing branches management (UTXO-only)
+  private competingBranches: Map<string, UTXOChainBranch> = new Map();
+  private activeBranch: UTXOChainBranch;
+  private orphanUTXOBlocks: Block[] = [];
+  
+  // Chain selection configuration
+  private readonly chainSelectionConfig: UTXOChainConfig = {
+    maxReorganizationDepth: 10,
+    suspiciousSplitThreshold: 6,
+    nodeDiscoveryEnabled: true,
+    maxMessageSize: 256, // LoRa constraint
+    forkDetectionEnabled: true,
+    attackDetectionEnabled: true,
+    minConfirmationsForFinality: 6
+  };
+
   constructor(
     persistence: UTXOPersistenceManager,
     utxoManager: UTXOManager,
     difficultyConfig: Partial<DifficultyConfig>,
-    genesisConfig: GenesisConfig | string // REQUIRED - config object or chain ID
+    genesisConfig: GenesisConfig | string, // REQUIRED - config object or chain ID
+    compressionManager?: UTXOCompressionManager,
+    reliableDelivery?: UTXOReliableDeliveryManager,
+    nodeDiscovery?: NodeDiscoveryProtocol
   ) {
     this.persistence = persistence;
     this.utxoManager = utxoManager;
@@ -69,11 +108,61 @@ export class Blockchain {
     // Initialize GenesisConfigManager - now required
     this.genesisConfigManager = new GenesisConfigManager(this.persistence);
 
+    // Initialize UTXO chain selection components - NO BACKWARDS COMPATIBILITY
+    const defaultCompressionManager = compressionManager || new UTXOCompressionManager();
+    const defaultReliableDelivery = reliableDelivery || new UTXOReliableDeliveryManager(
+      this.chainSelectionConfig,
+      defaultCompressionManager
+    );
+    
+    this.utxoForkDetector = new UTXOForkDetector(
+      this.chainSelectionConfig,
+      defaultCompressionManager,
+      defaultReliableDelivery,
+      utxoManager
+    );
+    
+    this.utxoChainSelector = new UTXOChainSelector(
+      this.chainSelectionConfig,
+      this.difficultyManager,
+      defaultCompressionManager
+    );
+    
+    this.utxoReorganizationManager = new UTXOReorganizationManager(
+      this.chainSelectionConfig,
+      this.utxoTransactionManager,
+      this.persistence,
+      utxoManager
+    );
+    
+    this.utxoChainSplitProtector = new UTXOChainSplitProtector(
+      this.chainSelectionConfig,
+      nodeDiscovery
+    );
+
+    // Initialize active branch from current chain
+    this.activeBranch = {
+      id: 'main',
+      utxoBlocks: [],
+      height: 0,
+      cumulativeDifficulty: 0n,
+      totalWork: 0n,
+      utxoMerkleRoot: '',
+      lastBlockHash: '',
+      branchPoint: 0,
+      isActive: true,
+      utxoSetHash: '',
+      timestamp: Date.now(),
+      parentBranchId: undefined
+    };
+
     // Initialize blockchain with genesis configuration - NO FALLBACKS
     this.initializationPromise = this.initializeWithGenesisConfig(
       genesisConfig,
       difficultyConfig
     );
+
+    this.logger.info('Enhanced Blockchain initialized with UTXO-only chain selection capabilities');
   }
 
   private async initializeWithGenesisConfig(
@@ -174,6 +263,9 @@ export class Blockchain {
             this.utxoManager.addUTXO(utxo);
           }
 
+          // Initialize active branch from loaded state
+          this.updateActiveBranch();
+
           this.logger.debug(
             `Loaded compatible blockchain state with ${this.blocks.length} blocks`
           );
@@ -199,6 +291,7 @@ export class Blockchain {
     const genesisBlock = BlockManager.createGenesisBlock(config);
     this.blocks = [genesisBlock];
     this.initializeUTXOFromGenesisConfig(genesisBlock, config);
+    this.updateActiveBranch();
   }
 
   private async createGenesisBlockchainState(
@@ -211,6 +304,9 @@ export class Blockchain {
 
     // Initialize UTXO set from genesis allocations
     this.initializeUTXOFromGenesisConfig(genesisBlock, config);
+    
+    // Initialize active branch
+    this.updateActiveBranch();
 
     // Save initial blockchain state
     if (this.autoSave) {
@@ -246,6 +342,34 @@ export class Blockchain {
       `Initialized UTXO set from genesis config: ${config.initialAllocations.length} allocations, ` +
         `total supply: ${config.totalSupply}`
     );
+  }
+
+  /**
+   * Update active branch from current blockchain state
+   */
+  private updateActiveBranch(): void {
+    this.activeBranch = {
+      id: 'main',
+      utxoBlocks: [...this.blocks],
+      height: this.blocks.length > 0 ? this.blocks[this.blocks.length - 1].index : 0,
+      cumulativeDifficulty: this.calculateCumulativeDifficulty(this.blocks),
+      totalWork: this.calculateTotalWork(this.blocks),
+      utxoMerkleRoot: this.blocks.length > 0 ? this.blocks[this.blocks.length - 1].merkleRoot : '',
+      lastBlockHash: this.blocks.length > 0 ? this.blocks[this.blocks.length - 1].hash : '',
+      branchPoint: 0,
+      isActive: true,
+      utxoSetHash: this.calculateUTXORootHash(),
+      timestamp: Date.now(),
+      parentBranchId: undefined
+    };
+  }
+
+  private calculateCumulativeDifficulty(blocks: Block[]): bigint {
+    return blocks.reduce((total, block) => total + BigInt(block.difficulty), 0n);
+  }
+
+  private calculateTotalWork(blocks: Block[]): bigint {
+    return this.calculateCumulativeDifficulty(blocks);
   }
 
   /**
@@ -393,13 +517,70 @@ export class Blockchain {
     // Process UTXO updates with the original UTXO transactions
     this.processBlockUTXOs(minedBlock, originalUTXOTransactions);
 
+    // Update active branch
+    this.updateActiveBranch();
+
     // Clear pending transactions after processing
     this.pendingUTXOTransactions = [];
 
     return minedBlock;
   }
 
+  /**
+   * Enhanced block addition with UTXO fork detection - NO BACKWARDS COMPATIBILITY
+   */
   async addBlock(block: Block): Promise<ValidationResult> {
+    try {
+      // CRITICAL: Validate block contains only UTXO transactions
+      if (!this.isUTXOOnlyBlock(block)) {
+        return {
+          isValid: false,
+          errors: ['Block contains non-UTXO transactions - breaking change from legacy support']
+        };
+      }
+
+      // Create chain state for fork detection
+      const chainState: UTXOChainState = {
+        activeBranch: this.activeBranch,
+        branches: this.competingBranches,
+        orphanUTXOBlocks: this.orphanUTXOBlocks
+      };
+
+      // Detect fork using UTXO fork detector
+      const forkResult = this.utxoForkDetector.detectUTXOFork(block, chainState);
+      
+      this.logger.info(`Fork detection result for block ${block.hash}: ${forkResult.type}`);
+
+      switch (forkResult.type) {
+        case 'extension':
+          return await this.handleChainExtension(block, forkResult);
+        
+        case 'fork':
+          return await this.handleChainFork(block, forkResult);
+        
+        case 'orphan':
+          return await this.handleOrphanBlock(block, forkResult);
+        
+        default:
+          return {
+            isValid: false,
+            errors: [`Unknown fork detection result type: ${forkResult.type}`]
+          };
+      }
+    } catch (error) {
+      this.logger.error(`Enhanced block addition failed: ${error.message}`);
+      return {
+        isValid: false,
+        errors: [`Block addition failed: ${error.message}`]
+      };
+    }
+  }
+
+  /**
+   * Handle chain extension (block extends active chain)
+   */
+  private async handleChainExtension(block: Block, forkResult: UTXOForkDetectionResult): Promise<ValidationResult> {
+    // Standard block validation
     const previousBlock = this.getLatestBlock();
     const validation = BlockManager.validateBlock(block, previousBlock);
 
@@ -426,6 +607,7 @@ export class Blockchain {
       return validation;
     }
 
+    // Add block to chain
     this.blocks.push(block);
 
     // Update difficulty if this was an adjustment block
@@ -448,6 +630,9 @@ export class Blockchain {
 
     // Process and update UTXO set for block transactions
     this.processBlockUTXOs(block);
+    
+    // Update active branch
+    this.updateActiveBranch();
 
     // Save to persistence if enabled
     if (this.persistence && this.autoSave) {
@@ -455,9 +640,241 @@ export class Blockchain {
     }
 
     this.logger.debug(
-      `Added block ${block.index} with ${block.transactions.length} transactions`
+      `Added block ${block.index} to main chain with ${block.transactions.length} transactions`
     );
     return { isValid: true, errors: [] };
+  }
+
+  /**
+   * Handle chain fork (block creates competing branch)
+   */
+  private async handleChainFork(block: Block, forkResult: UTXOForkDetectionResult): Promise<ValidationResult> {
+    if (!forkResult.competingBranch) {
+      return {
+        isValid: false,
+        errors: ['Fork detected but no competing branch provided']
+      };
+    }
+
+    // Add competing branch
+    this.competingBranches.set(forkResult.competingBranch.id, forkResult.competingBranch);
+    
+    this.logger.info(`Added competing branch: ${forkResult.competingBranch.id} at height ${forkResult.competingBranch.height}`);
+
+    // Update branches map with current active branch
+    this.competingBranches.set(this.activeBranch.id, this.activeBranch);
+
+    // Select best chain using chain selector
+    const bestBranch = this.utxoChainSelector.selectBestUTXOChain(this.competingBranches);
+    
+    // Check if reorganization is needed
+    if (bestBranch.id !== this.activeBranch.id) {
+      this.logger.info(`Chain reorganization needed: switching from ${this.activeBranch.id} to ${bestBranch.id}`);
+      
+      // Perform reorganization
+      const reorganizationResult = await this.utxoReorganizationManager.executeUTXOReorganization(
+        this.activeBranch,
+        bestBranch
+      );
+      
+      if (reorganizationResult.success) {
+        // Apply reorganization
+        this.blocks = [...bestBranch.utxoBlocks];
+        this.activeBranch = bestBranch;
+        this.activeBranch.isActive = true;
+        
+        // Update UTXO manager with new chain state
+        this.rebuildUTXOSetFromBlocks();
+        
+        // Clean up competed branches (remove old active branch)
+        for (const [branchId, branch] of this.competingBranches) {
+          if (branchId !== bestBranch.id) {
+            branch.isActive = false;
+          }
+        }
+        
+        this.logger.info(`Reorganization completed successfully to branch ${bestBranch.id}`);
+      } else {
+        this.logger.warn(`Reorganization failed: ${reorganizationResult.error}`);
+        return {
+          isValid: false,
+          errors: [`Reorganization failed: ${reorganizationResult.error}`]
+        };
+      }
+    }
+
+    // Analyze chain split for security threats
+    const splitAnalysis = this.utxoChainSplitProtector.analyzeUTXOChainSplit(this.competingBranches);
+    
+    if (splitAnalysis.isSuspicious) {
+      this.logger.warn(`Suspicious chain split detected - Risk level: ${splitAnalysis.riskLevel}`);
+      this.logger.warn(`Security recommendations: ${splitAnalysis.recommendations.join(', ')}`);
+    }
+
+    return { isValid: true, errors: [] };
+  }
+
+  /**
+   * Handle orphan block (parent not found)
+   */
+  private async handleOrphanBlock(block: Block, forkResult: UTXOForkDetectionResult): Promise<ValidationResult> {
+    // Add to orphan blocks
+    this.orphanUTXOBlocks.push(block);
+    
+    this.logger.info(`Added orphan block ${block.hash} at height ${block.index}`);
+    
+    // Try to connect orphan blocks after adding new one
+    await this.processOrphanBlocks();
+
+    return { isValid: true, errors: [] };
+  }
+
+  /**
+   * Process orphan blocks to see if any can now be connected
+   */
+  private async processOrphanBlocks(): Promise<void> {
+    let connected = true;
+    
+    while (connected) {
+      connected = false;
+      
+      for (let i = this.orphanUTXOBlocks.length - 1; i >= 0; i--) {
+        const orphanBlock = this.orphanUTXOBlocks[i];
+        
+        // Check if this orphan can now be connected
+        if (this.canConnectOrphanBlock(orphanBlock)) {
+          // Remove from orphan list and try to add normally
+          this.orphanUTXOBlocks.splice(i, 1);
+          
+          const result = await this.addBlock(orphanBlock);
+          if (result.isValid) {
+            connected = true;
+            this.logger.info(`Connected previously orphaned block ${orphanBlock.hash}`);
+          } else {
+            // Re-add to orphans if still can't be connected
+            this.orphanUTXOBlocks.push(orphanBlock);
+            this.logger.warn(`Still cannot connect orphan block ${orphanBlock.hash}: ${result.errors.join(', ')}`);
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Check if an orphan block can be connected to any known chain
+   */
+  private canConnectOrphanBlock(block: Block): boolean {
+    // Check if parent exists in main chain
+    if (this.blocks.some(b => b.hash === block.previousHash)) {
+      return true;
+    }
+    
+    // Check if parent exists in any competing branch
+    for (const branch of this.competingBranches.values()) {
+      if (branch.utxoBlocks.some(b => b.hash === block.previousHash)) {
+        return true;
+      }
+    }
+    
+    return false;
+  }
+
+  /**
+   * Validate block contains only UTXO transactions
+   */
+  private isUTXOOnlyBlock(block: Block): boolean {
+    return block.transactions.every(tx => this.isUTXOTransaction(tx));
+  }
+
+  /**
+   * Check if transaction is a UTXO transaction
+   */
+  private isUTXOTransaction(tx: any): boolean {
+    // Simplified validation - in reality would be more comprehensive
+    return tx && typeof tx.id === 'string' && typeof tx.fee === 'number';
+  }
+
+  /**
+   * Rebuild UTXO set from current blocks
+   */
+  private rebuildUTXOSetFromBlocks(): void {
+    this.utxoManager = new UTXOManager();
+    
+    for (const block of this.blocks) {
+      this.processBlockUTXOs(block);
+    }
+    
+    this.logger.debug('UTXO set rebuilt from current blockchain');
+  }
+
+  /**
+   * Get current chain state for external components
+   */
+  getUTXOChainState(): UTXOChainState {
+    return {
+      activeBranch: this.activeBranch,
+      branches: this.competingBranches,
+      orphanUTXOBlocks: this.orphanUTXOBlocks
+    };
+  }
+
+  /**
+   * Get competing branches
+   */
+  getCompetingBranches(): Map<string, UTXOChainBranch> {
+    return new Map(this.competingBranches);
+  }
+
+  /**
+   * Get active branch information
+   */
+  getActiveBranch(): UTXOChainBranch {
+    return { ...this.activeBranch };
+  }
+
+  /**
+   * Get orphan blocks
+   */
+  getOrphanBlocks(): Block[] {
+    return [...this.orphanUTXOBlocks];
+  }
+
+  /**
+   * Force chain selection (for testing or emergency use)
+   */
+  async forceChainSelection(): Promise<{ 
+    selectedBranch: UTXOChainBranch; 
+    reorganizationPerformed: boolean; 
+    splitAnalysis: UTXOChainSplitAnalysis 
+  }> {
+    // Add current active branch to selection
+    this.competingBranches.set(this.activeBranch.id, this.activeBranch);
+    
+    const bestBranch = this.utxoChainSelector.selectBestUTXOChain(this.competingBranches);
+    let reorganizationPerformed = false;
+    
+    if (bestBranch.id !== this.activeBranch.id) {
+      const reorganizationResult = await this.utxoReorganizationManager.executeUTXOReorganization(
+        this.activeBranch,
+        bestBranch
+      );
+      
+      if (reorganizationResult.success) {
+        this.blocks = [...bestBranch.utxoBlocks];
+        this.activeBranch = bestBranch;
+        this.activeBranch.isActive = true;
+        this.rebuildUTXOSetFromBlocks();
+        reorganizationPerformed = true;
+      }
+    }
+    
+    const splitAnalysis = this.utxoChainSplitProtector.analyzeUTXOChainSplit(this.competingBranches);
+    
+    return {
+      selectedBranch: bestBranch,
+      reorganizationPerformed,
+      splitAnalysis
+    };
   }
 
   private processBlockUTXOs(
@@ -672,6 +1089,9 @@ export class Blockchain {
         for (const [, utxo] of loadedState.utxoSet) {
           this.utxoManager.addUTXO(utxo);
         }
+        
+        // Update active branch
+        this.updateActiveBranch();
 
         this.logger.debug(
           `Loaded blockchain state with ${this.blocks.length} blocks`
