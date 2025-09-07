@@ -10,7 +10,6 @@ import type {
   UTXOChainBranch,
   UTXOChainConfig,
   UTXOPersistenceConfig,
-  UTXO,
 } from '../../src/types.js';
 
 describe('UTXOReorganizationManager (NO BACKWARDS COMPATIBILITY)', () => {

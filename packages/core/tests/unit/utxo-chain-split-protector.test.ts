@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { UTXOChainSplitProtector } from '../../src/utxo-chain-split-protector.js';
 import { NodeDiscoveryProtocol } from '../../src/node-discovery-protocol.js';
 import type {
@@ -347,9 +347,9 @@ describe('UTXOChainSplitProtector (NO BACKWARDS COMPATIBILITY)', () => {
       };
 
       // Mock nodeDiscovery to return healthy topology
-      jest
-        .spyOn(splitProtector as any, 'getNetworkTopology')
-        .mockReturnValue(mockTopology);
+      vi.spyOn(splitProtector as any, 'getNetworkTopology').mockReturnValue(
+        mockTopology
+      );
 
       const analysis = splitProtector.analyzeUTXOChainSplit(healthyBranches);
 
@@ -375,9 +375,9 @@ describe('UTXOChainSplitProtector (NO BACKWARDS COMPATIBILITY)', () => {
         lastUpdated: Date.now(),
       };
 
-      jest
-        .spyOn(splitProtector as any, 'getNetworkTopology')
-        .mockReturnValue(partitionedTopology);
+      vi.spyOn(splitProtector as any, 'getNetworkTopology').mockReturnValue(
+        partitionedTopology
+      );
 
       const analysis = splitProtector.analyzeUTXOChainSplit(branches);
 

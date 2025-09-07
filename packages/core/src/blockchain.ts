@@ -633,7 +633,7 @@ export class Blockchain {
    */
   private async handleChainExtension(
     block: Block,
-    forkResult: UTXOForkDetectionResult
+    _forkResult: UTXOForkDetectionResult
   ): Promise<ValidationResult> {
     // Standard block validation
     const previousBlock = this.getLatestBlock();
@@ -795,7 +795,7 @@ export class Blockchain {
    */
   private async handleOrphanBlock(
     block: Block,
-    forkResult: UTXOForkDetectionResult
+    _forkResult: UTXOForkDetectionResult
   ): Promise<ValidationResult> {
     // Add to orphan blocks
     this.orphanUTXOBlocks.push(block);
