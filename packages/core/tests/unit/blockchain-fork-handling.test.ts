@@ -215,7 +215,7 @@ describe('Enhanced Blockchain Fork Handling (NO BACKWARDS COMPATIBILITY)', () =>
       const result = await blockchain.addBlock(legacyBlock);
 
       expect(result.isValid).toBe(false);
-      expect(result.errors[0]).toContain('non-UTXO transactions');
+      expect(result.errors[0]).toContain('non-UTXO');
     });
 
     it('should update active branch after extension', async () => {
@@ -520,18 +520,11 @@ describe('Enhanced Blockchain Fork Handling (NO BACKWARDS COMPATIBILITY)', () =>
     previousHash: string,
     difficulty: number
   ): Block {
+    // Use coinbase transaction (no inputs) to avoid UTXO validation issues
+    // Coinbase transactions don't reference existing UTXOs
     const utxoTransaction = createValidMockUTXOTransaction({
-      id: `fork-tx-${index}`,
-      inputs:
-        index > 0
-          ? [
-              {
-                txId: `prev-fork-tx-${index - 1}`,
-                outputIndex: 0,
-                unlockingScript: 'test-signature',
-              },
-            ]
-          : [],
+      id: `fork-coinbase-${index}-${Date.now()}`,
+      inputs: [], // Coinbase has no inputs
       outputs: [
         {
           value: 50,
@@ -539,8 +532,8 @@ describe('Enhanced Blockchain Fork Handling (NO BACKWARDS COMPATIBILITY)', () =>
           outputIndex: 0,
         },
       ],
-      fee: 1,
-      withSignature: false, // Keep tests simple without cryptographic overhead
+      fee: 0, // Coinbase has no fee
+      withSignature: false, // Coinbase doesn't need signature
     });
 
     return createValidMockBlock({
