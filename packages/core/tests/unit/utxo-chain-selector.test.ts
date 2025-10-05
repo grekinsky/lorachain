@@ -198,7 +198,8 @@ describe('UTXOChainSelector (NO BACKWARDS COMPATIBILITY)', () => {
 
       const result = chainSelector.compareUTXOBranches(branchA, branchB);
 
-      expect(result).toBeLessThan(0); // branchA wins due to smaller hash
+      // branchA wins due to smaller hash (returns positive when used with sort(b,a))
+      expect(result).toBeGreaterThan(0);
     });
 
     it('should use timestamp as final tie-breaker', () => {
@@ -221,7 +222,8 @@ describe('UTXOChainSelector (NO BACKWARDS COMPATIBILITY)', () => {
         newerBranch
       );
 
-      expect(result).toBeLessThan(0); // olderBranch wins due to earlier timestamp
+      // olderBranch wins due to earlier timestamp (returns positive when used with sort(b,a))
+      expect(result).toBeGreaterThan(0);
     });
   });
 

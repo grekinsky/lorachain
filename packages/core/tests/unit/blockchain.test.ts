@@ -11,6 +11,7 @@ import type {
   GenesisConfig,
   UTXOPersistenceConfig,
 } from '../../src/types.js';
+import { createValidMockUTXOTransaction } from '../shared/fixtures/mock-transaction-factory.js';
 
 describe('Blockchain (NO BACKWARDS COMPATIBILITY)', () => {
   let blockchain: Blockchain;
@@ -268,20 +269,19 @@ describe('Blockchain (NO BACKWARDS COMPATIBILITY)', () => {
         testGenesisConfig
       );
       await blockchain.waitForInitialization();
-      mockUTXOTransaction = {
-        id: `tx-${Date.now()}-${Math.random()}`,
-        inputs: [],
+
+      // Use proper UTXO transaction with cryptographic signature
+      mockUTXOTransaction = createValidMockUTXOTransaction({
         outputs: [
           {
             value: 100,
-            lockingScript: 'to-address',
+            lockingScript: minerAddress,
             outputIndex: 0,
           },
         ],
-        lockTime: 0,
-        timestamp: Date.now(),
-        fee: 0, // Genesis transactions have no fee
-      };
+        fee: 1,
+        withSignature: true,
+      });
 
       // Create a valid block manually using BlockManager with UTXO transaction
       const latestBlock = blockchain.getLatestBlock();
