@@ -93,6 +93,7 @@ describe('Hybrid Routing System Integration', () => {
       const meshPeer: EnhancedNetworkNode = {
         id: 'mesh-node-1',
         address: 'lora://mesh-node-1.mesh.local',
+        port: 9735,
         type: 'full',
         latency: 200,
         reliability: 90,
@@ -105,6 +106,7 @@ describe('Hybrid Routing System Integration', () => {
       const internetPeer: EnhancedNetworkNode = {
         id: 'internet-node-1',
         address: 'http://internet-node-1.example.com',
+        port: 8333,
         type: 'full',
         latency: 50,
         reliability: 95,
@@ -407,11 +409,12 @@ describe('Hybrid Routing System Integration', () => {
     });
 
     it('should verify cryptographic signatures during bridging', async () => {
-      const message: HybridRoutingMessage = {
+      const message = {
         type: 'transaction',
         payload: new Uint8Array([1, 2, 3]),
         timestamp: Date.now(),
         signature: 'test-sig',
+        publicKey: 'test-public-key', // Required for signature verification
       };
 
       const verifySpy = vi
@@ -426,11 +429,12 @@ describe('Hybrid Routing System Integration', () => {
     });
 
     it('should handle invalid signatures during bridging', async () => {
-      const message: HybridRoutingMessage = {
+      const message = {
         type: 'transaction',
         payload: new Uint8Array([1, 2, 3]),
         timestamp: Date.now(),
         signature: 'invalid-sig',
+        publicKey: 'test-public-key', // Required for signature verification
       };
 
       vi.spyOn(CryptographicService, 'verify').mockReturnValue(false);
@@ -504,6 +508,7 @@ describe('Hybrid Routing System Integration', () => {
         const unreliablePeer: EnhancedNetworkNode = {
           id: `unreliable-peer-${i}`,
           address: `http://unreliable-${i}.example.com`,
+          port: 8333,
           type: 'full',
           latency: 500,
           reliability: 30, // Low reliability
@@ -705,6 +710,7 @@ describe('Hybrid Routing System Integration', () => {
       const lowLatencyPeer: EnhancedNetworkNode = {
         id: 'low-latency-peer',
         address: 'http://fast.example.com',
+        port: 8333,
         type: 'full',
         latency: 25,
         reliability: 95,
@@ -800,6 +806,7 @@ function createMeshPeer(id: string): EnhancedNetworkNode {
   return {
     id,
     address: `lora://${id}.mesh.local`,
+    port: 9735, // Default LoRa mesh port
     type: 'full',
     latency: 200,
     reliability: 85,
@@ -814,6 +821,7 @@ function createInternetPeer(id: string): EnhancedNetworkNode {
   return {
     id,
     address: `http://${id}.example.com`,
+    port: 8333, // Default Bitcoin/blockchain port
     type: 'full',
     latency: 50,
     reliability: 95,
