@@ -130,6 +130,7 @@ export interface RoutePerformance {
  * - Consider extending core MeshMessage with proper type narrowing in future refactoring
  *
  * @see MeshMessage in types.ts for the core mesh protocol message structure
+ * @see BridgeMessage in gateway-manager.ts for cross-network message structure
  */
 export interface HybridRoutingMessage {
   /** Message type identifier */
@@ -144,6 +145,8 @@ export interface HybridRoutingMessage {
   from?: string;
   /** Destination node identifier (optional) */
   to?: string;
+  /** Additional message properties */
+  [key: string]: unknown;
 }
 
 /**

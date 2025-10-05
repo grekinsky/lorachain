@@ -111,6 +111,18 @@ export interface GatewaySelectionCriteria {
 }
 
 /**
+ * Bridge message interface for cross-network communication
+ */
+export interface BridgeMessage {
+  /** Message type identifier */
+  type: string;
+  /** Message payload data */
+  payload?: Uint8Array;
+  /** Additional message properties */
+  [key: string]: unknown;
+}
+
+/**
  * GatewayManager - Manages gateway node registration and lifecycle
  *
  * Provides gateway registration with cryptographic authentication,
@@ -471,10 +483,31 @@ export class GatewayManager extends EventEmitter {
    *
    * @param criteria - Selection criteria to filter and score gateways
    * @returns Selected gateway node or null if none available
+   * @throws Error if criteria parameters are invalid
    */
   selectOptimalGateway(
     criteria: GatewaySelectionCriteria = {}
   ): GatewayNode | null {
+    // Validate criteria
+    if (
+      criteria.minScore !== undefined &&
+      (criteria.minScore < 0 || criteria.minScore > 100)
+    ) {
+      throw new Error('minScore must be between 0 and 100');
+    }
+    if (
+      criteria.maxLoad !== undefined &&
+      (criteria.maxLoad < 0 || criteria.maxLoad > 1)
+    ) {
+      throw new Error('maxLoad must be between 0 and 1');
+    }
+    if (
+      criteria.preferredLatency !== undefined &&
+      criteria.preferredLatency < 0
+    ) {
+      throw new Error('preferredLatency must be non-negative');
+    }
+
     const available = this.getAvailableGateways();
 
     if (available.length === 0) {
@@ -482,13 +515,16 @@ export class GatewayManager extends EventEmitter {
       return null;
     }
 
+    // Calculate scores once and cache them
+    const gatewaysWithScores = available.map(gateway => ({
+      gateway,
+      score: this.calculateGatewayScore(gateway),
+    }));
+
     // Filter by criteria
-    const filtered = available.filter(gateway => {
+    const filtered = gatewaysWithScores.filter(({ gateway, score }) => {
       // Check minimum score
-      if (
-        criteria.minScore &&
-        this.calculateGatewayScore(gateway) < criteria.minScore
-      ) {
+      if (criteria.minScore && score < criteria.minScore) {
         return false;
       }
 
@@ -522,23 +558,22 @@ export class GatewayManager extends EventEmitter {
       return available[0];
     }
 
-    // Select gateway with best score
-    const selected = filtered.reduce((best, current) => {
-      const bestScore = this.calculateGatewayScore(best);
-      const currentScore = this.calculateGatewayScore(current);
+    // Select gateway with best score (already cached)
+    const selected = filtered.reduce((best, current) =>
+      current.score > best.score ? current : best
+    ).gateway;
 
-      return currentScore > bestScore ? current : best;
-    });
+    const selectedScore = this.calculateGatewayScore(selected);
 
     this.logger.debug('Selected optimal gateway', {
       gatewayId: selected.id,
-      score: this.calculateGatewayScore(selected),
+      score: selectedScore,
       load: selected.status.currentLoad,
     });
 
     this.emit('gateway:selected', {
       gatewayId: selected.id,
-      score: this.calculateGatewayScore(selected),
+      score: selectedScore,
       timestamp: Date.now(),
     });
 
@@ -624,18 +659,29 @@ export class GatewayManager extends EventEmitter {
    * @param gateway - Gateway node to use
    * @param destination - Destination node identifier
    * @returns Promise resolving to true if bridging successful
+   * @throws Error if message or destination is invalid
    */
   async bridgeMessage(
-    message: any,
+    message: BridgeMessage,
     gateway: GatewayNode,
     destination: string
   ): Promise<boolean> {
-    try {
-      // Track gateway usage
-      gateway.status.queueSize++;
-      gateway.status.currentLoad =
-        gateway.status.queueSize / gateway.capabilities.maxThroughput;
+    // Validate inputs
+    if (!message || !message.type) {
+      throw new Error('Invalid message: type is required');
+    }
+    if (!destination || destination.trim() === '') {
+      throw new Error('Invalid destination: must be non-empty string');
+    }
 
+    // Track gateway usage
+    gateway.status.queueSize++;
+    gateway.status.currentLoad =
+      gateway.capabilities.maxThroughput > 0
+        ? gateway.status.queueSize / gateway.capabilities.maxThroughput
+        : 1.0; // Treat as fully loaded if maxThroughput is 0
+
+    try {
       // Bridge the message (actual implementation in Part 6)
       this.logger.debug('Bridging message via gateway', {
         gatewayId: gateway.id,
@@ -645,7 +691,6 @@ export class GatewayManager extends EventEmitter {
 
       // Update metrics
       gateway.metrics.messagesProcessed++;
-      gateway.status.queueSize--;
 
       this.emit('message:bridged', {
         gatewayId: gateway.id,
@@ -661,9 +706,12 @@ export class GatewayManager extends EventEmitter {
         gatewayId: gateway.id,
       });
 
+      // Update error rate correctly
+      gateway.metrics.messagesProcessed++;
       gateway.metrics.errorRate =
-        (gateway.metrics.errorRate * gateway.metrics.messagesProcessed + 1) /
-        (gateway.metrics.messagesProcessed + 1);
+        (gateway.metrics.errorRate * (gateway.metrics.messagesProcessed - 1) +
+          1) /
+        gateway.metrics.messagesProcessed;
 
       this.emit('message:bridge-failed', {
         gatewayId: gateway.id,
@@ -673,6 +721,13 @@ export class GatewayManager extends EventEmitter {
       });
 
       return false;
+    } finally {
+      // Always decrement queue size
+      gateway.status.queueSize = Math.max(0, gateway.status.queueSize - 1);
+      gateway.status.currentLoad =
+        gateway.capabilities.maxThroughput > 0
+          ? gateway.status.queueSize / gateway.capabilities.maxThroughput
+          : 1.0;
     }
   }
 
@@ -683,6 +738,7 @@ export class GatewayManager extends EventEmitter {
    * - Load score (30%): Lower load = higher score
    * - Error score (30%): Lower error rate = higher score
    * - Latency score (20%): Lower latency = higher score
+   *   - Latency of 0ms = 100 points, 1000ms = 0 points, >1000ms = 0 points
    * - Queue score (20%): Smaller queue = higher score
    *
    * @param gateway - Gateway node to score
@@ -696,12 +752,16 @@ export class GatewayManager extends EventEmitter {
     const errorScore = (1 - gateway.metrics.errorRate) * 100;
 
     // Score based on latency (0-100, higher is better)
-    // Assume latency below 100ms is excellent
+    // Latency of 0ms = 100 points, 1000ms = 0 points, >1000ms = 0 points
     const latencyScore = Math.max(0, 100 - gateway.metrics.averageLatency / 10);
 
     // Score based on queue size (0-100, higher is better)
+    // Handle division by zero when maxThroughput is 0
     const queueScore =
-      (1 - gateway.status.queueSize / gateway.capabilities.maxThroughput) * 100;
+      gateway.capabilities.maxThroughput > 0
+        ? (1 - gateway.status.queueSize / gateway.capabilities.maxThroughput) *
+          100
+        : 0;
 
     // Weighted average
     const weights = {

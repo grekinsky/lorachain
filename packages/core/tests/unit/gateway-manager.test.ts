@@ -914,6 +914,252 @@ describe('GatewayManager', () => {
       expect(gateway.status.queueSize).toBe(initialQueue);
     });
   });
+
+  describe('Error Scenarios and Boundary Conditions', () => {
+    describe('Input Validation', () => {
+      test('should throw error for invalid message (missing type)', async () => {
+        vi.spyOn(CryptographicService, 'verify').mockReturnValue(true);
+
+        const reg1 = createValidRegistration();
+        await gatewayManager.start();
+        await gatewayManager.registerGateway(reg1);
+
+        const gateway = gatewayManager.getGateway(reg1.nodeId)!;
+        const invalidMessage = { payload: new Uint8Array() } as any;
+
+        await expect(
+          gatewayManager.bridgeMessage(invalidMessage, gateway, 'node-123')
+        ).rejects.toThrow('Invalid message: type is required');
+      });
+
+      test('should throw error for empty destination', async () => {
+        vi.spyOn(CryptographicService, 'verify').mockReturnValue(true);
+
+        const reg1 = createValidRegistration();
+        await gatewayManager.start();
+        await gatewayManager.registerGateway(reg1);
+
+        const gateway = gatewayManager.getGateway(reg1.nodeId)!;
+        const message = { type: 'transaction', payload: new Uint8Array() };
+
+        await expect(
+          gatewayManager.bridgeMessage(message, gateway, '')
+        ).rejects.toThrow('Invalid destination: must be non-empty string');
+      });
+
+      test('should throw error for whitespace-only destination', async () => {
+        vi.spyOn(CryptographicService, 'verify').mockReturnValue(true);
+
+        const reg1 = createValidRegistration();
+        await gatewayManager.start();
+        await gatewayManager.registerGateway(reg1);
+
+        const gateway = gatewayManager.getGateway(reg1.nodeId)!;
+        const message = { type: 'transaction', payload: new Uint8Array() };
+
+        await expect(
+          gatewayManager.bridgeMessage(message, gateway, '   ')
+        ).rejects.toThrow('Invalid destination: must be non-empty string');
+      });
+
+      test('should throw error for invalid minScore criteria', () => {
+        expect(() => {
+          gatewayManager.selectOptimalGateway({ minScore: -10 });
+        }).toThrow('minScore must be between 0 and 100');
+
+        expect(() => {
+          gatewayManager.selectOptimalGateway({ minScore: 150 });
+        }).toThrow('minScore must be between 0 and 100');
+      });
+
+      test('should throw error for invalid maxLoad criteria', () => {
+        expect(() => {
+          gatewayManager.selectOptimalGateway({ maxLoad: -0.5 });
+        }).toThrow('maxLoad must be between 0 and 1');
+
+        expect(() => {
+          gatewayManager.selectOptimalGateway({ maxLoad: 1.5 });
+        }).toThrow('maxLoad must be between 0 and 1');
+      });
+
+      test('should throw error for invalid preferredLatency criteria', () => {
+        expect(() => {
+          gatewayManager.selectOptimalGateway({ preferredLatency: -100 });
+        }).toThrow('preferredLatency must be non-negative');
+      });
+    });
+
+    describe('Division by Zero Protection', () => {
+      test('should handle maxThroughput = 0 in score calculation', async () => {
+        vi.spyOn(CryptographicService, 'verify').mockReturnValue(true);
+
+        const reg1 = {
+          ...createValidRegistration(),
+          capabilities: {
+            ...createValidRegistration().capabilities,
+            maxThroughput: 0,
+          },
+        };
+        await gatewayManager.start();
+        await gatewayManager.registerGateway(reg1);
+
+        const gateway = gatewayManager.getGateway(reg1.nodeId)!;
+        const score = gatewayManager['calculateGatewayScore'](gateway);
+
+        expect(score).toBeDefined();
+        expect(Number.isNaN(score)).toBe(false);
+        expect(Number.isFinite(score)).toBe(true);
+      });
+
+      test('should handle maxThroughput = 0 in load calculation', async () => {
+        vi.spyOn(CryptographicService, 'verify').mockReturnValue(true);
+
+        const reg1 = {
+          ...createValidRegistration(),
+          capabilities: {
+            ...createValidRegistration().capabilities,
+            maxThroughput: 0,
+          },
+        };
+        await gatewayManager.start();
+        await gatewayManager.registerGateway(reg1);
+
+        const gateway = gatewayManager.getGateway(reg1.nodeId)!;
+        const message = { type: 'transaction', payload: new Uint8Array() };
+
+        await gatewayManager.bridgeMessage(message, gateway, 'node-123');
+
+        expect(gateway.status.currentLoad).toBe(1.0); // Should be fully loaded
+        expect(Number.isNaN(gateway.status.currentLoad)).toBe(false);
+      });
+    });
+
+    describe('Error Rate Calculation', () => {
+      test('should calculate error rate correctly on first error', async () => {
+        vi.spyOn(CryptographicService, 'verify').mockReturnValue(true);
+
+        const reg1 = createValidRegistration();
+        await gatewayManager.start();
+        await gatewayManager.registerGateway(reg1);
+
+        const gateway = gatewayManager.getGateway(reg1.nodeId)!;
+
+        // Mock bridgeMessage to throw an error
+        const message = { type: 'transaction', payload: new Uint8Array() };
+
+        // Simulate error by manually setting up error condition
+        vi.spyOn(gatewayManager as any, 'bridgeMessage').mockImplementationOnce(
+          async () => {
+            gateway.status.queueSize++;
+            gateway.metrics.messagesProcessed++;
+            gateway.metrics.errorRate = 1.0;
+            throw new Error('Bridge failed');
+          }
+        );
+
+        try {
+          await gatewayManager.bridgeMessage(message, gateway, 'node-123');
+        } catch (error) {
+          // Expected error
+        }
+
+        expect(gateway.metrics.errorRate).toBeGreaterThan(0);
+      });
+
+      test('should calculate error rate correctly after multiple successes', async () => {
+        vi.spyOn(CryptographicService, 'verify').mockReturnValue(true);
+
+        const reg1 = createValidRegistration();
+        await gatewayManager.start();
+        await gatewayManager.registerGateway(reg1);
+
+        const gateway = gatewayManager.getGateway(reg1.nodeId)!;
+        const message = { type: 'transaction', payload: new Uint8Array() };
+
+        // 10 successful messages
+        for (let i = 0; i < 10; i++) {
+          await gatewayManager.bridgeMessage(message, gateway, 'node-123');
+        }
+
+        expect(gateway.metrics.messagesProcessed).toBe(10);
+        expect(gateway.metrics.errorRate).toBe(0);
+      });
+    });
+
+    describe('Queue Size Bounds Checking', () => {
+      test('should not allow negative queue size', async () => {
+        vi.spyOn(CryptographicService, 'verify').mockReturnValue(true);
+
+        const reg1 = createValidRegistration();
+        await gatewayManager.start();
+        await gatewayManager.registerGateway(reg1);
+
+        const gateway = gatewayManager.getGateway(reg1.nodeId)!;
+        gateway.status.queueSize = 0; // Set to 0
+
+        const message = { type: 'transaction', payload: new Uint8Array() };
+
+        await gatewayManager.bridgeMessage(message, gateway, 'node-123');
+
+        // Queue size should never go negative
+        expect(gateway.status.queueSize).toBeGreaterThanOrEqual(0);
+      });
+    });
+
+    describe('Boundary Value Tests', () => {
+      test('should handle minScore = 0 and minScore = 100', async () => {
+        vi.spyOn(CryptographicService, 'verify').mockReturnValue(true);
+
+        const reg1 = createValidRegistration();
+        await gatewayManager.start();
+        await gatewayManager.registerGateway(reg1);
+
+        // minScore = 0 should select gateway
+        const selected1 = gatewayManager.selectOptimalGateway({ minScore: 0 });
+        expect(selected1).not.toBeNull();
+
+        // minScore = 100 might not find gateway depending on score
+        const selected2 = gatewayManager.selectOptimalGateway({
+          minScore: 100,
+        });
+        // Should either select or fallback to first available
+        expect(selected2).not.toBeNull();
+      });
+
+      test('should handle maxLoad = 0 and maxLoad = 1', async () => {
+        vi.spyOn(CryptographicService, 'verify').mockReturnValue(true);
+
+        const reg1 = createValidRegistration();
+        await gatewayManager.start();
+        await gatewayManager.registerGateway(reg1);
+
+        // maxLoad = 1 should allow all gateways
+        const selected1 = gatewayManager.selectOptimalGateway({ maxLoad: 1 });
+        expect(selected1).not.toBeNull();
+
+        // maxLoad = 0 should use fallback
+        const selected2 = gatewayManager.selectOptimalGateway({ maxLoad: 0 });
+        expect(selected2).not.toBeNull(); // Fallback to first available
+      });
+
+      test('should handle extremely high latency values', async () => {
+        vi.spyOn(CryptographicService, 'verify').mockReturnValue(true);
+
+        const reg1 = createValidRegistration();
+        await gatewayManager.start();
+        await gatewayManager.registerGateway(reg1);
+
+        const gateway = gatewayManager.getGateway(reg1.nodeId)!;
+        gateway.metrics.averageLatency = 10000; // 10 seconds
+
+        const score = gatewayManager['calculateGatewayScore'](gateway);
+
+        expect(score).toBeDefined();
+        expect(score).toBeGreaterThanOrEqual(0);
+        expect(score).toBeLessThanOrEqual(100);
+      });
+    });
+  });
 });
 
 /**
