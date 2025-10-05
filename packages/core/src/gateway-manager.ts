@@ -11,6 +11,8 @@
 import { EventEmitter } from 'events';
 import { Logger } from '@lorachain/shared';
 import { CryptographicService } from './cryptographic';
+import { NetworkBridge } from './network-bridge';
+import { UTXOCompressionManager } from './utxo-compression-manager';
 import type { PeerManager } from './peer-manager';
 
 /**
@@ -142,6 +144,7 @@ export class GatewayManager extends EventEmitter {
   private gateways: Map<string, GatewayNode>;
   private peerManager: PeerManager;
   private cryptoService: CryptographicService;
+  private networkBridge: NetworkBridge;
   private logger: Logger;
   private isRunning = false;
   private healthCheckInterval?: ReturnType<typeof setInterval>;
@@ -151,12 +154,18 @@ export class GatewayManager extends EventEmitter {
    *
    * @param peerManager - Peer management service
    * @param cryptoService - Cryptographic service for authentication
+   * @param compressionManager - UTXO compression manager for message optimization
    */
-  constructor(peerManager: PeerManager, cryptoService: CryptographicService) {
+  constructor(
+    peerManager: PeerManager,
+    cryptoService: CryptographicService,
+    compressionManager: UTXOCompressionManager
+  ) {
     super();
     this.gateways = new Map();
     this.peerManager = peerManager;
     this.cryptoService = cryptoService;
+    this.networkBridge = new NetworkBridge(compressionManager, cryptoService);
     this.logger = Logger.getInstance();
   }
 
@@ -682,11 +691,30 @@ export class GatewayManager extends EventEmitter {
         : 1.0; // Treat as fully loaded if maxThroughput is 0
 
     try {
-      // Bridge the message (actual implementation in Part 6)
+      // Determine target network based on destination
+      const peer = this.peerManager.getPeer(destination);
+      const targetNetwork: 'mesh' | 'internet' = peer?.address.includes(
+        '.mesh.'
+      )
+        ? 'mesh'
+        : 'internet';
+
+      // Bridge the message using NetworkBridge
+      const bridged = await this.networkBridge.bridgeMessage(
+        message,
+        targetNetwork
+      );
+
+      if (!bridged) {
+        this.logger.error('Network bridge failed', { destination });
+        throw new Error('Network bridge failed');
+      }
+
       this.logger.debug('Bridging message via gateway', {
         gatewayId: gateway.id,
         destination,
         messageType: message.type,
+        targetNetwork,
       });
 
       // Update metrics
@@ -696,6 +724,7 @@ export class GatewayManager extends EventEmitter {
         gatewayId: gateway.id,
         destination,
         messageType: message.type,
+        targetNetwork,
         timestamp: Date.now(),
       });
 
