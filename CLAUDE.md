@@ -186,7 +186,7 @@ pnpm --filter "@lorachain/mobile-wallet" test:unit:watch # Mobile wallet watch m
    pnpm test:unit                    # Runs once and exits
    pnpm test:integration            # Runs once and exits
    pnpm test:safe                   # Safe wrapper with timeout protection
-   
+
    # ❌ WRONG: Watch mode scripts that never terminate
    pnpm test:watch                  # Runs indefinitely in watch mode
    pnpm test:unit:watch            # Hangs waiting for file changes
@@ -198,9 +198,9 @@ pnpm --filter "@lorachain/mobile-wallet" test:unit:watch # Mobile wallet watch m
    ```bash
    # Recommended safe test execution with automatic cleanup
    pnpm test:safe                   # Unit tests with 5min timeout
-   pnpm test:safe:integration       # Integration tests with timeout  
+   pnpm test:safe:integration       # Integration tests with timeout
    pnpm test:safe:all              # All tests with timeout
-   
+
    # Process management commands
    pnpm test:status                # Check for running vitest processes
    pnpm test:kill                  # Kill any hanging vitest processes

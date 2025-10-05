@@ -37,6 +37,7 @@ describe('Enhanced Blockchain Fork Handling (NO BACKWARDS COMPATIBILITY)', () =>
   const testGenesisConfig: GenesisConfig = {
     chainId: 'fork-test-chain-v1',
     networkName: 'Fork Test Network',
+    networkType: 'testnet',
     version: '1.0.0',
     initialAllocations: [
       {
@@ -53,6 +54,12 @@ describe('Enhanced Blockchain Fork Handling (NO BACKWARDS COMPATIBILITY)', () =>
       maxDifficultyRatio: 4,
       miningReward: 50,
       maxBlockSize: 1024 * 1024,
+    },
+    metadata: {
+      description: 'Fork test network for blockchain testing',
+      creator: 'test',
+      createdAt: Date.now(),
+      genesisTimestamp: Date.now(),
     },
   };
 
@@ -71,7 +78,7 @@ describe('Enhanced Blockchain Fork Handling (NO BACKWARDS COMPATIBILITY)', () =>
     persistence = new UTXOPersistenceManager(database, testConfig);
     utxoManager = new UTXOManager();
 
-    const chainConfig = {
+    const _chainConfig = {
       maxReorganizationDepth: 10,
       suspiciousSplitThreshold: 6,
       nodeDiscoveryEnabled: true,
@@ -494,7 +501,7 @@ describe('Enhanced Blockchain Fork Handling (NO BACKWARDS COMPATIBILITY)', () =>
     difficulty: number
   ): Block {
     const utxoTransaction: UTXOTransaction = {
-      id: `fork-tx-${index}-${Math.random()}`,
+      id: `fork-tx-${index}`,
       inputs:
         index > 0
           ? [
@@ -522,7 +529,7 @@ describe('Enhanced Blockchain Fork Handling (NO BACKWARDS COMPATIBILITY)', () =>
       timestamp: Date.now(),
       transactions: [utxoTransaction as any],
       previousHash,
-      hash: `fork-block-${index}-${Math.random()}`,
+      hash: `${previousHash}-${index}`,
       merkleRoot: `fork-merkle-${index}`,
       nonce: 12345,
       difficulty,
@@ -551,7 +558,7 @@ describe('Enhanced Blockchain Fork Handling (NO BACKWARDS COMPATIBILITY)', () =>
         },
       ],
       previousHash,
-      hash: `legacy-block-${index}`,
+      hash: `${previousHash}-legacy-${index}`,
       merkleRoot: `legacy-merkle-${index}`,
       nonce: 12345,
       difficulty,

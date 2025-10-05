@@ -4,7 +4,6 @@ import {
   IUTXOChainSelector,
   Block,
   UTXOTransaction,
-  UTXOMessageType,
 } from './types.js';
 import { DifficultyManager } from './difficulty.js';
 import { UTXOCompressionManager } from './utxo-compression-manager.js';
@@ -76,8 +75,9 @@ export class UTXOChainSelector implements IUTXOChainSelector {
     }
 
     // Sort branches by comparison result (best first)
-    // compareUTXOBranches(a, b) returns positive if a > b, so we want descending order
-    validUTXOBranches.sort((a, b) => this.compareUTXOBranches(a, b) * -1);
+    // compareUTXOBranches(a, b) returns positive if a > b, negative if b > a
+    // We want descending order (best first), so compare b to a
+    validUTXOBranches.sort((a, b) => this.compareUTXOBranches(b, a));
 
     const bestBranch = validUTXOBranches[0];
     const processingTime = Date.now() - startTime;

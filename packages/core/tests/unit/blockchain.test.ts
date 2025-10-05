@@ -6,7 +6,6 @@ import { DatabaseFactory } from '../../src/database.js';
 import { BlockManager } from '../../src/block.js';
 import type { DifficultyConfig } from '../../src/difficulty.js';
 import type {
-  Transaction,
   Block,
   UTXOTransaction,
   GenesisConfig,

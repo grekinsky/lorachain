@@ -78,11 +78,6 @@ export class UTXOChainSplitProtector implements IUTXOChainSplitProtector {
     };
 
     try {
-      if (branches.size <= 1) {
-        analysis.recommendations.push('Single chain - no split detected');
-        return this.cacheAndReturn(cacheKey, analysis);
-      }
-
       // Sort branches by height (longest first)
       const sortedBranches = Array.from(branches.values())
         .filter(branch => this.validateChainIntegrity(branch))
@@ -98,6 +93,15 @@ export class UTXOChainSplitProtector implements IUTXOChainSplitProtector {
       }
 
       analysis.competingBranches = sortedBranches.slice(0, 5); // Top 5 branches
+
+      // Check for single branch (no split)
+      if (branches.size <= 1) {
+        analysis.recommendations.push('Single chain - no split detected');
+        // Still analyze mining distribution for security
+        this.analyzeMiningDistribution(analysis, sortedBranches);
+        this.generateSecurityRecommendations(analysis);
+        return this.cacheAndReturn(cacheKey, analysis);
+      }
 
       const primaryBranch = sortedBranches[0];
       const secondaryBranch = sortedBranches[1];

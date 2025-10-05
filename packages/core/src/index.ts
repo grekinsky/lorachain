@@ -268,3 +268,18 @@ export {
   DEFAULT_MISBEHAVIOR_CONFIG,
   DEFAULT_PEER_MANAGER_CONFIG,
 } from './peer-management-types.js';
+
+// Node Discovery Protocol exports
+export * from './node-discovery-protocol.js';
+export { NodeDiscoveryProtocol } from './node-discovery-protocol.js';
+
+// Chain Selection and Fork Management exports
+export * from './utxo-chain-selector.js';
+export * from './utxo-fork-detector.js';
+export * from './utxo-reorganization-manager.js';
+export * from './utxo-chain-split-protector.js';
+
+export { UTXOChainSelector } from './utxo-chain-selector.js';
+export { UTXOForkDetector } from './utxo-fork-detector.js';
+export { UTXOReorganizationManager } from './utxo-reorganization-manager.js';
+export { UTXOChainSplitProtector } from './utxo-chain-split-protector.js';

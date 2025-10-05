@@ -30,19 +30,20 @@ All code must follow the project's Prettier configuration:
 
 ```json
 {
-  "semi": true,                    // Always use semicolons
-  "trailingComma": "es5",         // ES5 trailing commas
-  "singleQuote": true,            // Single quotes for strings
-  "printWidth": 80,               // 80 character line limit
-  "tabWidth": 2,                  // 2 spaces for indentation
-  "useTabs": false,               // Spaces, not tabs
-  "bracketSpacing": true,         // Spaces inside brackets
-  "arrowParens": "avoid",         // Omit parens for single params
-  "endOfLine": "lf"               // Unix line endings
+  "semi": true, // Always use semicolons
+  "trailingComma": "es5", // ES5 trailing commas
+  "singleQuote": true, // Single quotes for strings
+  "printWidth": 80, // 80 character line limit
+  "tabWidth": 2, // 2 spaces for indentation
+  "useTabs": false, // Spaces, not tabs
+  "bracketSpacing": true, // Spaces inside brackets
+  "arrowParens": "avoid", // Omit parens for single params
+  "endOfLine": "lf" // Unix line endings
 }
 ```
 
 **Commands**:
+
 ```bash
 # Format all files
 pnpm format
@@ -61,14 +62,15 @@ pnpm lint
 
 ```typescript
 // ✅ Good - properly wrapped
+const result = someVeryLongFunctionName(parameter1, parameter2, parameter3);
+
+// ❌ Bad - exceeds 80 characters
 const result = someVeryLongFunctionName(
   parameter1,
   parameter2,
-  parameter3
+  parameter3,
+  parameter4
 );
-
-// ❌ Bad - exceeds 80 characters
-const result = someVeryLongFunctionName(parameter1, parameter2, parameter3, parameter4);
 ```
 
 ---
@@ -99,7 +101,9 @@ function processData(data: any): any {
 
 // ✅ Good - specific types
 function processData(data: UTXOTransaction): ProcessedData {
-  return { /* ... */ };
+  return {
+    /* ... */
+  };
 }
 ```
 
@@ -180,14 +184,17 @@ packages/core/src/
 
 ```typescript
 // ✅ Good
-class UTXOManager { }
-interface TransactionInput { }
+class UTXOManager {}
+interface TransactionInput {}
 type NetworkStatus = 'online' | 'offline';
-enum BlockStatus { PENDING, CONFIRMED }
+enum BlockStatus {
+  PENDING,
+  CONFIRMED,
+}
 
 // ❌ Bad
-class utxoManager { }          // Wrong case
-interface ITransactionInput { } // Unnecessary prefix
+class utxoManager {} // Wrong case
+interface ITransactionInput {} // Unnecessary prefix
 ```
 
 ### 3.3 Functions and Methods
@@ -198,13 +205,13 @@ interface ITransactionInput { } // Unnecessary prefix
 
 ```typescript
 // ✅ Good - verb prefixes
-async function validateTransaction(tx: UTXOTransaction): Promise<boolean> { }
-function calculateTotalFee(inputs: Input[]): number { }
-function getBlockByHash(hash: string): Block | null { }
+async function validateTransaction(tx: UTXOTransaction): Promise<boolean> {}
+function calculateTotalFee(inputs: Input[]): number {}
+function getBlockByHash(hash: string): Block | null {}
 
 // ❌ Bad - unclear or non-verb
-function transaction() { }
-function fee() { }
+function transaction() {}
+function fee() {}
 ```
 
 ### 3.4 Variables and Properties
@@ -217,7 +224,9 @@ function fee() { }
 // ✅ Good
 const MAX_BLOCK_SIZE = 1024 * 1024;
 let currentHeight = 0;
-const blockchainState = { /* ... */ };
+const blockchainState = {
+  /* ... */
+};
 
 // Private properties
 class Blockchain {
@@ -253,15 +262,15 @@ Organize imports in this order:
 
 ```typescript
 // ✅ Good import order
-import { readFileSync } from 'fs';                    // Node.js
+import { readFileSync } from 'fs'; // Node.js
 import { createHash } from 'crypto';
 
-import msgpack from 'msgpack-lite';                   // External
+import msgpack from 'msgpack-lite'; // External
 
-import { Logger } from '@lorachain/shared';           // Internal packages
+import { Logger } from '@lorachain/shared'; // Internal packages
 import { UTXOManager } from '@lorachain/core';
 
-import { validateInput } from './validation';         // Relative
+import { validateInput } from './validation'; // Relative
 import type { Config } from './types';
 ```
 
@@ -308,16 +317,16 @@ class ExampleService {
 
 ```typescript
 // ✅ Good - named exports
-export class UTXOManager { }
-export interface UTXO { }
-export function createTransaction() { }
+export class UTXOManager {}
+export interface UTXO {}
+export function createTransaction() {}
 
 // index.ts
 export * from './utxo-manager';
 export * from './types';
 
 // ❌ Avoid default exports
-export default class UTXOManager { }
+export default class UTXOManager {}
 ```
 
 ### 4.4 Function Length
@@ -375,8 +384,7 @@ describe('UTXOManager', () => {
     utxoManager.addUTXO(utxo);
 
     // Assert
-    expect(utxoManager.getUTXO(utxo.txId, utxo.outputIndex))
-      .toEqual(utxo);
+    expect(utxoManager.getUTXO(utxo.txId, utxo.outputIndex)).toEqual(utxo);
   });
 });
 ```
@@ -390,12 +398,12 @@ describe('UTXOManager', () => {
 // ✅ Good - descriptive names
 describe('UTXOManager', () => {
   describe('addUTXO', () => {
-    it('should add valid UTXO to the set', () => { });
-    it('should throw error for duplicate UTXO', () => { });
+    it('should add valid UTXO to the set', () => {});
+    it('should throw error for duplicate UTXO', () => {});
   });
 
   describe('when UTXO is spent', () => {
-    it('then should mark UTXO as spent', () => { });
+    it('then should mark UTXO as spent', () => {});
   });
 });
 ```
@@ -422,6 +430,7 @@ beforeEach(() => {
 ### 5.5 Coverage Requirements
 
 Maintain minimum coverage thresholds:
+
 - **Statements**: 80%
 - **Branches**: 80%
 - **Functions**: 80%
@@ -462,9 +471,7 @@ function validateUTXO(utxo: UTXO): void {
   }
 
   if (utxo.value <= 0) {
-    throw new ValidationError(
-      `UTXO value must be positive, got ${utxo.value}`
-    );
+    throw new ValidationError(`UTXO value must be positive, got ${utxo.value}`);
   }
 }
 
@@ -527,7 +534,7 @@ const delay = baseDelay * Math.pow(2, retryCount);
 
 Document public APIs with JSDoc:
 
-```typescript
+````typescript
 /**
  * Validates a UTXO transaction and its inputs/outputs.
  *
@@ -550,11 +557,12 @@ async function validateTransaction(
 ): Promise<boolean> {
   // Implementation
 }
-```
+````
 
 ### 7.3 README Files
 
 Each package should have a README with:
+
 - Purpose and overview
 - Installation instructions
 - Usage examples
@@ -579,6 +587,7 @@ Follow conventional commit format:
 **Types**: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`
 
 **Examples**:
+
 ```bash
 # ✅ Good
 feat(utxo): implement chain selection algorithm

@@ -10,6 +10,7 @@
     "test:unit": "pnpm --recursive test:unit",
     "test:integration": "pnpm --recursive test:integration",
     "test": "pnpm --recursive test",
+    "test:run": "pnpm --recursive test:run",
     "lint": "pnpm --recursive lint",
     "lint:fix": "pnpm --recursive lint:fix",
     "format": "prettier --write \"**/*.{js,ts,tsx,json,md}\"",

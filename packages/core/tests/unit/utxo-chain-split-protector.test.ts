@@ -482,9 +482,11 @@ describe('UTXOChainSplitProtector (NO BACKWARDS COMPATIBILITY)', () => {
     height: number,
     cumulativeDifficulty: bigint
   ): UTXOChainBranch {
-    const blocks = Array.from({ length: height + 1 }, (_, i) =>
-      createMockBlock(i, i === 0 ? 'genesis' : `genesis-${i - 1}`)
-    );
+    const blocks: Block[] = [];
+    for (let i = 0; i <= height; i++) {
+      const previousHash = i === 0 ? 'genesis' : blocks[i - 1].hash;
+      blocks.push(createMockBlock(i, previousHash));
+    }
 
     return {
       id,
@@ -529,8 +531,9 @@ describe('UTXOChainSplitProtector (NO BACKWARDS COMPATIBILITY)', () => {
       Date.now() - intervals.reduce((sum, interval) => sum + interval, 0);
 
     for (let i = 0; i < intervals.length + 1; i++) {
+      const previousHash = i === 0 ? 'genesis' : blocks[i - 1].hash;
       blocks.push({
-        ...createMockBlock(i, i === 0 ? 'genesis' : `genesis-${i - 1}`),
+        ...createMockBlock(i, previousHash),
         timestamp,
       });
 
@@ -559,10 +562,14 @@ describe('UTXOChainSplitProtector (NO BACKWARDS COMPATIBILITY)', () => {
     id: string,
     difficulties: number[]
   ): UTXOChainBranch {
-    const blocks = difficulties.map((difficulty, i) => ({
-      ...createMockBlock(i, i === 0 ? 'genesis' : `genesis-${i - 1}`),
-      difficulty,
-    }));
+    const blocks: Block[] = [];
+    for (let i = 0; i < difficulties.length; i++) {
+      const previousHash = i === 0 ? 'genesis' : blocks[i - 1].hash;
+      blocks.push({
+        ...createMockBlock(i, previousHash),
+        difficulty: difficulties[i],
+      });
+    }
 
     return {
       id,
@@ -587,10 +594,14 @@ describe('UTXOChainSplitProtector (NO BACKWARDS COMPATIBILITY)', () => {
     const now = Date.now();
     const rapidInterval = 30000; // 30 seconds between blocks (very fast)
 
-    const blocks = Array.from({ length: blockCount }, (_, i) => ({
-      ...createMockBlock(i, i === 0 ? 'genesis' : `genesis-${i - 1}`),
-      timestamp: now - (blockCount - i) * rapidInterval,
-    }));
+    const blocks: Block[] = [];
+    for (let i = 0; i < blockCount; i++) {
+      const previousHash = i === 0 ? 'genesis' : blocks[i - 1].hash;
+      blocks.push({
+        ...createMockBlock(i, previousHash),
+        timestamp: now - (blockCount - i) * rapidInterval,
+      });
+    }
 
     return {
       id,

@@ -77,13 +77,22 @@ export function createValidMockBlock(options: MockBlockOptions): Block {
 /**
  * Calculates a valid nonce that satisfies the difficulty requirement.
  *
+ * This function iteratively searches for a nonce value that produces a hash
+ * meeting the specified difficulty requirement. In production, mining is
+ * unbounded, but for testing we limit iterations to prevent test timeouts.
+ *
+ * The 1M iteration limit is intentionally set high enough to reliably find
+ * valid nonces for test difficulties (typically 2-4) while providing a safety
+ * net against infinite loops if difficulty is accidentally set too high.
+ *
  * @param index - Block index
  * @param timestamp - Block timestamp
  * @param merkleRoot - Merkle root of transactions
  * @param previousHash - Hash of previous block
  * @param difficulty - Required difficulty level
  * @param validator - Block validator
- * @returns A nonce value that produces a valid hash
+ * @param transactions - Array of transactions in the block
+ * @returns A nonce value that produces a valid hash, or 0 if not found within iteration limit
  */
 function calculateValidNonce(
   index: number,
@@ -97,8 +106,8 @@ function calculateValidNonce(
   const targetPrefix = '0'.repeat(difficulty);
   let nonce = 0;
 
-  // Try nonces until we find one that meets difficulty
-  // In tests, we limit iterations to avoid infinite loops
+  // Maximum iterations to prevent test timeouts while reliably finding valid nonces
+  // for typical test difficulties (2-4). This is a safety limit for testing only.
   const maxIterations = 1000000;
 
   for (let i = 0; i < maxIterations; i++) {
@@ -146,12 +155,16 @@ export function createMockBlockChain(
 
   const chain: Block[] = [];
 
+  // Use a fixed base timestamp to ensure uniqueness and proper ordering
+  // even if function is called multiple times rapidly
+  const baseTimestamp = Date.now();
+
   // Create genesis block
   const genesis = createValidMockBlock({
     index: 0,
     previousHash: '0',
     difficulty: startDifficulty,
-    timestamp: Date.now() - length * 60000, // Stagger timestamps
+    timestamp: baseTimestamp - length * 60000,
   });
 
   // Override genesis hash if provided
@@ -161,14 +174,15 @@ export function createMockBlockChain(
 
   chain.push(genesis);
 
-  // Create subsequent blocks
+  // Create subsequent blocks with guaranteed unique timestamps
   for (let i = 1; i < length; i++) {
     const previousBlock = chain[i - 1];
     const block = createValidMockBlock({
       index: i,
       previousHash: previousBlock.hash,
       difficulty: startDifficulty,
-      timestamp: Date.now() - (length - i - 1) * 60000,
+      // Ensure strict timestamp ordering and uniqueness
+      timestamp: baseTimestamp - (length - i) * 60000 + i,
     });
     chain.push(block);
   }

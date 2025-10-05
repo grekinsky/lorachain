@@ -8,6 +8,11 @@ import {
 import { CryptographicService } from '../../../src/cryptographic.js';
 
 /**
+ * Default fee rate for mock transactions (0.1% of input value)
+ */
+const DEFAULT_FEE_RATE = 0.001;
+
+/**
  * Options for creating a mock UTXO transaction
  */
 export interface MockUTXOTransactionOptions {
@@ -171,7 +176,7 @@ export function createMockUTXOTransactionWithInputs(
   signatureAlgorithm: SignatureAlgorithm = 'secp256k1'
 ): UTXOTransaction {
   const totalInput = utxos.reduce((sum, utxo) => sum + utxo.value, 0);
-  const fee = Math.max(1, Math.floor(totalInput * 0.001)); // 0.1% fee, minimum 1
+  const fee = Math.max(1, Math.floor(totalInput * DEFAULT_FEE_RATE)); // 0.1% fee, minimum 1
   const change = totalInput - amount - fee;
 
   // Create outputs
@@ -300,7 +305,7 @@ export function createMultiOutputTransaction(
 ): UTXOTransaction {
   const totalInput = utxos.reduce((sum, utxo) => sum + utxo.value, 0);
   const totalOutput = recipients.reduce((sum, r) => sum + r.amount, 0);
-  const fee = Math.max(1, Math.floor(totalInput * 0.001));
+  const fee = Math.max(1, Math.floor(totalInput * DEFAULT_FEE_RATE));
   const change = totalInput - totalOutput - fee;
 
   // Create outputs for each recipient
