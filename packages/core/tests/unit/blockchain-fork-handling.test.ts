@@ -13,6 +13,20 @@ import type {
   GenesisConfig,
   UTXOPersistenceConfig,
 } from '../../src/types.js';
+import {
+  createValidMockBlock,
+  createMockBlockChain,
+  createForkingChains,
+} from '../shared/fixtures/mock-block-factory.js';
+import { createValidMockUTXOTransaction } from '../shared/fixtures/mock-transaction-factory.js';
+import {
+  createCompleteGenesisConfig,
+  createTestnetGenesisConfig,
+} from '../shared/fixtures/mock-genesis-config.js';
+import {
+  validateMockBlock,
+  validateMockChain,
+} from '../shared/fixtures/mock-validation.js';
 
 describe('Enhanced Blockchain Fork Handling (NO BACKWARDS COMPATIBILITY)', () => {
   let blockchain: Blockchain;
@@ -34,7 +48,7 @@ describe('Enhanced Blockchain Fork Handling (NO BACKWARDS COMPATIBILITY)', () =>
     compactionStyle: 'size',
   };
 
-  const testGenesisConfig: GenesisConfig = {
+  const testGenesisConfig: GenesisConfig = createCompleteGenesisConfig({
     chainId: 'fork-test-chain-v1',
     networkName: 'Fork Test Network',
     networkType: 'testnet',
@@ -57,11 +71,10 @@ describe('Enhanced Blockchain Fork Handling (NO BACKWARDS COMPATIBILITY)', () =>
     },
     metadata: {
       description: 'Fork test network for blockchain testing',
-      creator: 'test',
-      createdAt: Date.now(),
-      genesisTimestamp: Date.now(),
+      creator: 'test-suite',
+      networkType: 'testnet',
     },
-  };
+  });
 
   const testDifficultyConfig: DifficultyConfig = {
     targetBlockTime: 180,
@@ -278,8 +291,15 @@ describe('Enhanced Blockchain Fork Handling (NO BACKWARDS COMPATIBILITY)', () =>
       const weakBlock = blockchain.minePendingUTXOTransactions('weak-miner');
       const _initialBlocks = blockchain.getBlocks().length;
 
+      // Get the genesis block hash to use for fork
+      const genesisBlock = blockchain.getBlocks()[0];
+
       // Create a stronger competing chain
-      const strongerFork = createMockUTXOBlock(weakBlock!.index, 'genesis', 10); // Much higher difficulty
+      const strongerFork = createMockUTXOBlock(
+        weakBlock!.index,
+        genesisBlock.hash,
+        10
+      ); // Much higher difficulty
 
       const result = await blockchain.addBlock(strongerFork);
 
@@ -494,19 +514,19 @@ describe('Enhanced Blockchain Fork Handling (NO BACKWARDS COMPATIBILITY)', () =>
     });
   });
 
-  // Mock helper functions
+  // Mock helper functions using standardized factories
   function createMockUTXOBlock(
     index: number,
     previousHash: string,
     difficulty: number
   ): Block {
-    const utxoTransaction: UTXOTransaction = {
+    const utxoTransaction = createValidMockUTXOTransaction({
       id: `fork-tx-${index}`,
       inputs:
         index > 0
           ? [
               {
-                previousTxId: `prev-fork-tx-${index - 1}`,
+                txId: `prev-fork-tx-${index - 1}`,
                 outputIndex: 0,
                 unlockingScript: 'test-signature',
               },
@@ -519,22 +539,17 @@ describe('Enhanced Blockchain Fork Handling (NO BACKWARDS COMPATIBILITY)', () =>
           outputIndex: 0,
         },
       ],
-      lockTime: 0,
-      timestamp: Date.now(),
       fee: 1,
-    };
+      withSignature: false, // Keep tests simple without cryptographic overhead
+    });
 
-    return {
+    return createValidMockBlock({
       index,
-      timestamp: Date.now(),
-      transactions: [utxoTransaction as any],
       previousHash,
-      hash: `${previousHash}-${index}`,
-      merkleRoot: `fork-merkle-${index}`,
-      nonce: 12345,
       difficulty,
+      transactions: [utxoTransaction],
       validator: `fork-validator-${index}`,
-    };
+    });
   }
 
   function createMockLegacyBlock(
@@ -542,6 +557,8 @@ describe('Enhanced Blockchain Fork Handling (NO BACKWARDS COMPATIBILITY)', () =>
     previousHash: string,
     difficulty: number
   ): Block {
+    // Create a block with intentionally invalid (non-UTXO) transaction structure
+    // This is used to test that the blockchain properly rejects legacy transactions
     return {
       index,
       timestamp: Date.now(),
@@ -556,7 +573,7 @@ describe('Enhanced Blockchain Fork Handling (NO BACKWARDS COMPATIBILITY)', () =>
           signature: 'legacy-signature',
           nonce: 0,
         },
-      ],
+      ] as any,
       previousHash,
       hash: `${previousHash}-legacy-${index}`,
       merkleRoot: `legacy-merkle-${index}`,
