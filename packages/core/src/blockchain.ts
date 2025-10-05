@@ -872,9 +872,12 @@ export class Blockchain {
   /**
    * Check if transaction is a UTXO transaction
    */
-  private isUTXOTransaction(tx: any): boolean {
+  private isUTXOTransaction(tx: unknown): tx is UTXOTransaction {
+    const utxoTx = tx as UTXOTransaction;
     // Simplified validation - in reality would be more comprehensive
-    return tx && typeof tx.id === 'string' && typeof tx.fee === 'number';
+    return (
+      utxoTx && typeof utxoTx.id === 'string' && typeof utxoTx.fee === 'number'
+    );
   }
 
   /**

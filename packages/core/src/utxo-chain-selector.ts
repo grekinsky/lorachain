@@ -7,6 +7,7 @@ import {
 } from './types.js';
 import { DifficultyManager } from './difficulty.js';
 import { UTXOCompressionManager } from './utxo-compression-manager.js';
+import { Logger } from '@lorachain/shared';
 
 /**
  * UTXO Chain Selector - NO BACKWARDS COMPATIBILITY
@@ -22,7 +23,7 @@ import { UTXOCompressionManager } from './utxo-compression-manager.js';
  * - Performance-optimized branch comparison algorithms
  */
 export class UTXOChainSelector implements IUTXOChainSelector {
-  private readonly logger = console;
+  private readonly logger = Logger.getInstance();
   private readonly config: UTXOChainConfig;
   private readonly difficultyManager: DifficultyManager;
   private readonly compressionManager: UTXOCompressionManager;
@@ -113,13 +114,13 @@ export class UTXOChainSelector implements IUTXOChainSelector {
       this.logger.debug(
         `Branch ${branchA.id} selected by higher difficulty: ${difficultyA} > ${difficultyB}`
       );
-      return 1;
+      return 1; // A is better (higher difficulty)
     }
     if (difficultyA < difficultyB) {
       this.logger.debug(
         `Branch ${branchB.id} selected by higher difficulty: ${difficultyB} > ${difficultyA}`
       );
-      return -1;
+      return -1; // B is better (higher difficulty)
     }
 
     // Tie-breaker 1: Higher block count (longer chain preference)
@@ -132,40 +133,47 @@ export class UTXOChainSelector implements IUTXOChainSelector {
     }
 
     // Tie-breaker 2: Compare UTXO set hashes (UTXO-specific deterministic tie-breaking)
+    // Prefer lexicographically smaller hash
+    // In sort with (b,a), we want smaller hashes to "win", so we need to invert
     if (branchA.utxoSetHash !== branchB.utxoSetHash) {
-      const comparison = branchA.utxoSetHash.localeCompare(branchB.utxoSetHash);
+      const comparison = -branchA.utxoSetHash.localeCompare(
+        branchB.utxoSetHash
+      );
       if (comparison !== 0) {
         this.logger.debug(
-          `Branch selected by UTXO set hash comparison: ${comparison < 0 ? branchA.id : branchB.id}`
+          `Branch selected by UTXO set hash comparison: ${comparison > 0 ? branchA.id : branchB.id}`
         );
         return comparison;
       }
     }
 
     // Tie-breaker 3: Lexicographically smaller last block hash (deterministic)
-    const hashComparison = branchA.lastBlockHash.localeCompare(
+    // In sort with (b,a), we want smaller hashes to "win", so we need to invert
+    const hashComparison = -branchA.lastBlockHash.localeCompare(
       branchB.lastBlockHash
     );
     if (hashComparison !== 0) {
       this.logger.debug(
-        `Branch selected by last block hash comparison: ${hashComparison < 0 ? branchA.id : branchB.id}`
+        `Branch selected by last block hash comparison: ${hashComparison > 0 ? branchA.id : branchB.id}`
       );
       return hashComparison;
     }
 
     // Tie-breaker 4: Earlier timestamp (prefer older branch)
-    const timestampComparison = branchA.timestamp - branchB.timestamp;
+    // In sort with (b,a), we want earlier timestamps to "win", so we need to invert
+    const timestampComparison = -(branchA.timestamp - branchB.timestamp);
     if (timestampComparison !== 0) {
       this.logger.debug(
-        `Branch selected by timestamp: ${timestampComparison < 0 ? branchA.id : branchB.id}`
+        `Branch selected by timestamp: ${timestampComparison > 0 ? branchA.id : branchB.id}`
       );
       return timestampComparison;
     }
 
     // Final tie-breaker: Branch ID lexicographic comparison
-    const idComparison = branchA.id.localeCompare(branchB.id);
+    // In sort with (b,a), we want smaller IDs to "win", so we need to invert
+    const idComparison = -branchA.id.localeCompare(branchB.id);
     this.logger.debug(
-      `Branch selected by ID comparison: ${idComparison < 0 ? branchA.id : branchB.id}`
+      `Branch selected by ID comparison: ${idComparison > 0 ? branchA.id : branchB.id}`
     );
 
     return idComparison;
@@ -433,7 +441,7 @@ export class UTXOChainSelector implements IUTXOChainSelector {
   /**
    * Check if transaction is a UTXO transaction (NO LEGACY SUPPORT)
    */
-  private isUTXOTransaction(tx: any): boolean {
+  private isUTXOTransaction(tx: unknown): tx is UTXOTransaction {
     const utxoTx = tx as UTXOTransaction;
 
     return (

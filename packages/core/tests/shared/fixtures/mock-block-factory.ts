@@ -4,6 +4,18 @@ import { MerkleTree } from '../../../src/merkle/MerkleTree.js';
 import { BlockManager } from '../../../src/block.js';
 
 /**
+ * Maximum iterations for nonce calculation in tests to prevent timeouts
+ * while reliably finding valid nonces for typical test difficulties (2-4).
+ * This is a safety limit for testing only.
+ */
+const MAX_NONCE_ITERATIONS_FOR_TESTS = 1_000_000;
+
+/**
+ * Default time offset between blocks in milliseconds (1 minute)
+ */
+const TEST_BLOCK_TIME_OFFSET = 60_000;
+
+/**
  * Options for creating a mock block
  */
 export interface MockBlockOptions {
@@ -106,11 +118,7 @@ function calculateValidNonce(
   const targetPrefix = '0'.repeat(difficulty);
   let nonce = 0;
 
-  // Maximum iterations to prevent test timeouts while reliably finding valid nonces
-  // for typical test difficulties (2-4). This is a safety limit for testing only.
-  const maxIterations = 1000000;
-
-  for (let i = 0; i < maxIterations; i++) {
+  for (let i = 0; i < MAX_NONCE_ITERATIONS_FOR_TESTS; i++) {
     const blockWithoutHash: Omit<Block, 'hash'> = {
       index,
       timestamp,
@@ -164,7 +172,7 @@ export function createMockBlockChain(
     index: 0,
     previousHash: '0',
     difficulty: startDifficulty,
-    timestamp: baseTimestamp - length * 60000,
+    timestamp: baseTimestamp - length * TEST_BLOCK_TIME_OFFSET,
   });
 
   // Override genesis hash if provided
@@ -182,7 +190,7 @@ export function createMockBlockChain(
       previousHash: previousBlock.hash,
       difficulty: startDifficulty,
       // Ensure strict timestamp ordering and uniqueness
-      timestamp: baseTimestamp - (length - i) * 60000 + i,
+      timestamp: baseTimestamp - (length - i) * TEST_BLOCK_TIME_OFFSET + i,
     });
     chain.push(block);
   }
@@ -226,7 +234,7 @@ export function createForkingChains(
       index: commonAncestorIndex + 1 + i,
       previousHash,
       difficulty,
-      timestamp: timestamp + i * 60000,
+      timestamp: timestamp + i * TEST_BLOCK_TIME_OFFSET,
       validator: 'branch1-validator',
     });
     branch1.push(block);
@@ -243,7 +251,7 @@ export function createForkingChains(
       index: commonAncestorIndex + 1 + i,
       previousHash,
       difficulty,
-      timestamp: timestamp + i * 60000,
+      timestamp: timestamp + i * TEST_BLOCK_TIME_OFFSET,
       validator: 'branch2-validator',
     });
     branch2.push(block);

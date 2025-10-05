@@ -546,14 +546,15 @@ export class UTXOForkDetector implements IUTXOForkDetector {
   /**
    * Check if transaction is a UTXO transaction (NO LEGACY SUPPORT)
    */
-  private isUTXOTransaction(tx: any): boolean {
+  private isUTXOTransaction(tx: unknown): tx is UTXOTransaction {
     // UTXO transactions must have inputs and outputs arrays
+    const utxoTx = tx as UTXOTransaction;
     return (
-      tx &&
-      Array.isArray(tx.inputs) &&
-      Array.isArray(tx.outputs) &&
-      typeof tx.fee === 'number' &&
-      typeof tx.timestamp === 'number'
+      utxoTx &&
+      Array.isArray(utxoTx.inputs) &&
+      Array.isArray(utxoTx.outputs) &&
+      typeof utxoTx.fee === 'number' &&
+      typeof utxoTx.timestamp === 'number'
     );
   }
 }

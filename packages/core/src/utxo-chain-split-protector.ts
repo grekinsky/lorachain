@@ -631,7 +631,7 @@ export class UTXOChainSplitProtector implements IUTXOChainSplitProtector {
     return block.transactions.every(tx => this.isUTXOTransaction(tx));
   }
 
-  private isUTXOTransaction(tx: any): boolean {
+  private isUTXOTransaction(tx: unknown): tx is UTXOTransaction {
     const utxoTx = tx as UTXOTransaction;
     return (
       utxoTx &&
