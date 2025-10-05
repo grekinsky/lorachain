@@ -288,10 +288,12 @@ export { UTXOChainSplitProtector } from './utxo-chain-split-protector.js';
 export * from './hybrid-router.js';
 export * from './gateway-manager.js';
 export * from './network-bridge.js';
+export * from './traffic-optimizer.js';
 
 export { HybridRouter } from './hybrid-router.js';
 export { GatewayManager } from './gateway-manager.js';
 export { NetworkBridge } from './network-bridge.js';
+export { TrafficOptimizer } from './traffic-optimizer.js';
 
 // Hybrid routing type exports
 export type {

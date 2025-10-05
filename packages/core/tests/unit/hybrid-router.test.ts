@@ -22,6 +22,7 @@ import {
 import { PeerManager } from '../../src/peer-manager.js';
 import { UTXOCompressionManager } from '../../src/utxo-compression-manager.js';
 import { GatewayManager } from '../../src/gateway-manager.js';
+import { TrafficOptimizer } from '../../src/traffic-optimizer.js';
 import { CryptographicService } from '../../src/cryptographic.js';
 import { UTXOManager } from '../../src/utxo.js';
 import { DutyCycleManager } from '../../src/duty-cycle.js';
@@ -31,6 +32,7 @@ describe('HybridRouter', () => {
   let mockPeerManager: PeerManager;
   let mockCompressionManager: UTXOCompressionManager;
   let mockGatewayManager: GatewayManager;
+  let mockTrafficOptimizer: TrafficOptimizer;
   let mockConfig: HybridRouterConfig;
 
   beforeEach(() => {
@@ -85,6 +87,9 @@ describe('HybridRouter', () => {
     );
     mockGatewayManager = new GatewayManager(mockPeerManager, mockCryptoService);
 
+    // Create mock traffic optimizer
+    mockTrafficOptimizer = new TrafficOptimizer();
+
     // Create router configuration
     mockConfig = {
       enableAutoOptimization: false,
@@ -99,7 +104,8 @@ describe('HybridRouter', () => {
       mockConfig,
       mockPeerManager,
       mockCompressionManager,
-      mockGatewayManager
+      mockGatewayManager,
+      mockTrafficOptimizer
     );
   });
 
@@ -269,7 +275,9 @@ describe('HybridRouter', () => {
       const meshRouter = new HybridRouter(
         meshConfig,
         mockPeerManager,
-        mockCompressionManager
+        mockCompressionManager,
+        mockGatewayManager,
+        mockTrafficOptimizer
       );
 
       const route = meshRouter.determineOptimalPath('node-123', 'block');
@@ -285,7 +293,9 @@ describe('HybridRouter', () => {
       const internetRouter = new HybridRouter(
         internetConfig,
         mockPeerManager,
-        mockCompressionManager
+        mockCompressionManager,
+        mockGatewayManager,
+        mockTrafficOptimizer
       );
 
       const route = internetRouter.determineOptimalPath('node-456', 'block');
@@ -709,7 +719,8 @@ describe('HybridRouter', () => {
         meshConfig,
         mockPeerManager,
         mockCompressionManager,
-        mockGatewayManager
+        mockGatewayManager,
+        mockTrafficOptimizer
       );
       meshRouter.on('routes:cleared', clearSpy);
 
@@ -759,7 +770,8 @@ describe('HybridRouter', () => {
         autoOptimizeConfig,
         mockPeerManager,
         mockCompressionManager,
-        mockGatewayManager
+        mockGatewayManager,
+        mockTrafficOptimizer
       );
 
       const conditionsSpy = vi.fn();
@@ -788,7 +800,8 @@ describe('HybridRouter', () => {
         autoOptimizeConfig,
         mockPeerManager,
         mockCompressionManager,
-        mockGatewayManager
+        mockGatewayManager,
+        mockTrafficOptimizer
       );
 
       await autoRouter.start();

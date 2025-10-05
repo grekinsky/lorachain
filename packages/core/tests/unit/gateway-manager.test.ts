@@ -1059,7 +1059,7 @@ describe('GatewayManager', () => {
 
         try {
           await gatewayManager.bridgeMessage(message, gateway, 'node-123');
-        } catch (error) {
+        } catch {
           // Expected error
         }
 

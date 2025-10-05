@@ -14,6 +14,7 @@ import { Logger } from '@lorachain/shared';
 import { PeerManager } from './peer-manager';
 import { UTXOCompressionManager } from './utxo-compression-manager';
 import type { GatewayManager } from './gateway-manager';
+import type { TrafficOptimizer } from './traffic-optimizer.js';
 
 /**
  * Default network latency constants (milliseconds)
@@ -172,6 +173,7 @@ export class HybridRouter extends EventEmitter {
   private peerManager: PeerManager;
   private compressionManager: UTXOCompressionManager;
   private gatewayManager: GatewayManager;
+  private trafficOptimizer: TrafficOptimizer;
   private logger: Logger;
   private isRunning = false;
   private networkConditions: NetworkConditions;
@@ -185,18 +187,21 @@ export class HybridRouter extends EventEmitter {
    * @param peerManager - Peer management service
    * @param compressionManager - Compression management service
    * @param gatewayManager - Gateway management service
+   * @param trafficOptimizer - Traffic optimization service
    */
   constructor(
     config: HybridRouterConfig,
     peerManager: PeerManager,
     compressionManager: UTXOCompressionManager,
-    gatewayManager: GatewayManager
+    gatewayManager: GatewayManager,
+    trafficOptimizer: TrafficOptimizer
   ) {
     super();
     this.config = config;
     this.peerManager = peerManager;
     this.compressionManager = compressionManager;
     this.gatewayManager = gatewayManager;
+    this.trafficOptimizer = trafficOptimizer;
     this.logger = Logger.getInstance();
     this.routingTable = new Map();
     this.routingTableTimestamps = new Map();
@@ -221,8 +226,9 @@ export class HybridRouter extends EventEmitter {
       autoOptimization: this.config.enableAutoOptimization,
     });
 
-    // Start gateway manager
+    // Start dependencies
     await this.gatewayManager.start();
+    await this.trafficOptimizer.start();
 
     // Update network conditions on start
     await this.updateNetworkConditions();
@@ -251,8 +257,9 @@ export class HybridRouter extends EventEmitter {
     this.isRunning = false;
     this.logger.info('Stopping hybrid router');
 
-    // Stop gateway manager
+    // Stop dependencies
     await this.gatewayManager.stop();
+    await this.trafficOptimizer.stop();
 
     // Stop periodic condition updates
     if (this.conditionUpdateInterval) {
@@ -536,6 +543,9 @@ export class HybridRouter extends EventEmitter {
     // Update network conditions
     await this.updateNetworkConditions();
 
+    // Notify traffic optimizer
+    this.trafficOptimizer.handleNetworkFailure(failedNetwork);
+
     // Emit failover event
     this.emit('network:failover', {
       failedNetwork,
@@ -776,11 +786,11 @@ export class HybridRouter extends EventEmitter {
   /**
    * Optimize traffic flow
    *
-   * Balances gateway load and triggers traffic rebalancing for optimal
-   * network performance.
+   * Balances network load via traffic optimizer and gateway load balancing
+   * for optimal network performance.
    */
   optimizeTrafficFlow(): void {
-    this.balanceGatewayLoad();
+    this.trafficOptimizer.balanceNetworkLoad();
     this.gatewayManager.rebalanceTraffic();
   }
 
