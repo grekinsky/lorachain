@@ -283,3 +283,16 @@ export { UTXOChainSelector } from './utxo-chain-selector.js';
 export { UTXOForkDetector } from './utxo-fork-detector.js';
 export { UTXOReorganizationManager } from './utxo-reorganization-manager.js';
 export { UTXOChainSplitProtector } from './utxo-chain-split-protector.js';
+
+// Hybrid Routing System exports
+export * from './hybrid-router.js';
+
+export { HybridRouter } from './hybrid-router.js';
+
+// Hybrid routing type exports
+export type {
+  RouteDecision,
+  HybridRouterConfig,
+  RoutePerformance,
+  HybridRoutingMessage,
+} from './hybrid-router.js';
