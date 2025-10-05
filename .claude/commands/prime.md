@@ -6,16 +6,8 @@
 
 `eza . --tree --git-ignore`
 
-## PARALLEL READ the following files:
+`npx repomix --include "README.md,package.json,ai_docs/code_guidelines.md,ai_docs/mcp_tools_guide.md,specs/ROADMAP.md" --stdout --output-show-line-numbers --no-file-summary --no-gitignore`
 
-README.md
-CLAUDE.md
-
-## READ these files:
-
-specs/ROADMAP.md
-ai_docs/mcp_tools_guide.md
-
-# CHECK serena onboarding
+## CHECK serena onboarding
 
 Check if serena onboarding has been executed

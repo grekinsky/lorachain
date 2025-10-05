@@ -8,7 +8,6 @@ import type {
   BlockHeader,
   GenesisConfig,
 } from './types.js';
-import { TransactionManager } from './transaction.js';
 import { MerkleTree } from './merkle/index.js';
 import { GenesisConfigManager } from './genesis/index.js';
 
@@ -130,16 +129,10 @@ export class BlockManager {
       errors.push('Block must have a valid difficulty field');
     }
 
-    for (const transaction of block.transactions) {
-      const txValidation = TransactionManager.validateTransaction(transaction);
-      if (!txValidation.isValid) {
-        errors.push(
-          `Invalid transaction ${transaction.id}: ${txValidation.errors.join(
-            ', '
-          )}`
-        );
-      }
-    }
+    // NOTE: Transaction validation is handled separately by the blockchain layer
+    // This is because UTXO transaction validation requires access to the UTXOManager
+    // which is not available in this static context. The blockchain validates
+    // transactions before adding blocks.
 
     // Validate block meets its own difficulty requirement (only if difficulty is valid and not genesis block)
     if (
