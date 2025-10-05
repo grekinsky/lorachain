@@ -511,10 +511,16 @@ export class TrafficOptimizer extends EventEmitter {
   /**
    * Get current traffic metrics
    *
-   * @returns Current traffic metrics
+   * Returns a deep copy of traffic metrics to prevent external mutation
+   * of internal state, particularly the messagesByType Map.
+   *
+   * @returns Current traffic metrics (deep copy)
    */
   getTrafficMetrics(): TrafficMetrics {
-    return { ...this.trafficMetrics };
+    return {
+      ...this.trafficMetrics,
+      messagesByType: new Map(this.trafficMetrics.messagesByType),
+    };
   }
 
   /**
@@ -524,6 +530,17 @@ export class TrafficOptimizer extends EventEmitter {
    */
   getOptimizationRules(): OptimizationRule[] {
     return [...this.optimizationRules];
+  }
+
+  /**
+   * Get current traffic patterns
+   *
+   * Returns read-only access to traffic patterns for monitoring and analysis.
+   *
+   * @returns Array of traffic patterns
+   */
+  getTrafficPatterns(): TrafficPattern[] {
+    return Array.from(this.trafficPatterns.values());
   }
 
   /**
