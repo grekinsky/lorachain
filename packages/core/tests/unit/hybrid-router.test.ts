@@ -8,6 +8,8 @@
  * - Configuration handling
  * - Route decision logic
  * - Performance metrics updates
+ * - Network conditions monitoring (Part 2)
+ * - Network failover handling (Part 2)
  */
 
 import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
@@ -17,6 +19,7 @@ import {
   RouteDecision,
   RoutePerformance,
   HybridRoutingMessage,
+  NetworkConditions,
 } from '../../src/hybrid-router.js';
 import { PeerManager } from '../../src/peer-manager.js';
 import { UTXOCompressionManager } from '../../src/utxo-compression-manager.js';
@@ -507,6 +510,300 @@ describe('HybridRouter', () => {
       // Should have the last update's values
       expect(finalRoute.estimatedDelay).toBe(190);
       expect(finalRoute.reliability).toBe(0.97);
+    });
+  });
+
+  describe('Network Conditions Monitoring', () => {
+    test('should update network conditions on start', async () => {
+      const conditionsSpy = vi.fn();
+      hybridRouter.on('network:conditions-updated', conditionsSpy);
+
+      await hybridRouter.start();
+
+      expect(conditionsSpy).toHaveBeenCalled();
+      expect(conditionsSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          conditions: expect.any(Object),
+          timestamp: expect.any(Number),
+        })
+      );
+    });
+
+    test('should detect mesh connectivity correctly', async () => {
+      // Add mesh peer
+      mockPeerManager.addPeer({
+        id: 'mesh-peer-1',
+        address: 'node.mesh.local',
+        port: 8333,
+        type: 'full',
+        isOnline: true,
+        lastSeen: Date.now(),
+        latency: 150,
+        reliability: 90,
+      });
+
+      await hybridRouter.start();
+
+      const conditions = hybridRouter.getNetworkConditions();
+      expect(conditions.meshConnectivity).toBe(true);
+    });
+
+    test('should detect internet connectivity correctly', async () => {
+      // Add internet peer
+      mockPeerManager.addPeer({
+        id: 'internet-peer-1',
+        address: '192.168.1.100',
+        port: 8333,
+        type: 'full',
+        isOnline: true,
+        lastSeen: Date.now(),
+        latency: 30,
+        reliability: 95,
+      });
+
+      await hybridRouter.start();
+
+      const conditions = hybridRouter.getNetworkConditions();
+      expect(conditions.internetConnectivity).toBe(true);
+    });
+
+    test('should measure network latency from peers', async () => {
+      mockPeerManager.addPeer({
+        id: 'mesh-peer-1',
+        address: 'node.mesh.local',
+        port: 8333,
+        type: 'full',
+        isOnline: true,
+        lastSeen: Date.now(),
+        latency: 150,
+        reliability: 85,
+      });
+
+      mockPeerManager.addPeer({
+        id: 'internet-peer-1',
+        address: '192.168.1.100',
+        port: 8333,
+        type: 'full',
+        isOnline: true,
+        lastSeen: Date.now(),
+        latency: 30,
+        reliability: 95,
+      });
+
+      await hybridRouter.start();
+
+      const conditions = hybridRouter.getNetworkConditions();
+      expect(conditions.networkLatency.mesh).toBeGreaterThan(0);
+      expect(conditions.networkLatency.internet).toBeGreaterThan(0);
+      expect(conditions.networkLatency.crossNetwork).toBeGreaterThan(
+        conditions.networkLatency.mesh
+      );
+    });
+
+    test('should measure congestion from peer reliability', async () => {
+      mockPeerManager.addPeer({
+        id: 'mesh-peer-1',
+        address: 'node.mesh.local',
+        port: 8333,
+        type: 'full',
+        isOnline: true,
+        lastSeen: Date.now(),
+        latency: 200,
+        reliability: 80, // 20% unreliability = 0.2 congestion
+      });
+
+      await hybridRouter.start();
+
+      const conditions = hybridRouter.getNetworkConditions();
+      expect(conditions.congestion.mesh).toBeGreaterThanOrEqual(0);
+      expect(conditions.congestion.mesh).toBeLessThanOrEqual(1);
+    });
+
+    test('should handle no peers gracefully', async () => {
+      await hybridRouter.start();
+
+      const conditions = hybridRouter.getNetworkConditions();
+      expect(conditions.meshConnectivity).toBe(false);
+      expect(conditions.internetConnectivity).toBe(false);
+      expect(conditions.networkLatency).toBeDefined();
+      expect(conditions.bandwidth).toBeDefined();
+      expect(conditions.congestion).toBeDefined();
+    });
+
+    test('should return bandwidth estimates correctly', async () => {
+      await hybridRouter.start();
+
+      const conditions = hybridRouter.getNetworkConditions();
+      expect(conditions.bandwidth.mesh).toBe(256); // LoRa constraint
+      expect(conditions.bandwidth.internet).toBeGreaterThan(0);
+    });
+
+    test('should return copy of network conditions', async () => {
+      await hybridRouter.start();
+
+      const conditions1 = hybridRouter.getNetworkConditions();
+      const conditions2 = hybridRouter.getNetworkConditions();
+
+      expect(conditions1).toEqual(conditions2);
+      expect(conditions1).not.toBe(conditions2); // Should be different objects
+    });
+  });
+
+  describe('Network Failover', () => {
+    test('should handle mesh network failover', async () => {
+      const failoverSpy = vi.fn();
+      hybridRouter.on('network:failover', failoverSpy);
+
+      await hybridRouter.start();
+      await hybridRouter.handleNetworkFailover('mesh');
+
+      expect(failoverSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          failedNetwork: 'mesh',
+          timestamp: expect.any(Number),
+          newConditions: expect.any(Object),
+        })
+      );
+    });
+
+    test('should handle internet network failover', async () => {
+      const failoverSpy = vi.fn();
+      hybridRouter.on('network:failover', failoverSpy);
+
+      await hybridRouter.start();
+      await hybridRouter.handleNetworkFailover('internet');
+
+      expect(failoverSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          failedNetwork: 'internet',
+          timestamp: expect.any(Number),
+        })
+      );
+    });
+
+    test('should clear affected routes on failover', async () => {
+      const clearSpy = vi.fn();
+      hybridRouter.on('routes:cleared', clearSpy);
+
+      // Create router with mesh preference
+      const meshConfig: HybridRouterConfig = {
+        enableAutoOptimization: false,
+        optimizationInterval: 60000,
+        maxConcurrentBridgeOperations: 10,
+        crossNetworkTimeout: 15000,
+        preferredNetwork: 'mesh',
+      };
+
+      const meshRouter = new HybridRouter(
+        meshConfig,
+        mockPeerManager,
+        mockCompressionManager
+      );
+      meshRouter.on('routes:cleared', clearSpy);
+
+      await meshRouter.start();
+
+      // Create routes - these will use mesh as target network due to config
+      meshRouter.determineOptimalPath('mesh-node-1', 'block');
+      const initialSize = meshRouter.getRoutingTableSize();
+      expect(initialSize).toBeGreaterThan(0);
+
+      await meshRouter.handleNetworkFailover('mesh');
+
+      // Routes should be cleared for mesh
+      expect(clearSpy).toHaveBeenCalled();
+      expect(clearSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          count: initialSize,
+          failedNetwork: 'mesh',
+        })
+      );
+
+      await meshRouter.stop();
+    });
+
+    test('should update conditions after failover', async () => {
+      await hybridRouter.start();
+
+      const conditionsBefore = hybridRouter.getNetworkConditions();
+      await hybridRouter.handleNetworkFailover('internet');
+      const conditionsAfter = hybridRouter.getNetworkConditions();
+
+      expect(conditionsAfter).toBeDefined();
+      expect(conditionsAfter).toEqual(expect.any(Object));
+    });
+  });
+
+  describe('Periodic Updates', () => {
+    test('should start periodic updates when auto-optimization enabled', async () => {
+      const autoOptimizeConfig: HybridRouterConfig = {
+        enableAutoOptimization: true,
+        optimizationInterval: 100,
+        maxConcurrentBridgeOperations: 10,
+        crossNetworkTimeout: 15000,
+        preferredNetwork: 'adaptive',
+      };
+
+      const autoRouter = new HybridRouter(
+        autoOptimizeConfig,
+        mockPeerManager,
+        mockCompressionManager
+      );
+
+      const conditionsSpy = vi.fn();
+      autoRouter.on('network:conditions-updated', conditionsSpy);
+
+      await autoRouter.start();
+
+      // Wait for periodic update
+      await new Promise(resolve => setTimeout(resolve, 150));
+
+      expect(conditionsSpy).toHaveBeenCalledTimes(2); // Initial + 1 periodic
+
+      await autoRouter.stop();
+    });
+
+    test('should stop periodic updates on router stop', async () => {
+      const autoOptimizeConfig: HybridRouterConfig = {
+        enableAutoOptimization: true,
+        optimizationInterval: 100,
+        maxConcurrentBridgeOperations: 10,
+        crossNetworkTimeout: 15000,
+        preferredNetwork: 'adaptive',
+      };
+
+      const autoRouter = new HybridRouter(
+        autoOptimizeConfig,
+        mockPeerManager,
+        mockCompressionManager
+      );
+
+      await autoRouter.start();
+      await autoRouter.stop();
+
+      const conditionsSpy = vi.fn();
+      autoRouter.on('network:conditions-updated', conditionsSpy);
+
+      // Wait to ensure no updates occur
+      await new Promise(resolve => setTimeout(resolve, 150));
+
+      expect(conditionsSpy).not.toHaveBeenCalled();
+    });
+
+    test('should not start periodic updates when auto-optimization disabled', async () => {
+      const conditionsSpy = vi.fn();
+      hybridRouter.on('network:conditions-updated', conditionsSpy);
+
+      await hybridRouter.start();
+
+      // Initial update should happen
+      expect(conditionsSpy).toHaveBeenCalledTimes(1);
+
+      // Wait to ensure no periodic updates occur
+      await new Promise(resolve => setTimeout(resolve, 150));
+
+      // Should still be 1 (no periodic updates)
+      expect(conditionsSpy).toHaveBeenCalledTimes(1);
     });
   });
 });
