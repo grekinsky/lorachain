@@ -15,6 +15,14 @@ import { PeerManager } from './peer-manager';
 import { UTXOCompressionManager } from './utxo-compression-manager';
 
 /**
+ * Default network latency constants (milliseconds)
+ */
+const DEFAULT_MESH_LATENCY_MS = 200;
+const DEFAULT_INTERNET_LATENCY_MS = 50;
+const GATEWAY_OVERHEAD_MS = 50;
+const DEFAULT_CROSS_NETWORK_LATENCY_MS = 300;
+
+/**
  * Route decision containing network selection and performance estimates
  */
 export interface RouteDecision {
@@ -152,7 +160,7 @@ export class HybridRouter extends EventEmitter {
   private logger: Logger;
   private isRunning = false;
   private networkConditions: NetworkConditions;
-  private conditionUpdateInterval?: NodeJS.Timeout;
+  private conditionUpdateInterval?: ReturnType<typeof setInterval>;
 
   /**
    * Create a new HybridRouter instance
@@ -538,7 +546,7 @@ export class HybridRouter extends EventEmitter {
         );
         measurements.mesh = totalLatency / meshPeers.length;
       } else {
-        measurements.mesh = 200; // Default mesh latency estimate (ms)
+        measurements.mesh = DEFAULT_MESH_LATENCY_MS;
       }
 
       // Measure internet latency from internet peers
@@ -552,18 +560,18 @@ export class HybridRouter extends EventEmitter {
         );
         measurements.internet = totalLatency / internetPeers.length;
       } else {
-        measurements.internet = 50; // Default internet latency estimate (ms)
+        measurements.internet = DEFAULT_INTERNET_LATENCY_MS;
       }
 
       // Cross-network latency is sum of both + gateway overhead
       measurements.crossNetwork =
-        measurements.mesh + measurements.internet + 50; // 50ms gateway overhead
+        measurements.mesh + measurements.internet + GATEWAY_OVERHEAD_MS;
     } catch (error) {
       this.logger.error('Failed to measure network latency', { error });
       // Return defaults on error
-      measurements.mesh = 200;
-      measurements.internet = 50;
-      measurements.crossNetwork = 300;
+      measurements.mesh = DEFAULT_MESH_LATENCY_MS;
+      measurements.internet = DEFAULT_INTERNET_LATENCY_MS;
+      measurements.crossNetwork = DEFAULT_CROSS_NETWORK_LATENCY_MS;
     }
 
     return measurements;
@@ -575,12 +583,21 @@ export class HybridRouter extends EventEmitter {
    * Returns bandwidth estimates for mesh and internet networks.
    * Mesh bandwidth is constrained by LoRa 256-byte message limit.
    *
+   * NOTE: Current implementation uses static bandwidth values.
+   * Future enhancements (Part 7 - Traffic Optimizer):
+   * - Implement actual internet bandwidth measurement
+   * - Measure throughput from peer transfer rates
+   * - Track historical bandwidth performance
+   * - Adapt to network conditions dynamically
+   *
    * @returns Bandwidth measurements in bytes
    */
   private async measureBandwidth(): Promise<NetworkConditions['bandwidth']> {
     return {
-      mesh: 256, // LoRa 256-byte message limit
-      internet: 1048576, // 1MB (example internet bandwidth)
+      mesh: 256, // LoRa 256-byte message limit (hard constraint)
+      // TODO (Part 7): Implement actual internet bandwidth measurement
+      // Current value is conservative estimate for typical mobile/wifi connections
+      internet: 1048576, // 1MB baseline (will be measured dynamically)
     };
   }
 
@@ -589,6 +606,14 @@ export class HybridRouter extends EventEmitter {
    *
    * Estimates network congestion from peer reliability metrics.
    * Higher peer unreliability indicates higher congestion.
+   *
+   * NOTE: Current implementation uses peer reliability as a proxy for congestion.
+   * Future enhancements (Part 7 - Traffic Optimizer):
+   * - Queue sizes from peer status
+   * - Message delivery delays
+   * - Retry rates and timeouts
+   * - Duty cycle utilization (for mesh)
+   * - Network throughput degradation
    *
    * @returns Congestion levels (0-1 scale)
    */

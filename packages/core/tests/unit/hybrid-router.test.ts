@@ -16,10 +16,8 @@ import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   HybridRouter,
   HybridRouterConfig,
-  RouteDecision,
   RoutePerformance,
   HybridRoutingMessage,
-  NetworkConditions,
 } from '../../src/hybrid-router.js';
 import { PeerManager } from '../../src/peer-manager.js';
 import { UTXOCompressionManager } from '../../src/utxo-compression-manager.js';
@@ -725,7 +723,6 @@ describe('HybridRouter', () => {
     test('should update conditions after failover', async () => {
       await hybridRouter.start();
 
-      const conditionsBefore = hybridRouter.getNetworkConditions();
       await hybridRouter.handleNetworkFailover('internet');
       const conditionsAfter = hybridRouter.getNetworkConditions();
 
