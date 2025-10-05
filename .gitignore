@@ -61,3 +61,7 @@ packages/node/node-data
 
 # Serena
 .serena
+
+# MCP configs
+.mcp.json
+.mcp.json.*
