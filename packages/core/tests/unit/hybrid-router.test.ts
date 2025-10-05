@@ -83,10 +83,7 @@ describe('HybridRouter', () => {
       keyPair.privateKey,
       'secp256k1'
     );
-    mockGatewayManager = new GatewayManager(
-      mockPeerManager,
-      mockCryptoService
-    );
+    mockGatewayManager = new GatewayManager(mockPeerManager, mockCryptoService);
 
     // Create router configuration
     mockConfig = {

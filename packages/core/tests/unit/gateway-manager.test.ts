@@ -9,7 +9,6 @@ import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   GatewayManager,
   GatewayRegistration,
-  GatewayNode,
 } from '../../src/gateway-manager.js';
 import { CryptographicService } from '../../src/cryptographic.js';
 import { PeerManager } from '../../src/peer-manager.js';
