@@ -63,9 +63,24 @@ export interface RoutePerformance {
 /**
  * Hybrid routing mesh message structure
  *
- * This extends the basic message structure for hybrid routing purposes.
- * Uses the existing MeshMessage from types.ts but with additional clarity
- * for routing purposes.
+ * This is a separate interface from the core MeshMessage type (defined in types.ts)
+ * to accommodate hybrid routing requirements:
+ *
+ * **Differences from core MeshMessage:**
+ * - Uses `Uint8Array` payload (instead of `unknown`) for compression compatibility
+ * - Makes `from` and `to` fields optional (instead of required)
+ * - Optimized for cross-network routing with gateway nodes
+ *
+ * **Rationale:**
+ * - The core MeshMessage uses `unknown` payload for flexibility across different message types
+ * - Hybrid routing requires `Uint8Array` for UTXO compression and fragmentation
+ * - Gateway routing may not always have source/destination in traditional peer-to-peer sense
+ *
+ * **Future Consideration:**
+ * - Part 8 integration may unify message types using discriminated unions
+ * - Consider extending core MeshMessage with proper type narrowing in future refactoring
+ *
+ * @see MeshMessage in types.ts for the core mesh protocol message structure
  */
 export interface HybridRoutingMessage {
   /** Message type identifier */
@@ -325,7 +340,13 @@ export class HybridRouter extends EventEmitter {
    * @returns True if route is still valid
    */
   private isRouteValid(_route: RouteDecision): boolean {
-    // Simplified - full validation logic in Part 2
+    // TODO (Part 2): Implement comprehensive route validation based on:
+    //   - Time-based expiration (routes valid for 5 minutes)
+    //   - Network condition changes (mesh/internet connectivity status)
+    //   - Peer connectivity status (from PeerManager)
+    //   - Gateway availability (if using hybrid routing)
+    //   - Performance degradation thresholds (reliability < 0.5, delay > 5000ms)
+    //   - Route staleness detection for network topology changes
     return true;
   }
 }
