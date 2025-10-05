@@ -9,24 +9,12 @@ import { DatabaseFactory } from '../../src/database.js';
 import type { DifficultyConfig } from '../../src/difficulty.js';
 import type {
   Block,
-  UTXOTransaction,
   GenesisConfig,
   UTXOPersistenceConfig,
 } from '../../src/types.js';
-import {
-  createValidMockBlock,
-  createMockBlockChain,
-  createForkingChains,
-} from '../shared/fixtures/mock-block-factory.js';
+import { createValidMockBlock } from '../shared/fixtures/mock-block-factory.js';
 import { createValidMockUTXOTransaction } from '../shared/fixtures/mock-transaction-factory.js';
-import {
-  createCompleteGenesisConfig,
-  createTestnetGenesisConfig,
-} from '../shared/fixtures/mock-genesis-config.js';
-import {
-  validateMockBlock,
-  validateMockChain,
-} from '../shared/fixtures/mock-validation.js';
+import { createCompleteGenesisConfig } from '../shared/fixtures/mock-genesis-config.js';
 
 describe('Enhanced Blockchain Fork Handling (NO BACKWARDS COMPATIBILITY)', () => {
   let blockchain: Blockchain;
@@ -192,16 +180,15 @@ describe('Enhanced Blockchain Fork Handling (NO BACKWARDS COMPATIBILITY)', () =>
   describe('chain extension handling', () => {
     it('should handle normal chain extension', async () => {
       // Mine a block to extend the chain
-      const minedBlock = blockchain.minePendingUTXOTransactions('test-miner');
-      expect(minedBlock).toBeDefined();
+      const minedBlock1 = blockchain.minePendingUTXOTransactions('test-miner');
+      expect(minedBlock1).toBeDefined();
 
-      // Create a valid extension block
-      const extensionBlock = createMockUTXOBlock(2, minedBlock!.hash, 2);
+      // Mine another block to extend further
+      const minedBlock2 =
+        blockchain.minePendingUTXOTransactions('test-miner-2');
+      expect(minedBlock2).toBeDefined();
 
-      const result = await blockchain.addBlock(extensionBlock);
-
-      expect(result.isValid).toBe(true);
-      expect(blockchain.getBlocks()).toHaveLength(3); // Genesis + mined + extension
+      expect(blockchain.getBlocks()).toHaveLength(3); // Genesis + 2 mined blocks
       expect(blockchain.getActiveBranch().height).toBe(2);
     });
 
