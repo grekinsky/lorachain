@@ -1,0 +1,39 @@
+{
+  "mcpServers": {
+    "serena": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": [
+        "--from",
+        "git+https://github.com/oraios/serena",
+        "serena",
+        "start-mcp-server",
+        "--context",
+        "ide-assistant",
+        "--project",
+        "/Users/greco/Documents/lorachain"
+      ],
+      "env": {}
+    },
+    "context7": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@upstash/context7-mcp"
+      ],
+      "env": {}
+    },
+    "playwright": {
+      "command": "npx",
+      "args": [
+        "@playwright/mcp",
+        "--isolated",
+        "--extension"
+      ],
+      "env": {
+        "PLAYWRIGHT_MCP_EXTENSION_TOKEN": "fVk0PO19ltBAZUaWHStuuS80CBo12JbncOjztrg_4qU"
+      }
+    }
+  }
+}
