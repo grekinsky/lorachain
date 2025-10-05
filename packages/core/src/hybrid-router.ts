@@ -23,6 +23,15 @@ const GATEWAY_OVERHEAD_MS = 50;
 const DEFAULT_CROSS_NETWORK_LATENCY_MS = 300;
 
 /**
+ * Route validation and calculation constants
+ */
+const ROUTE_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const MESH_LATENCY_COMPETITIVENESS_THRESHOLD = 2; // Mesh competitive if < 2x internet latency
+const CONGESTION_PENALTY_FACTOR = 0.5; // Up to 50% reliability penalty from congestion
+const MIN_RELIABILITY = 0.1; // Minimum reliability floor
+const MAX_RELIABILITY = 1.0; // Maximum reliability ceiling
+
+/**
  * Route decision containing network selection and performance estimates
  */
 export interface RouteDecision {
@@ -155,11 +164,13 @@ export interface HybridRoutingMessage {
 export class HybridRouter extends EventEmitter {
   private config: HybridRouterConfig;
   private routingTable: Map<string, RouteDecision>;
+  private routingTableTimestamps: Map<string, number>;
   private peerManager: PeerManager;
   private compressionManager: UTXOCompressionManager;
   private logger: Logger;
   private isRunning = false;
   private networkConditions: NetworkConditions;
+  private previousNetworkConditions?: NetworkConditions;
   private conditionUpdateInterval?: ReturnType<typeof setInterval>;
 
   /**
@@ -180,6 +191,7 @@ export class HybridRouter extends EventEmitter {
     this.compressionManager = compressionManager;
     this.logger = Logger.getInstance();
     this.routingTable = new Map();
+    this.routingTableTimestamps = new Map();
     this.networkConditions = this.initializeNetworkConditions();
   }
 
@@ -236,6 +248,7 @@ export class HybridRouter extends EventEmitter {
 
     // Clear routing table
     this.routingTable.clear();
+    this.routingTableTimestamps.clear();
 
     // Emit stop event
     this.emit('router:stopped', { timestamp: Date.now() });
@@ -337,7 +350,7 @@ export class HybridRouter extends EventEmitter {
   ): RouteDecision {
     // Check cached routing decision
     const cached = this.routingTable.get(destination);
-    if (cached && this.isRouteValid(cached)) {
+    if (cached && this.isRouteValid(cached, destination)) {
       this.logger.debug('Using cached route', { destination });
       return cached;
     }
@@ -347,11 +360,13 @@ export class HybridRouter extends EventEmitter {
     if (!peer) {
       this.logger.warn('Peer not found, using default route', { destination });
       const defaultRoute = this.createDefaultRoute();
+      const now = Date.now();
       this.routingTable.set(destination, defaultRoute);
+      this.routingTableTimestamps.set(destination, now);
       this.emit('route:cached', {
         destination,
         route: defaultRoute,
-        timestamp: Date.now(),
+        timestamp: now,
       });
       return defaultRoute;
     }
@@ -360,7 +375,9 @@ export class HybridRouter extends EventEmitter {
     const route = this.calculateRoute(peer, messageType);
 
     // Cache the decision (valid for 5 minutes)
+    const now = Date.now();
     this.routingTable.set(destination, route);
+    this.routingTableTimestamps.set(destination, now);
 
     this.logger.debug('Calculated new route', {
       destination,
@@ -371,7 +388,7 @@ export class HybridRouter extends EventEmitter {
     this.emit('route:cached', {
       destination,
       route,
-      timestamp: Date.now(),
+      timestamp: now,
     });
 
     return route;
@@ -460,6 +477,11 @@ export class HybridRouter extends EventEmitter {
    */
   async updateNetworkConditions(): Promise<void> {
     this.logger.debug('Updating network conditions');
+
+    // Store previous conditions before updating
+    this.previousNetworkConditions = this.networkConditions
+      ? { ...this.networkConditions }
+      : undefined;
 
     this.networkConditions = {
       meshConnectivity: await this.checkMeshConnectivity(),
@@ -558,7 +580,8 @@ export class HybridRouter extends EventEmitter {
         targetNetwork = 'internet';
       } else if (
         conditions.networkLatency.mesh <
-        conditions.networkLatency.internet * 2
+        conditions.networkLatency.internet *
+          MESH_LATENCY_COMPETITIVENESS_THRESHOLD
       ) {
         // Mesh is competitive - prefer it for lower cost
         targetNetwork = 'mesh';
@@ -683,12 +706,15 @@ export class HybridRouter extends EventEmitter {
         ? this.networkConditions.congestion.mesh
         : this.networkConditions.congestion.internet;
 
-    const congestionPenalty = 1 - congestion * 0.5; // Up to 50% penalty
+    const congestionPenalty = 1 - congestion * CONGESTION_PENALTY_FACTOR;
 
     const finalReliability =
       baseReliability * networkMultiplier * congestionPenalty;
 
-    return Math.min(1.0, Math.max(0.1, finalReliability)); // Clamp between 0.1 and 1.0
+    return Math.min(
+      MAX_RELIABILITY,
+      Math.max(MIN_RELIABILITY, finalReliability)
+    );
   }
 
   /**
@@ -809,21 +835,93 @@ export class HybridRouter extends EventEmitter {
   /**
    * Check if a cached route is still valid
    *
-   * Routes are considered valid for 5 minutes (simplified logic).
-   * Full validation logic will be implemented in Part 2.
+   * Routes are considered valid if:
+   * - Cached within TTL (5 minutes)
+   * - Network conditions haven't changed significantly
+   * - Route still meets reliability/performance thresholds
    *
    * @param route - Route decision to validate
+   * @param destination - Destination for timestamp lookup
    * @returns True if route is still valid
    */
-  private isRouteValid(_route: RouteDecision): boolean {
-    // TODO (Part 2): Implement comprehensive route validation based on:
-    //   - Time-based expiration (routes valid for 5 minutes)
-    //   - Network condition changes (mesh/internet connectivity status)
-    //   - Peer connectivity status (from PeerManager)
-    //   - Gateway availability (if using hybrid routing)
-    //   - Performance degradation thresholds (reliability < 0.5, delay > 5000ms)
-    //   - Route staleness detection for network topology changes
+  private isRouteValid(route: RouteDecision, destination?: string): boolean {
+    // Check time-based expiration
+    if (destination) {
+      const cachedTime = this.routingTableTimestamps.get(destination);
+      if (cachedTime) {
+        const age = Date.now() - cachedTime;
+        if (age > ROUTE_CACHE_TTL_MS) {
+          this.logger.debug('Route expired due to TTL', {
+            destination,
+            age,
+            ttl: ROUTE_CACHE_TTL_MS,
+          });
+          return false;
+        }
+      } else {
+        // No timestamp found - invalidate route
+        return false;
+      }
+    }
+
+    // Check if network conditions have changed significantly
+    if (this.hasNetworkConditionsChanged()) {
+      this.logger.debug('Route invalidated due to network condition changes');
+      return false;
+    }
+
+    // Check performance degradation thresholds
+    if (route.reliability < 0.5) {
+      this.logger.debug('Route invalidated due to low reliability', {
+        reliability: route.reliability,
+      });
+      return false;
+    }
+
+    if (route.estimatedDelay > 5000) {
+      this.logger.debug('Route invalidated due to high delay', {
+        delay: route.estimatedDelay,
+      });
+      return false;
+    }
+
     return true;
+  }
+
+  /**
+   * Check if network conditions have changed significantly
+   *
+   * Compares current conditions with previous snapshot to detect:
+   * - Connectivity changes (mesh/internet up/down)
+   * - Gateway availability changes
+   *
+   * @returns True if conditions have changed significantly
+   */
+  private hasNetworkConditionsChanged(): boolean {
+    if (!this.previousNetworkConditions) {
+      return false; // No previous state to compare
+    }
+
+    const prev = this.previousNetworkConditions;
+    const curr = this.networkConditions;
+
+    // Check connectivity changes
+    if (
+      prev.meshConnectivity !== curr.meshConnectivity ||
+      prev.internetConnectivity !== curr.internetConnectivity
+    ) {
+      return true;
+    }
+
+    // Check gateway availability changes
+    if (
+      prev.availableGateways.length !== curr.availableGateways.length ||
+      !prev.availableGateways.every(g => curr.availableGateways.includes(g))
+    ) {
+      return true;
+    }
+
+    return false;
   }
 
   /**
