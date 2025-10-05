@@ -32,6 +32,8 @@ config/nginx/ssl/
 
 # Claude specific files
 specs/
+specs/*
+specs/**/*
 **/.claude/settings.local.json
 
 # Editor directories and files
