@@ -803,4 +803,345 @@ describe('HybridRouter', () => {
       expect(conditionsSpy).toHaveBeenCalledTimes(1);
     });
   });
+
+  describe('HybridRouter - Route Decision Logic', () => {
+    describe('Message Routing', () => {
+      test('should route mesh messages via mesh network', async () => {
+        const meshSpy = vi.fn();
+        hybridRouter.on('route:mesh', meshSpy);
+
+        const peer = {
+          id: 'mesh-peer-1',
+          address: 'node.mesh.local',
+          port: 8333,
+          type: 'full' as const,
+          isOnline: true,
+          lastSeen: Date.now(),
+          latency: 150,
+          reliability: 90,
+        };
+        mockPeerManager.addPeer(peer);
+
+        await hybridRouter.start();
+
+        const message: HybridRoutingMessage = {
+          type: 'transaction',
+          payload: new Uint8Array(),
+          timestamp: Date.now(),
+          signature: 'test-sig',
+        };
+
+        await hybridRouter.routeMessage(message, peer.id);
+
+        expect(meshSpy).toHaveBeenCalled();
+      });
+
+      test('should route internet messages via internet network', async () => {
+        const internetSpy = vi.fn();
+        hybridRouter.on('route:internet', internetSpy);
+
+        const peer = {
+          id: 'internet-peer-1',
+          address: '192.168.1.100',
+          port: 8333,
+          type: 'full' as const,
+          isOnline: true,
+          lastSeen: Date.now(),
+          latency: 30,
+          reliability: 95,
+        };
+        mockPeerManager.addPeer(peer);
+
+        await hybridRouter.start();
+
+        const message: HybridRoutingMessage = {
+          type: 'block',
+          payload: new Uint8Array(),
+          timestamp: Date.now(),
+          signature: 'test-sig',
+        };
+
+        await hybridRouter.routeMessage(message, peer.id);
+
+        expect(internetSpy).toHaveBeenCalled();
+      });
+
+      test('should emit message:routed event on successful routing', async () => {
+        const routedSpy = vi.fn();
+        hybridRouter.on('message:routed', routedSpy);
+
+        const peer = {
+          id: 'internet-peer-1',
+          address: '192.168.1.100',
+          port: 8333,
+          type: 'full' as const,
+          isOnline: true,
+          lastSeen: Date.now(),
+          latency: 30,
+          reliability: 95,
+        };
+        mockPeerManager.addPeer(peer);
+
+        await hybridRouter.start();
+
+        const message: HybridRoutingMessage = {
+          type: 'transaction',
+          payload: new Uint8Array(),
+          timestamp: Date.now(),
+          signature: 'test-sig',
+        };
+
+        await hybridRouter.routeMessage(message, peer.id);
+
+        expect(routedSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            destination: peer.id,
+            route: expect.any(Object),
+            timestamp: expect.any(Number),
+          })
+        );
+      });
+    });
+
+    describe('Route Calculation', () => {
+      test('should prioritize internet for high-priority messages', async () => {
+        const peer = {
+          id: 'internet-peer-1',
+          address: '192.168.1.100',
+          port: 8333,
+          type: 'full' as const,
+          isOnline: true,
+          lastSeen: Date.now(),
+          latency: 30,
+          reliability: 95,
+        };
+        mockPeerManager.addPeer(peer);
+
+        await hybridRouter.start();
+
+        const route = hybridRouter.determineOptimalPath(peer.id, 'block');
+
+        expect(route.targetNetwork).toBe('internet');
+        expect(route.priority).toBe('high');
+      });
+
+      test('should use mesh for mesh-only peers', async () => {
+        const peer = {
+          id: 'mesh-peer-1',
+          address: 'node.mesh.local',
+          port: 8333,
+          type: 'full' as const,
+          isOnline: true,
+          lastSeen: Date.now(),
+          latency: 150,
+          reliability: 85,
+        };
+        mockPeerManager.addPeer(peer);
+
+        await hybridRouter.start();
+
+        const route = hybridRouter.determineOptimalPath(peer.id, 'transaction');
+
+        expect(route.targetNetwork).toBe('mesh');
+      });
+
+      test('should cache routing decisions', async () => {
+        const peer = {
+          id: 'internet-peer-1',
+          address: '192.168.1.100',
+          port: 8333,
+          type: 'full' as const,
+          isOnline: true,
+          lastSeen: Date.now(),
+          latency: 30,
+          reliability: 95,
+        };
+        mockPeerManager.addPeer(peer);
+
+        await hybridRouter.start();
+
+        const route1 = hybridRouter.determineOptimalPath(peer.id, 'block');
+        const route2 = hybridRouter.determineOptimalPath(peer.id, 'block');
+
+        expect(route1).toBe(route2); // Same object reference (cached)
+      });
+
+      test('should emit route:cached event when caching new route', async () => {
+        const cachedSpy = vi.fn();
+        hybridRouter.on('route:cached', cachedSpy);
+
+        const peer = {
+          id: 'internet-peer-1',
+          address: '192.168.1.100',
+          port: 8333,
+          type: 'full' as const,
+          isOnline: true,
+          lastSeen: Date.now(),
+          latency: 30,
+          reliability: 95,
+        };
+        mockPeerManager.addPeer(peer);
+
+        await hybridRouter.start();
+
+        hybridRouter.determineOptimalPath(peer.id, 'transaction');
+
+        expect(cachedSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            destination: peer.id,
+            route: expect.any(Object),
+            timestamp: expect.any(Number),
+          })
+        );
+      });
+    });
+
+    describe('Priority Determination', () => {
+      test('should assign high priority to blocks', () => {
+        const priority = hybridRouter['determinePriority']('block');
+        expect(priority).toBe('high');
+      });
+
+      test('should assign high priority to transactions', () => {
+        const priority = hybridRouter['determinePriority']('transaction');
+        expect(priority).toBe('high');
+      });
+
+      test('should assign medium priority to peer discovery', () => {
+        const priority = hybridRouter['determinePriority']('peer_discovery');
+        expect(priority).toBe('medium');
+      });
+
+      test('should assign low priority to unknown types', () => {
+        const priority = hybridRouter['determinePriority']('unknown_type');
+        expect(priority).toBe('low');
+      });
+    });
+
+    describe('Delay Estimation', () => {
+      test('should estimate mesh delay from network conditions', async () => {
+        await hybridRouter.start();
+
+        const conditions = hybridRouter.getNetworkConditions();
+        const delay = hybridRouter['estimateDelay']('mesh', conditions);
+
+        expect(delay).toBeGreaterThan(0);
+      });
+
+      test('should estimate internet delay as lower than mesh', async () => {
+        await hybridRouter.start();
+
+        const conditions = hybridRouter.getNetworkConditions();
+        const meshDelay = hybridRouter['estimateDelay']('mesh', conditions);
+        const internetDelay = hybridRouter['estimateDelay'](
+          'internet',
+          conditions
+        );
+
+        expect(internetDelay).toBeLessThan(meshDelay);
+      });
+
+      test('should estimate hybrid delay as highest', async () => {
+        await hybridRouter.start();
+
+        const conditions = hybridRouter.getNetworkConditions();
+        const meshDelay = hybridRouter['estimateDelay']('mesh', conditions);
+        const hybridDelay = hybridRouter['estimateDelay']('hybrid', conditions);
+
+        expect(hybridDelay).toBeGreaterThan(meshDelay);
+      });
+    });
+
+    describe('Cost Calculation', () => {
+      test('should calculate mesh cost as 1.0', () => {
+        const cost = hybridRouter['calculateCost']('mesh');
+        expect(cost).toBe(1.0);
+      });
+
+      test('should calculate internet cost as lower than mesh', () => {
+        const meshCost = hybridRouter['calculateCost']('mesh');
+        const internetCost = hybridRouter['calculateCost']('internet');
+        expect(internetCost).toBeLessThan(meshCost);
+      });
+
+      test('should calculate hybrid cost as highest', () => {
+        const meshCost = hybridRouter['calculateCost']('mesh');
+        const hybridCost = hybridRouter['calculateCost']('hybrid');
+        expect(hybridCost).toBeGreaterThan(meshCost);
+      });
+    });
+
+    describe('Reliability Estimation', () => {
+      test('should estimate reliability from peer reliability', async () => {
+        const peer = {
+          id: 'internet-peer-1',
+          address: '192.168.1.100',
+          port: 8333,
+          type: 'full' as const,
+          isOnline: true,
+          lastSeen: Date.now(),
+          latency: 30,
+          reliability: 95,
+        };
+        mockPeerManager.addPeer(peer);
+
+        await hybridRouter.start();
+
+        const reliability = hybridRouter['estimateReliability']('internet', {
+          reliability: 95,
+        });
+
+        expect(reliability).toBeGreaterThan(0.9);
+        expect(reliability).toBeLessThanOrEqual(1.0);
+      });
+
+      test('should apply congestion penalty to reliability', async () => {
+        const peer = {
+          id: 'internet-peer-1',
+          address: '192.168.1.100',
+          port: 8333,
+          type: 'full' as const,
+          isOnline: true,
+          lastSeen: Date.now(),
+          latency: 30,
+          reliability: 95,
+        };
+        mockPeerManager.addPeer(peer);
+
+        await hybridRouter.start();
+
+        // Set high congestion
+        hybridRouter['networkConditions'].congestion.internet = 0.8;
+
+        const reliability = hybridRouter['estimateReliability']('internet', {
+          reliability: 95,
+        });
+
+        expect(reliability).toBeLessThan(0.95);
+      });
+
+      test('should clamp reliability between 0.1 and 1.0', async () => {
+        const lowReliabilityPeer = {
+          id: 'internet-peer-1',
+          address: '192.168.1.100',
+          port: 8333,
+          type: 'full' as const,
+          isOnline: true,
+          lastSeen: Date.now(),
+          latency: 30,
+          reliability: 1,
+        };
+        mockPeerManager.addPeer(lowReliabilityPeer);
+
+        await hybridRouter.start();
+
+        const reliability = hybridRouter['estimateReliability']('internet', {
+          reliability: 1,
+        });
+
+        expect(reliability).toBeGreaterThanOrEqual(0.1);
+        expect(reliability).toBeLessThanOrEqual(1.0);
+      });
+    });
+  });
 });

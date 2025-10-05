@@ -245,11 +245,16 @@ export class HybridRouter extends EventEmitter {
    * Route a message to its destination
    *
    * Determines optimal routing path and delivers message through appropriate network.
-   * This is a placeholder implementation that will be enhanced in Part 3.
+   * Emits events for successful routing and routing failures.
    *
    * @param message - UTXO message to route
    * @param destination - Destination node identifier
    * @returns Promise resolving to true if routing successful
+   * @fires message:routed - Emitted when message is successfully routed
+   * @fires message:route-failed - Emitted when message routing fails
+   * @fires route:mesh - Emitted when routing via mesh network
+   * @fires route:internet - Emitted when routing via internet
+   * @fires route:gateway - Emitted when routing via gateway
    */
   async routeMessage(
     message: HybridRoutingMessage,
@@ -260,26 +265,71 @@ export class HybridRouter extends EventEmitter {
       return false;
     }
 
+    const route = this.determineOptimalPath(destination, message.type);
+
     this.logger.debug('Routing message', {
       destination,
-      messageType: message.type,
-      payloadSize: message.payload.length,
+      targetNetwork: route.targetNetwork,
+      priority: route.priority,
+      estimatedDelay: route.estimatedDelay,
     });
 
-    // Placeholder - actual routing logic will be implemented in Part 3
-    return true;
+    try {
+      let success = false;
+
+      switch (route.targetNetwork) {
+        case 'mesh':
+          success = await this.routeViaMesh(message, destination);
+          break;
+        case 'internet':
+          success = await this.routeViaInternet(message, destination);
+          break;
+        case 'hybrid':
+          success = await this.routeViaGateway(
+            message,
+            destination,
+            route.gatewayNode!
+          );
+          break;
+        default:
+          this.logger.error('Unknown target network', {
+            targetNetwork: route.targetNetwork,
+          });
+          return false;
+      }
+
+      if (success) {
+        this.emit('message:routed', {
+          destination,
+          route,
+          timestamp: Date.now(),
+        });
+      }
+
+      return success;
+    } catch (error) {
+      this.logger.error('Failed to route message', { error, destination });
+      this.emit('message:route-failed', {
+        destination,
+        route,
+        error,
+        timestamp: Date.now(),
+      });
+      return false;
+    }
   }
 
   /**
    * Determine optimal routing path for a destination
    *
    * Checks routing table cache and returns existing route if valid,
-   * otherwise creates a default route based on configuration.
-   * Full route calculation logic will be implemented in Part 3.
+   * otherwise calculates route based on peer type, network conditions,
+   * and message priority.
    *
    * @param destination - Destination node identifier
    * @param messageType - Type of message being routed
    * @returns Route decision with network selection and performance estimates
+   * @fires route:cached - Emitted when route is cached
    */
   determineOptimalPath(
     destination: string,
@@ -292,19 +342,39 @@ export class HybridRouter extends EventEmitter {
       return cached;
     }
 
-    // Create default route (full logic in Part 3)
-    const defaultRoute = this.createDefaultRoute();
-    this.logger.debug('Created default route', {
+    // Determine peer connectivity
+    const peer = this.peerManager.getPeer(destination);
+    if (!peer) {
+      this.logger.warn('Peer not found, using default route', { destination });
+      const defaultRoute = this.createDefaultRoute();
+      this.routingTable.set(destination, defaultRoute);
+      this.emit('route:cached', {
+        destination,
+        route: defaultRoute,
+        timestamp: Date.now(),
+      });
+      return defaultRoute;
+    }
+
+    // Calculate route based on network conditions and peer type
+    const route = this.calculateRoute(peer, messageType);
+
+    // Cache the decision (valid for 5 minutes)
+    this.routingTable.set(destination, route);
+
+    this.logger.debug('Calculated new route', {
       destination,
-      messageType,
-      targetNetwork: defaultRoute.targetNetwork,
+      targetNetwork: route.targetNetwork,
+      priority: route.priority,
     });
 
-    // Cache the route for future use
-    this.routingTable.set(destination, defaultRoute);
-    this.emit('route:cached', { destination, route: defaultRoute });
+    this.emit('route:cached', {
+      destination,
+      route,
+      timestamp: Date.now(),
+    });
 
-    return defaultRoute;
+    return route;
   }
 
   /**
@@ -433,6 +503,287 @@ export class HybridRouter extends EventEmitter {
       timestamp: Date.now(),
       newConditions: this.networkConditions,
     });
+  }
+
+  /**
+   * Calculate route based on peer type and network conditions
+   *
+   * Determines best network based on:
+   * - Peer type (mesh-only vs internet-capable)
+   * - Network connectivity (mesh/internet availability)
+   * - Message priority (high-priority prefers faster networks)
+   * - Network conditions (latency, congestion)
+   *
+   * @param peer - Target peer information
+   * @param messageType - Type of message being routed
+   * @returns Route decision with optimal network selection
+   */
+  private calculateRoute(
+    peer: { id: string; address: string; reliability: number },
+    messageType: string
+  ): RouteDecision {
+    const conditions = this.networkConditions;
+
+    // Determine best network based on peer type and network conditions
+    let targetNetwork: 'mesh' | 'internet' | 'hybrid' = 'internet';
+
+    if (peer.address.includes('.mesh.')) {
+      // Mesh-only peer
+      if (conditions.meshConnectivity) {
+        targetNetwork = 'mesh';
+      } else {
+        this.logger.warn('Mesh peer but no mesh connectivity - using gateway', {
+          peerId: peer.id,
+        });
+        targetNetwork = 'hybrid';
+      }
+    } else if (
+      conditions.internetConnectivity &&
+      !conditions.meshConnectivity
+    ) {
+      // Internet-only mode
+      targetNetwork = 'internet';
+    } else if (
+      conditions.meshConnectivity &&
+      !conditions.internetConnectivity
+    ) {
+      // Mesh-only mode
+      targetNetwork = 'mesh';
+    } else if (conditions.internetConnectivity && conditions.meshConnectivity) {
+      // Hybrid mode - choose based on message priority and latency
+      const priority = this.determinePriority(messageType);
+
+      if (priority === 'high' && conditions.internetConnectivity) {
+        // High-priority messages prefer internet for speed
+        targetNetwork = 'internet';
+      } else if (
+        conditions.networkLatency.mesh <
+        conditions.networkLatency.internet * 2
+      ) {
+        // Mesh is competitive - prefer it for lower cost
+        targetNetwork = 'mesh';
+      } else {
+        // Use hybrid/gateway approach
+        targetNetwork = 'hybrid';
+      }
+    }
+
+    const priority = this.determinePriority(messageType);
+    const estimatedDelay = this.estimateDelay(targetNetwork, conditions);
+    const cost = this.calculateCost(targetNetwork);
+    const reliability = this.estimateReliability(targetNetwork, peer);
+
+    return {
+      targetNetwork,
+      gatewayNode:
+        targetNetwork === 'hybrid' ? 'gateway-placeholder' : undefined, // Part 5 will implement gateway selection
+      priority,
+      estimatedDelay,
+      cost,
+      reliability,
+    };
+  }
+
+  /**
+   * Determine message priority based on type
+   *
+   * Priority levels:
+   * - High: block, transaction, sync_request (time-sensitive blockchain operations)
+   * - Medium: peer_discovery, utxo_sync (network maintenance)
+   * - Low: all other message types
+   *
+   * @param messageType - Type of message
+   * @returns Priority level
+   */
+  private determinePriority(messageType: string): 'high' | 'medium' | 'low' {
+    const highPriorityTypes = ['block', 'transaction', 'sync_request'];
+    const mediumPriorityTypes = ['peer_discovery', 'utxo_sync'];
+
+    if (highPriorityTypes.includes(messageType)) {
+      return 'high';
+    } else if (mediumPriorityTypes.includes(messageType)) {
+      return 'medium';
+    }
+
+    return 'low';
+  }
+
+  /**
+   * Estimate delivery delay based on network type
+   *
+   * @param network - Target network type
+   * @param conditions - Current network conditions
+   * @returns Estimated delay in milliseconds
+   */
+  private estimateDelay(
+    network: 'mesh' | 'internet' | 'hybrid',
+    conditions: NetworkConditions
+  ): number {
+    switch (network) {
+      case 'mesh':
+        return conditions.networkLatency.mesh || 200;
+      case 'internet':
+        return conditions.networkLatency.internet || 50;
+      case 'hybrid':
+        return conditions.networkLatency.crossNetwork || 300;
+      default:
+        return 1000; // Default 1 second
+    }
+  }
+
+  /**
+   * Calculate routing cost based on network type
+   *
+   * Cost represents resource usage (battery, bandwidth):
+   * - Internet: 0.5 (cheaper bandwidth, higher availability)
+   * - Mesh: 1.0 (base cost for LoRa transmission)
+   * - Hybrid: 1.5 (overhead of bridging through gateway)
+   *
+   * @param network - Target network type
+   * @returns Cost multiplier
+   */
+  private calculateCost(network: 'mesh' | 'internet' | 'hybrid'): number {
+    switch (network) {
+      case 'mesh':
+        return 1.0; // Base cost for LoRa transmission
+      case 'internet':
+        return 0.5; // Cheaper bandwidth, higher availability
+      case 'hybrid':
+        return 1.5; // Overhead of bridging through gateway
+      default:
+        return 1.0;
+    }
+  }
+
+  /**
+   * Estimate reliability based on network type and peer
+   *
+   * Factors:
+   * - Base peer reliability
+   * - Network type multiplier (internet > mesh > hybrid)
+   * - Congestion penalty (up to 50% reduction)
+   *
+   * @param network - Target network type
+   * @param peer - Target peer information
+   * @returns Reliability estimate (0-1 scale, clamped between 0.1 and 1.0)
+   */
+  private estimateReliability(
+    network: 'mesh' | 'internet' | 'hybrid',
+    peer: { reliability: number }
+  ): number {
+    const baseReliability = peer.reliability / 100;
+
+    // Network type affects reliability
+    const networkMultiplier =
+      network === 'internet' ? 1.2 : network === 'mesh' ? 1.0 : 0.9;
+
+    // Apply congestion penalty
+    const congestion =
+      network === 'mesh'
+        ? this.networkConditions.congestion.mesh
+        : this.networkConditions.congestion.internet;
+
+    const congestionPenalty = 1 - congestion * 0.5; // Up to 50% penalty
+
+    const finalReliability =
+      baseReliability * networkMultiplier * congestionPenalty;
+
+    return Math.min(1.0, Math.max(0.1, finalReliability)); // Clamp between 0.1 and 1.0
+  }
+
+  /**
+   * Route message via mesh network
+   *
+   * Placeholder implementation that delegates to existing mesh protocol.
+   * Emits 'route:mesh' event for tracking.
+   *
+   * @param message - Message to route
+   * @param destination - Destination node identifier
+   * @returns Promise resolving to true if routing successful
+   * @fires route:mesh - Emitted when routing via mesh
+   */
+  private async routeViaMesh(
+    message: HybridRoutingMessage,
+    destination: string
+  ): Promise<boolean> {
+    // Placeholder - actual mesh routing delegated to mesh protocol
+    this.logger.debug('Routing via mesh network', {
+      destination,
+      type: message.type,
+    });
+
+    this.emit('route:mesh', {
+      destination,
+      messageType: message.type,
+      timestamp: Date.now(),
+    });
+
+    return true; // Implementation delegates to existing mesh protocol
+  }
+
+  /**
+   * Route message via internet
+   *
+   * Placeholder implementation that delegates to HTTP/WebSocket server.
+   * Emits 'route:internet' event for tracking.
+   *
+   * @param message - Message to route
+   * @param destination - Destination node identifier
+   * @returns Promise resolving to true if routing successful
+   * @fires route:internet - Emitted when routing via internet
+   */
+  private async routeViaInternet(
+    message: HybridRoutingMessage,
+    destination: string
+  ): Promise<boolean> {
+    // Placeholder - actual internet routing delegated to HTTP/WebSocket server
+    this.logger.debug('Routing via internet', {
+      destination,
+      type: message.type,
+    });
+
+    this.emit('route:internet', {
+      destination,
+      messageType: message.type,
+      timestamp: Date.now(),
+    });
+
+    return true; // Implementation delegates to HTTP/WebSocket server
+  }
+
+  /**
+   * Route message via gateway node
+   *
+   * Placeholder implementation for gateway routing.
+   * Gateway selection will be implemented in Parts 4-5.
+   * Emits 'route:gateway' event for tracking.
+   *
+   * @param message - Message to route
+   * @param destination - Destination node identifier
+   * @param gatewayId - Gateway node identifier
+   * @returns Promise resolving to true if routing successful
+   * @fires route:gateway - Emitted when routing via gateway
+   */
+  private async routeViaGateway(
+    message: HybridRoutingMessage,
+    destination: string,
+    gatewayId: string
+  ): Promise<boolean> {
+    // Placeholder - gateway routing will be implemented in Part 4-5
+    this.logger.debug('Routing via gateway', {
+      destination,
+      gatewayId,
+      type: message.type,
+    });
+
+    this.emit('route:gateway', {
+      destination,
+      gatewayId,
+      messageType: message.type,
+      timestamp: Date.now(),
+    });
+
+    return true; // Implementation will be completed in Part 4-5
   }
 
   /**
