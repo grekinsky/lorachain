@@ -309,3 +309,23 @@ export type {
   GatewayCapabilities,
   GatewayRegistration,
 } from './gateway-manager.js';
+
+// Blockchain Message Handling System exports
+export * from './blockchain-message-types.js';
+export * from './blockchain-message-interfaces.js';
+export * from './blockchain-message-handler-interface.js';
+export * from './base-blockchain-message-handler.js';
+
+export { BlockchainMessageType } from './blockchain-message-types.js';
+export { BaseBlockchainMessageHandler } from './base-blockchain-message-handler.js';
+
+// Blockchain message type exports
+export type {
+  UTXOMessagePayload,
+  BlockchainNetworkMessage,
+  BlockchainMessageContext,
+  MessageResponse,
+  ValidationResult as BlockchainValidationResult,
+} from './blockchain-message-interfaces.js';
+
+export type { BlockchainMessageHandler } from './blockchain-message-handler-interface.js';
