@@ -1,6 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { LorachainNode } from './node.js';
-import { Blockchain, BlockManager } from '@lorachain/core';
+import {
+  Blockchain,
+  BlockManager,
+  CryptographicService,
+  type UTXOTransaction,
+} from '@lorachain/core';
 import { Logger } from '@lorachain/shared';
 import type { NodeConfig } from './node.js';
 import type { NetworkNode, GenesisConfig } from '@lorachain/core';
@@ -258,24 +263,27 @@ describe('LorachainNode', () => {
       const blockchain = node.getBlockchain();
       await blockchain.waitForInitialization();
 
-      // Create a valid block manually using BlockManager
-      const transaction = {
-        id: `block-test-tx-${Date.now()}`,
-        from: 'from-address',
-        to: 'to-address',
-        amount: 100,
-        fee: 1,
+      // Create a coinbase UTXO transaction (no inputs, no signature required)
+      const utxoTransaction: UTXOTransaction = {
+        id: `coinbase-${Date.now()}`,
+        inputs: [], // Coinbase has no inputs
+        outputs: [
+          {
+            address: 'miner-address',
+            value: 50, // Block reward
+          },
+        ],
+        lockTime: 0,
         timestamp: Date.now(),
-        signature: 'test-signature',
-        nonce: 0,
+        fee: 0, // Coinbase has no fee
       };
 
       const latestBlock = blockchain.getLatestBlock();
 
-      // Create a valid block using BlockManager
+      // Create a valid block using BlockManager with coinbase transaction
       validBlock = BlockManager.createBlock(
         latestBlock.index + 1,
-        [transaction],
+        [utxoTransaction],
         latestBlock.hash,
         blockchain.getDifficulty(),
         'miner-address'
