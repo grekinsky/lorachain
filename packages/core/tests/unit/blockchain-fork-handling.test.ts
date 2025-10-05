@@ -6,15 +6,12 @@ import { UTXOCompressionManager } from '../../src/utxo-compression-manager.js';
 import { UTXOReliableDeliveryManager } from '../../src/utxo-reliable-delivery-manager.js';
 import { NodeDiscoveryProtocol } from '../../src/node-discovery-protocol.js';
 import { DatabaseFactory } from '../../src/database.js';
-import { BlockManager } from '../../src/block.js';
 import type { DifficultyConfig } from '../../src/difficulty.js';
 import type {
   Block,
   UTXOTransaction,
   GenesisConfig,
   UTXOPersistenceConfig,
-  UTXOChainBranch,
-  UTXOChainState,
 } from '../../src/types.js';
 
 describe('Enhanced Blockchain Fork Handling (NO BACKWARDS COMPATIBILITY)', () => {
@@ -95,11 +92,63 @@ describe('Enhanced Blockchain Fork Handling (NO BACKWARDS COMPATIBILITY)', () =>
       utxoOptimization: true,
       regionalCompliance: 'US',
     });
+
+    // Create proper config for UTXOReliableDeliveryManager
+    const deliveryConfig = {
+      defaultRetryPolicy: {
+        maxRetries: 3,
+        baseDelayMs: 1000,
+        maxDelayMs: 10000,
+        backoffMultiplier: 2,
+      },
+      maxPendingMessages: 100,
+      ackTimeoutMs: 5000,
+      enablePersistence: false,
+      deadLetterThreshold: 5,
+      enableCompression: true,
+      enableDutyCycleIntegration: false,
+      enablePriorityCalculation: true,
+    };
+
+    const nodeKeyPair = {
+      publicKey: 'test-public-key',
+      privateKey: 'test-private-key',
+    };
+
     reliableDelivery = new UTXOReliableDeliveryManager(
-      chainConfig,
-      compressionManager
+      'test-node-id',
+      nodeKeyPair,
+      deliveryConfig
     );
-    nodeDiscovery = new NodeDiscoveryProtocol(chainConfig);
+
+    // Create proper config for NodeDiscoveryProtocol
+    const discoveryConfig = {
+      beaconInterval: 30000,
+      neighborTimeout: 120000,
+      maxNeighbors: 50,
+      enableTopologySharing: true,
+      securityConfig: {
+        enableBeaconSigning: false,
+        maxBeaconRate: 2,
+        requireIdentityProof: false,
+        allowAnonymousNodes: true,
+        topologyValidationStrict: false,
+      },
+      performanceConfig: {
+        maxBeaconProcessingTime: 100,
+        maxNeighborLookupTime: 10,
+        maxTopologyUpdateTime: 200,
+        maxMemoryUsageMB: 10,
+        enableAdaptiveBeaconInterval: false,
+      },
+    };
+
+    nodeDiscovery = new NodeDiscoveryProtocol(
+      'test-node-id',
+      nodeKeyPair,
+      'full',
+      discoveryConfig
+    );
 
     blockchain = new Blockchain(
       persistence,
@@ -115,7 +164,9 @@ describe('Enhanced Blockchain Fork Handling (NO BACKWARDS COMPATIBILITY)', () =>
   });
 
   afterEach(async () => {
-    await blockchain.close();
+    if (blockchain && typeof blockchain.close === 'function') {
+      await blockchain.close();
+    }
   });
 
   describe('chain extension handling', () => {
@@ -179,7 +230,7 @@ describe('Enhanced Blockchain Fork Handling (NO BACKWARDS COMPATIBILITY)', () =>
     it('should select best chain based on cumulative difficulty', async () => {
       // Create initial chain with low difficulty
       const block1 = blockchain.minePendingUTXOTransactions('miner1');
-      const block2 = blockchain.minePendingUTXOTransactions('miner2');
+      const _block2 = blockchain.minePendingUTXOTransactions('miner2');
 
       // Create competing fork with higher difficulty
       const highDifficultyFork = createMockUTXOBlock(2, block1!.hash, 8); // Much higher difficulty
@@ -218,7 +269,7 @@ describe('Enhanced Blockchain Fork Handling (NO BACKWARDS COMPATIBILITY)', () =>
     it('should perform chain reorganization when necessary', async () => {
       // Create initial weaker chain
       const weakBlock = blockchain.minePendingUTXOTransactions('weak-miner');
-      const initialBlocks = blockchain.getBlocks().length;
+      const _initialBlocks = blockchain.getBlocks().length;
 
       // Create a stronger competing chain
       const strongerFork = createMockUTXOBlock(weakBlock!.index, 'genesis', 10); // Much higher difficulty
@@ -347,7 +398,7 @@ describe('Enhanced Blockchain Fork Handling (NO BACKWARDS COMPATIBILITY)', () =>
 
   describe('chain state management', () => {
     it('should provide accurate chain state', async () => {
-      const minedBlock = blockchain.minePendingUTXOTransactions('miner');
+      const _minedBlock = blockchain.minePendingUTXOTransactions('miner');
 
       const chainState = blockchain.getUTXOChainState();
 
@@ -358,7 +409,7 @@ describe('Enhanced Blockchain Fork Handling (NO BACKWARDS COMPATIBILITY)', () =>
     });
 
     it('should maintain branch metadata correctly', async () => {
-      const block1 = blockchain.minePendingUTXOTransactions('miner1');
+      const _block1 = blockchain.minePendingUTXOTransactions('miner1');
       const block2 = blockchain.minePendingUTXOTransactions('miner2');
 
       const activeBranch = blockchain.getActiveBranch();

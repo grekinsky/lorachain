@@ -1735,6 +1735,16 @@ export interface UTXOChainConfig {
 }
 
 /**
+ * Result of reorganization safety validation
+ */
+export interface UTXOReorganizationSafetyResult {
+  isSafe: boolean;
+  warnings: string[];
+  reorganizationDepth: number;
+  reasonUnsafe?: string;
+}
+
+/**
  * Result of chain reorganization operation
  * Integrates with existing UTXOTransactionManager and UTXOPersistenceManager
  */
@@ -1841,7 +1851,7 @@ export interface IUTXOReorganizationManager {
   validateReorganizationSafety(
     currentBranch: UTXOChainBranch,
     newBranch: UTXOChainBranch
-  ): boolean;
+  ): Promise<UTXOReorganizationSafetyResult>;
 
   createUTXOSetDelta(
     fromBranch: UTXOChainBranch,

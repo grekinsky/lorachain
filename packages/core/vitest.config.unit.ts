@@ -10,6 +10,14 @@ export default defineConfig({
     setupFiles: ['tests/shared/setup-unit.ts'],
     testTimeout: 10000, // 10 seconds max per unit test
     hookTimeout: 5000,
+    teardownTimeout: 2000, // Ensure processes clean up quickly
+    bail: process.env.CI ? 1 : 0, // Stop on first failure in CI
+    watchExclude: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/coverage/**',
+      '**/.git/**',
+    ],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],

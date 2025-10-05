@@ -51,9 +51,8 @@ describe('UTXOReorganizationManager (NO BACKWARDS COMPATIBILITY)', () => {
 
     reorganizationManager = new UTXOReorganizationManager(
       config,
-      utxoTransactionManager,
-      persistence,
-      utxoManager
+      utxoManager,
+      utxoTransactionManager
     );
   });
 
@@ -61,13 +60,13 @@ describe('UTXOReorganizationManager (NO BACKWARDS COMPATIBILITY)', () => {
     it('should successfully reorganize to better branch', async () => {
       const currentBranch = createMockBranch('current', [
         createMockBlock(0, 'genesis', 2),
-        createMockBlock(1, 'block0', 2),
+        createMockBlock(1, 'genesis-0', 2),
       ]);
 
       const betterBranch = createMockBranch('better', [
         createMockBlock(0, 'genesis', 2),
-        createMockBlock(1, 'block0', 4), // Higher difficulty
-        createMockBlock(2, 'block1', 4),
+        createMockBlock(1, 'genesis-0', 4), // Higher difficulty
+        createMockBlock(2, 'genesis-0-1', 4),
       ]);
 
       const result = await reorganizationManager.executeUTXOReorganization(
@@ -90,7 +89,8 @@ describe('UTXOReorganizationManager (NO BACKWARDS COMPATIBILITY)', () => {
       // Create a branch that requires reorganization beyond max depth
       const deepBlocks = Array.from(
         { length: config.maxReorganizationDepth + 1 },
-        (_, i) => createMockBlock(i, i === 0 ? 'genesis' : `block${i - 1}`, 2)
+        (_, i) =>
+          createMockBlock(i, i === 0 ? 'genesis' : `genesis-${i - 1}`, 2)
       );
       const deepBranch = createMockBranch('deep', deepBlocks);
 
@@ -109,13 +109,13 @@ describe('UTXOReorganizationManager (NO BACKWARDS COMPATIBILITY)', () => {
     it('should handle UTXO set delta calculation', async () => {
       const currentBranch = createMockBranch('current', [
         createMockBlock(0, 'genesis', 2),
-        createMockBlock(1, 'block0', 2),
+        createMockBlock(1, 'genesis-0', 2),
       ]);
 
       const newBranch = createMockBranch('new', [
         createMockBlock(0, 'genesis', 2),
-        createMockBlock(1, 'block0', 2),
-        createMockBlock(2, 'block1', 2),
+        createMockBlock(1, 'genesis-0', 2),
+        createMockBlock(2, 'genesis-0-1', 2),
       ]);
 
       const result = await reorganizationManager.executeUTXOReorganization(
@@ -169,12 +169,12 @@ describe('UTXOReorganizationManager (NO BACKWARDS COMPATIBILITY)', () => {
     it('should calculate delta for different branches', async () => {
       const branchA = createMockBranch('A', [
         createMockBlock(0, 'genesis', 2),
-        createMockBlock(1, 'block0', 2),
+        createMockBlock(1, 'genesis-0', 2),
       ]);
 
       const branchB = createMockBranch('B', [
         createMockBlock(0, 'genesis', 2),
-        createMockBlock(1, 'block0-alt', 2), // Different block at same height
+        createMockBlock(1, 'genesis-0', 2), // Same parent hash, different content
       ]);
 
       const delta = await reorganizationManager.calculateUTXOSetDelta(
@@ -210,7 +210,7 @@ describe('UTXOReorganizationManager (NO BACKWARDS COMPATIBILITY)', () => {
 
       const branchB = createMockBranch('B', [
         createMockBlockWithValue(0, 'genesis', 100),
-        createMockBlockWithValue(1, 'block0', 50), // Additional value
+        createMockBlockWithValue(1, 'genesis-0', 50), // Additional value
       ]);
 
       const delta = await reorganizationManager.calculateUTXOSetDelta(
@@ -226,12 +226,12 @@ describe('UTXOReorganizationManager (NO BACKWARDS COMPATIBILITY)', () => {
     it('should validate safe reorganization', async () => {
       const currentBranch = createMockBranch('current', [
         createMockBlock(0, 'genesis', 2),
-        createMockBlock(1, 'block0', 2),
+        createMockBlock(1, 'genesis-0', 2),
       ]);
 
       const newBranch = createMockBranch('new', [
         createMockBlock(0, 'genesis', 2),
-        createMockBlock(1, 'block0-alt', 4), // Higher difficulty, safe
+        createMockBlock(1, 'genesis-0', 4), // Higher difficulty, safe
       ]);
 
       const result = await reorganizationManager.validateReorganizationSafety(
@@ -253,7 +253,8 @@ describe('UTXOReorganizationManager (NO BACKWARDS COMPATIBILITY)', () => {
 
       const deepBlocks = Array.from(
         { length: config.maxReorganizationDepth + 1 },
-        (_, i) => createMockBlock(i, i === 0 ? 'genesis' : `block${i - 1}`, 2)
+        (_, i) =>
+          createMockBlock(i, i === 0 ? 'genesis' : `genesis-${i - 1}`, 2)
       );
       const deepBranch = createMockBranch('deep', deepBlocks);
 
@@ -275,13 +276,13 @@ describe('UTXOReorganizationManager (NO BACKWARDS COMPATIBILITY)', () => {
       const currentBranch = createMockBranch(
         'current',
         Array.from({ length: config.minConfirmationsForFinality + 1 }, (_, i) =>
-          createMockBlock(i, i === 0 ? 'genesis' : `block${i - 1}`, 2)
+          createMockBlock(i, i === 0 ? 'genesis' : `genesis-${i - 1}`, 2)
         )
       );
 
       const conflictingBranch = createMockBranch('conflict', [
         createMockBlock(0, 'genesis', 2),
-        createMockBlock(1, 'different-block', 4), // Conflicts with finalized blocks
+        createMockBlock(1, 'genesis-0', 4), // Conflicts with finalized blocks
       ]);
 
       const result = await reorganizationManager.validateReorganizationSafety(
@@ -303,7 +304,7 @@ describe('UTXOReorganizationManager (NO BACKWARDS COMPATIBILITY)', () => {
         Array.from({ length: 5 }, (_, i) =>
           createMockBlockWithManyUTXOs(
             i,
-            i === 0 ? 'genesis' : `block${i - 1}`,
+            i === 0 ? 'genesis' : `genesis-${i - 1}`,
             2
           )
         )
@@ -322,12 +323,12 @@ describe('UTXOReorganizationManager (NO BACKWARDS COMPATIBILITY)', () => {
     it('should update transaction pool after reorganization', async () => {
       const currentBranch = createMockBranch('current', [
         createMockBlock(0, 'genesis', 2),
-        createMockBlock(1, 'block0', 2),
+        createMockBlock(1, 'genesis-0', 2),
       ]);
 
       const newBranch = createMockBranch('new', [
         createMockBlock(0, 'genesis', 2),
-        createMockBlock(1, 'different', 2),
+        createMockBlock(1, 'genesis-0', 2),
       ]);
 
       const result = await reorganizationManager.executeUTXOReorganization(
@@ -344,12 +345,12 @@ describe('UTXOReorganizationManager (NO BACKWARDS COMPATIBILITY)', () => {
     it('should handle conflicting transactions', async () => {
       const branchWithConflict = createMockBranch('conflict', [
         createMockBlock(0, 'genesis', 2),
-        createMockBlockWithConflictingTx(1, 'block0', 2),
+        createMockBlockWithConflictingTx(1, 'genesis-0', 2),
       ]);
 
       const cleanBranch = createMockBranch('clean', [
         createMockBlock(0, 'genesis', 2),
-        createMockBlock(1, 'clean-block', 2),
+        createMockBlock(1, 'genesis-0', 2),
       ]);
 
       const result = await reorganizationManager.executeUTXOReorganization(
@@ -387,7 +388,7 @@ describe('UTXOReorganizationManager (NO BACKWARDS COMPATIBILITY)', () => {
 
       const newBranch = createMockBranch('new', [
         createMockBlock(0, 'genesis', 2),
-        createMockBlock(1, 'block0', 2),
+        createMockBlock(1, 'genesis-0', 2),
       ]);
 
       // Simulate persistence failure by closing the database

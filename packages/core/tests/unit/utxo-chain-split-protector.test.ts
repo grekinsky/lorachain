@@ -25,7 +25,35 @@ describe('UTXOChainSplitProtector (NO BACKWARDS COMPATIBILITY)', () => {
       minConfirmationsForFinality: 6,
     };
 
-    nodeDiscovery = new NodeDiscoveryProtocol(config);
+    // Create proper DiscoveryConfig for NodeDiscoveryProtocol
+    const discoveryConfig = {
+      beaconInterval: 30000,
+      neighborTimeout: 90000,
+      maxNeighbors: 50,
+      enableTopologySharing: true,
+      securityConfig: {
+        enableSignatureVerification: true,
+        trustThreshold: 0.75,
+        maxUntrustedNodes: 10,
+      },
+      performanceConfig: {
+        compressionEnabled: true,
+        batchSize: 100,
+        maxMemoryUsage: 50 * 1024 * 1024,
+      },
+    };
+
+    const nodeKeyPair = {
+      publicKey: 'test-public-key',
+      privateKey: 'test-private-key',
+    };
+
+    nodeDiscovery = new NodeDiscoveryProtocol(
+      'test-node-id',
+      nodeKeyPair,
+      'full',
+      discoveryConfig
+    );
     splitProtector = new UTXOChainSplitProtector(config, nodeDiscovery);
   });
 
@@ -455,7 +483,7 @@ describe('UTXOChainSplitProtector (NO BACKWARDS COMPATIBILITY)', () => {
     cumulativeDifficulty: bigint
   ): UTXOChainBranch {
     const blocks = Array.from({ length: height + 1 }, (_, i) =>
-      createMockBlock(i, i === 0 ? 'genesis' : `block${i - 1}`)
+      createMockBlock(i, i === 0 ? 'genesis' : `genesis-${i - 1}`)
     );
 
     return {
@@ -502,7 +530,7 @@ describe('UTXOChainSplitProtector (NO BACKWARDS COMPATIBILITY)', () => {
 
     for (let i = 0; i < intervals.length + 1; i++) {
       blocks.push({
-        ...createMockBlock(i, i === 0 ? 'genesis' : `block${i - 1}`),
+        ...createMockBlock(i, i === 0 ? 'genesis' : `genesis-${i - 1}`),
         timestamp,
       });
 
@@ -532,7 +560,7 @@ describe('UTXOChainSplitProtector (NO BACKWARDS COMPATIBILITY)', () => {
     difficulties: number[]
   ): UTXOChainBranch {
     const blocks = difficulties.map((difficulty, i) => ({
-      ...createMockBlock(i, i === 0 ? 'genesis' : `block${i - 1}`),
+      ...createMockBlock(i, i === 0 ? 'genesis' : `genesis-${i - 1}`),
       difficulty,
     }));
 
@@ -560,7 +588,7 @@ describe('UTXOChainSplitProtector (NO BACKWARDS COMPATIBILITY)', () => {
     const rapidInterval = 30000; // 30 seconds between blocks (very fast)
 
     const blocks = Array.from({ length: blockCount }, (_, i) => ({
-      ...createMockBlock(i, i === 0 ? 'genesis' : `block${i - 1}`),
+      ...createMockBlock(i, i === 0 ? 'genesis' : `genesis-${i - 1}`),
       timestamp: now - (blockCount - i) * rapidInterval,
     }));
 

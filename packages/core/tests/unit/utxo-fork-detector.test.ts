@@ -42,9 +42,32 @@ describe('UTXOForkDetector (NO BACKWARDS COMPATIBILITY)', () => {
       utxoOptimization: true,
       regionalCompliance: 'US',
     });
+    // Create proper config for UTXOReliableDeliveryManager
+    const deliveryConfig = {
+      defaultRetryPolicy: {
+        maxRetries: 3,
+        baseDelayMs: 1000,
+        maxDelayMs: 10000,
+        backoffMultiplier: 2,
+      },
+      maxPendingMessages: 100,
+      ackTimeoutMs: 5000,
+      enablePersistence: false,
+      deadLetterThreshold: 5,
+      enableCompression: true,
+      enableDutyCycleIntegration: false,
+      enablePriorityCalculation: true,
+    };
+
+    const nodeKeyPair = {
+      publicKey: 'test-public-key',
+      privateKey: 'test-private-key',
+    };
+
     reliableDelivery = new UTXOReliableDeliveryManager(
-      config,
-      compressionManager
+      'test-node-id',
+      nodeKeyPair,
+      deliveryConfig
     );
     utxoManager = new UTXOManager();
 
@@ -79,10 +102,10 @@ describe('UTXOForkDetector (NO BACKWARDS COMPATIBILITY)', () => {
   });
 
   describe('detectUTXOFork', () => {
-    it('should detect chain extension for valid block extending active chain', () => {
+    it('should detect chain extension for valid block extending active chain', async () => {
       const newBlock = createMockBlock(2, 'block1'); // extends block1
 
-      const result = forkDetector.detectUTXOFork(newBlock, chainState);
+      const result = await forkDetector.detectUTXOFork(newBlock, chainState);
 
       expect(result.type).toBe('extension');
       expect(result.utxoBlock).toBe(newBlock);
@@ -90,10 +113,10 @@ describe('UTXOForkDetector (NO BACKWARDS COMPATIBILITY)', () => {
       expect(result.fragmentationRequired).toBeDefined();
     });
 
-    it('should detect fork for block with different parent', () => {
+    it('should detect fork for block with different parent', async () => {
       const newBlock = createMockBlock(2, 'genesis'); // forks from genesis
 
-      const result = forkDetector.detectUTXOFork(newBlock, chainState);
+      const result = await forkDetector.detectUTXOFork(newBlock, chainState);
 
       expect(result.type).toBe('fork');
       expect(result.utxoBlock).toBe(newBlock);
@@ -101,28 +124,28 @@ describe('UTXOForkDetector (NO BACKWARDS COMPATIBILITY)', () => {
       expect(result.branchPoint).toBe(0);
     });
 
-    it('should detect orphan for block with unknown parent', () => {
+    it('should detect orphan for block with unknown parent', async () => {
       const newBlock = createMockBlock(5, 'unknown-parent');
 
-      const result = forkDetector.detectUTXOFork(newBlock, chainState);
+      const result = await forkDetector.detectUTXOFork(newBlock, chainState);
 
       expect(result.type).toBe('orphan');
       expect(result.utxoBlock).toBe(newBlock);
       expect(result.reason).toContain('Parent UTXO block not found');
     });
 
-    it('should throw error for non-UTXO blocks', () => {
+    it('should throw error for non-UTXO blocks', async () => {
       const nonUTXOBlock = createMockLegacyBlock(2, 'block1');
 
-      expect(() => {
-        forkDetector.detectUTXOFork(nonUTXOBlock, chainState);
-      }).toThrow('Non-UTXO transactions detected');
+      await expect(
+        forkDetector.detectUTXOFork(nonUTXOBlock, chainState)
+      ).rejects.toThrow('Non-UTXO transactions detected');
     });
 
-    it('should analyze LoRa fragmentation requirements', () => {
+    it('should analyze LoRa fragmentation requirements', async () => {
       const largeBlock = createMockLargeBlock(2, 'block1');
 
-      const result = forkDetector.detectUTXOFork(largeBlock, chainState);
+      const result = await forkDetector.detectUTXOFork(largeBlock, chainState);
 
       expect(result.fragmentationRequired).toBe(true);
     });
@@ -211,26 +234,26 @@ describe('UTXOForkDetector (NO BACKWARDS COMPATIBILITY)', () => {
   });
 
   describe('estimateLoRaFragmentation', () => {
-    it('should detect fragmentation for large blocks', () => {
+    it('should detect fragmentation for large blocks', async () => {
       const largeBlock = createMockLargeBlock(1, 'parent');
 
-      const result = forkDetector.estimateLoRaFragmentation(largeBlock);
+      const result = await forkDetector.estimateLoRaFragmentation(largeBlock);
 
       expect(result).toBe(true);
     });
 
-    it('should not require fragmentation for small blocks', () => {
+    it('should not require fragmentation for small blocks', async () => {
       const smallBlock = createMockSmallBlock(1, 'parent');
 
-      const result = forkDetector.estimateLoRaFragmentation(smallBlock);
+      const result = await forkDetector.estimateLoRaFragmentation(smallBlock);
 
       expect(result).toBe(false);
     });
 
-    it('should handle compression analysis gracefully', () => {
+    it('should handle compression analysis gracefully', async () => {
       const regularBlock = createMockBlock(1, 'parent');
 
-      const result = forkDetector.estimateLoRaFragmentation(regularBlock);
+      const result = await forkDetector.estimateLoRaFragmentation(regularBlock);
 
       expect(typeof result).toBe('boolean');
     });

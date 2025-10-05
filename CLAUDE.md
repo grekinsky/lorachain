@@ -179,7 +179,34 @@ pnpm --filter "@lorachain/mobile-wallet" test:unit:watch # Mobile wallet watch m
 
 **⚠️ Critical Testing Guidelines:**
 
-1. **ALWAYS check current directory with `pwd` before using `cd`**: This prevents "no such file or directory" errors by ensuring you know your current location before attempting navigation:
+1. **PREVENT HANGING VITEST PROCESSES** - Never use watch mode scripts in automated environments:
+
+   ```bash
+   # ✅ CORRECT: Always use explicit run commands for automation
+   pnpm test:unit                    # Runs once and exits
+   pnpm test:integration            # Runs once and exits
+   pnpm test:safe                   # Safe wrapper with timeout protection
+   
+   # ❌ WRONG: Watch mode scripts that never terminate
+   pnpm test:watch                  # Runs indefinitely in watch mode
+   pnpm test:unit:watch            # Hangs waiting for file changes
+   pnpm test:integration:watch     # Never exits automatically
+   ```
+
+2. **USE SAFE TEST RUNNERS** - Prevent hanging processes with built-in timeout protection:
+
+   ```bash
+   # Recommended safe test execution with automatic cleanup
+   pnpm test:safe                   # Unit tests with 5min timeout
+   pnpm test:safe:integration       # Integration tests with timeout  
+   pnpm test:safe:all              # All tests with timeout
+   
+   # Process management commands
+   pnpm test:status                # Check for running vitest processes
+   pnpm test:kill                  # Kill any hanging vitest processes
+   ```
+
+3. **ALWAYS check current directory with `pwd` before using `cd`**: This prevents "no such file or directory" errors by ensuring you know your current location before attempting navigation:
 
    ```bash
    # ✅ CORRECT: Always check where you are first
@@ -191,27 +218,35 @@ pnpm --filter "@lorachain/mobile-wallet" test:unit:watch # Mobile wallet watch m
    cd packages/core  # May fail if already in packages/core!
    ```
 
-2. **Always use `test:run` for single-run testing**: The default `test` command runs in watch mode and will wait indefinitely for file changes, causing timeouts in automated environments.
-
-3. **Avoid unnecessary directory changes**: When already in the project root, use filter commands instead of `cd` to avoid "no such file or directory" errors:
+4. **Avoid unnecessary directory changes**: When already in the project root, use filter commands instead of `cd` to avoid "no such file or directory" errors:
 
    ```bash
    # ❌ WRONG: Don't change to directories that don't exist relative to current location
    cd packages/core && pnpm test
 
    # ✅ CORRECT: Use filter commands from project root
-   pnpm --filter "@lorachain/core" test:run
+   pnpm --filter "@lorachain/core" test:unit
    ```
 
-4. **Build dependencies before testing**: Always build shared packages first to avoid test failures due to outdated compiled versions.
+5. **Build dependencies before testing**: Always build shared packages first to avoid test failures due to outdated compiled versions.
 
-5. **Use appropriate test commands**:
-   - `test` - Run full test suite (unit + integration)
-   - `test:unit` - Run unit tests only
-   - `test:unit:watch` - Unit tests in watch mode
-   - `test:integration` - Run integration tests only (core package)
-   - `test:integration:watch` - Integration tests in watch mode (core package)
-   - `test:run` - Single test execution (deprecated, use test:unit or test:integration)
+6. **Use appropriate test commands**:
+   - `test` - Run full test suite (unit + integration) once and exit
+   - `test:unit` - Run unit tests only, then exit
+   - `test:integration` - Run integration tests only, then exit
+   - `test:once` - Guaranteed single-run execution with --run flag
+   - `test:safe` - Safe execution with timeout and cleanup protection
+   - `test:unit:watch` - Unit tests in watch mode (NEVER use in automation)
+   - `test:integration:watch` - Integration tests in watch mode (NEVER use in automation)
+
+### Process Management
+
+**If vitest processes become stuck:**
+
+1. **Check for hanging processes**: `pnpm test:status`
+2. **Kill hanging processes**: `pnpm test:kill`
+3. **Use safe runner**: `pnpm test:safe` (includes automatic cleanup)
+4. **Manual cleanup**: `pkill -f vitest` or `killall node` if needed
 
 ### Dependency Build Order
 

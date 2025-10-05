@@ -284,23 +284,11 @@ describe('Blockchain (NO BACKWARDS COMPATIBILITY)', () => {
         fee: 0, // Genesis transactions have no fee
       };
 
-      // Convert UTXO transaction to legacy format for block creation
-      const legacyTransaction: Transaction = {
-        id: mockUTXOTransaction.id,
-        from: 'from-address',
-        to: mockUTXOTransaction.outputs[0].lockingScript,
-        amount: mockUTXOTransaction.outputs[0].value,
-        fee: mockUTXOTransaction.fee,
-        timestamp: mockUTXOTransaction.timestamp,
-        signature: 'test-signature',
-        nonce: 0,
-      };
-
-      // Create a valid block manually using BlockManager
+      // Create a valid block manually using BlockManager with UTXO transaction
       const latestBlock = blockchain.getLatestBlock();
       validBlock = BlockManager.createBlock(
         latestBlock.index + 1,
-        [legacyTransaction],
+        [mockUTXOTransaction as any],
         latestBlock.hash,
         blockchain.getDifficulty(),
         minerAddress

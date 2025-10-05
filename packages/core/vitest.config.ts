@@ -13,6 +13,15 @@ export default defineConfig({
     setupFiles: ['tests/shared/setup-all.ts'],
     testTimeout: 60000, // 60 seconds to accommodate integration tests
     hookTimeout: 30000,
+    teardownTimeout: 5000, // Allow more time for integration test cleanup
+    bail: process.env.CI ? 1 : 0, // Stop on first failure in CI
+    watchExclude: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/coverage/**',
+      '**/.git/**',
+      '**/temp/**',
+    ],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],

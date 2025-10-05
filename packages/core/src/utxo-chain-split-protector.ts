@@ -1,4 +1,3 @@
-import { Logger } from '@lorachain/shared';
 import {
   UTXOChainBranch,
   UTXOChainConfig,

@@ -1,7 +1,5 @@
-import { Logger } from '@lorachain/shared';
 import {
   Block,
-  UTXOChainState,
   UTXOChainBranch,
   UTXOForkDetectionResult,
   UTXOForkDetectionState,
@@ -232,7 +230,7 @@ export class UTXOForkDetector implements IUTXOForkDetector {
    */
   private async createOrphanResult(
     block: Block,
-    chainState: UTXOForkDetectionState
+    _chainState: UTXOForkDetectionState
   ): Promise<UTXOForkDetectionResult> {
     const compressionInfo = await this.analyzeBlockCompression(block);
 
@@ -346,7 +344,7 @@ export class UTXOForkDetector implements IUTXOForkDetector {
    */
   private calculateUTXOSetDelta(
     block: Block,
-    chainState: UTXOForkDetectionState
+    _chainState: UTXOForkDetectionState
   ): UTXOSetDelta {
     const addedUTXOs: UTXO[] = [];
     const removedUTXOs: Array<{ txId: string; outputIndex: number }> = [];
