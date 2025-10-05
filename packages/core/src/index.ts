@@ -286,8 +286,10 @@ export { UTXOChainSplitProtector } from './utxo-chain-split-protector.js';
 
 // Hybrid Routing System exports
 export * from './hybrid-router.js';
+export * from './gateway-manager.js';
 
 export { HybridRouter } from './hybrid-router.js';
+export { GatewayManager } from './gateway-manager.js';
 
 // Hybrid routing type exports
 export type {
@@ -296,3 +298,10 @@ export type {
   RoutePerformance,
   HybridRoutingMessage,
 } from './hybrid-router.js';
+
+// Gateway manager type exports
+export type {
+  GatewayNode,
+  GatewayCapabilities,
+  GatewayRegistration,
+} from './gateway-manager.js';

@@ -13,6 +13,7 @@ import { EventEmitter } from 'events';
 import { Logger } from '@lorachain/shared';
 import { PeerManager } from './peer-manager';
 import { UTXOCompressionManager } from './utxo-compression-manager';
+import type { GatewayManager } from './gateway-manager';
 
 /**
  * Default network latency constants (milliseconds)
@@ -167,6 +168,7 @@ export class HybridRouter extends EventEmitter {
   private routingTableTimestamps: Map<string, number>;
   private peerManager: PeerManager;
   private compressionManager: UTXOCompressionManager;
+  private gatewayManager: GatewayManager;
   private logger: Logger;
   private isRunning = false;
   private networkConditions: NetworkConditions;
@@ -179,16 +181,19 @@ export class HybridRouter extends EventEmitter {
    * @param config - Router configuration
    * @param peerManager - Peer management service
    * @param compressionManager - Compression management service
+   * @param gatewayManager - Gateway management service
    */
   constructor(
     config: HybridRouterConfig,
     peerManager: PeerManager,
-    compressionManager: UTXOCompressionManager
+    compressionManager: UTXOCompressionManager,
+    gatewayManager: GatewayManager
   ) {
     super();
     this.config = config;
     this.peerManager = peerManager;
     this.compressionManager = compressionManager;
+    this.gatewayManager = gatewayManager;
     this.logger = Logger.getInstance();
     this.routingTable = new Map();
     this.routingTableTimestamps = new Map();
@@ -212,6 +217,9 @@ export class HybridRouter extends EventEmitter {
       preferredNetwork: this.config.preferredNetwork,
       autoOptimization: this.config.enableAutoOptimization,
     });
+
+    // Start gateway manager
+    await this.gatewayManager.start();
 
     // Update network conditions on start
     await this.updateNetworkConditions();
@@ -239,6 +247,9 @@ export class HybridRouter extends EventEmitter {
 
     this.isRunning = false;
     this.logger.info('Stopping hybrid router');
+
+    // Stop gateway manager
+    await this.gatewayManager.stop();
 
     // Stop periodic condition updates
     if (this.conditionUpdateInterval) {
@@ -483,10 +494,13 @@ export class HybridRouter extends EventEmitter {
       ? { ...this.networkConditions }
       : undefined;
 
+    // Get available gateways from gateway manager
+    const gateways = this.gatewayManager.getAvailableGateways();
+
     this.networkConditions = {
       meshConnectivity: await this.checkMeshConnectivity(),
       internetConnectivity: await this.checkInternetConnectivity(),
-      availableGateways: [], // Will be populated in Part 4 (Gateway Management)
+      availableGateways: gateways.map(g => g.id),
       networkLatency: await this.measureNetworkLatency(),
       bandwidth: await this.measureBandwidth(),
       congestion: await this.measureCongestion(),

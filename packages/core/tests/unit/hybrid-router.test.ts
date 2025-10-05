@@ -21,6 +21,8 @@ import {
 } from '../../src/hybrid-router.js';
 import { PeerManager } from '../../src/peer-manager.js';
 import { UTXOCompressionManager } from '../../src/utxo-compression-manager.js';
+import { GatewayManager } from '../../src/gateway-manager.js';
+import { CryptographicService } from '../../src/cryptographic.js';
 import { UTXOManager } from '../../src/utxo.js';
 import { DutyCycleManager } from '../../src/duty-cycle.js';
 
@@ -28,6 +30,7 @@ describe('HybridRouter', () => {
   let hybridRouter: HybridRouter;
   let mockPeerManager: PeerManager;
   let mockCompressionManager: UTXOCompressionManager;
+  let mockGatewayManager: GatewayManager;
   let mockConfig: HybridRouterConfig;
 
   beforeEach(() => {
@@ -73,6 +76,18 @@ describe('HybridRouter', () => {
       mockDutyCycleManager
     );
 
+    // Create mock gateway manager
+    const keyPair = CryptographicService.generateKeyPair('secp256k1');
+    const mockCryptoService = new CryptographicService(
+      keyPair.publicKey,
+      keyPair.privateKey,
+      'secp256k1'
+    );
+    mockGatewayManager = new GatewayManager(
+      mockPeerManager,
+      mockCryptoService
+    );
+
     // Create router configuration
     mockConfig = {
       enableAutoOptimization: false,
@@ -86,7 +101,8 @@ describe('HybridRouter', () => {
     hybridRouter = new HybridRouter(
       mockConfig,
       mockPeerManager,
-      mockCompressionManager
+      mockCompressionManager,
+      mockGatewayManager
     );
   });
 
@@ -695,7 +711,8 @@ describe('HybridRouter', () => {
       const meshRouter = new HybridRouter(
         meshConfig,
         mockPeerManager,
-        mockCompressionManager
+        mockCompressionManager,
+        mockGatewayManager
       );
       meshRouter.on('routes:cleared', clearSpy);
 
@@ -744,7 +761,8 @@ describe('HybridRouter', () => {
       const autoRouter = new HybridRouter(
         autoOptimizeConfig,
         mockPeerManager,
-        mockCompressionManager
+        mockCompressionManager,
+        mockGatewayManager
       );
 
       const conditionsSpy = vi.fn();
@@ -772,7 +790,8 @@ describe('HybridRouter', () => {
       const autoRouter = new HybridRouter(
         autoOptimizeConfig,
         mockPeerManager,
-        mockCompressionManager
+        mockCompressionManager,
+        mockGatewayManager
       );
 
       await autoRouter.start();
