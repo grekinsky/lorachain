@@ -742,6 +742,45 @@ export class HybridRouter extends EventEmitter {
    * @returns Promise resolving to true if routing successful
    * @fires route:mesh - Emitted when routing via mesh
    */
+
+  /**
+   * Select best gateway for routing
+   *
+   * Uses GatewayManager's selection algorithm with specific criteria
+   * for optimal gateway selection.
+   *
+   * @returns Gateway ID or undefined if no suitable gateway found
+   */
+  private selectBestGateway(): string | undefined {
+    const gateway = this.gatewayManager.selectOptimalGateway({
+      preferFullNodes: true,
+      minScore: 50,
+      maxLoad: 0.8,
+    });
+
+    return gateway?.id;
+  }
+
+  /**
+   * Balance gateway load
+   *
+   * Triggers load distribution across available gateways via GatewayManager.
+   */
+  balanceGatewayLoad(): void {
+    this.gatewayManager.distributeLoad();
+  }
+
+  /**
+   * Optimize traffic flow
+   *
+   * Balances gateway load and triggers traffic rebalancing for optimal
+   * network performance.
+   */
+  optimizeTrafficFlow(): void {
+    this.balanceGatewayLoad();
+    this.gatewayManager.rebalanceTraffic();
+  }
+
   private async routeViaMesh(
     message: HybridRoutingMessage,
     destination: string
@@ -809,21 +848,19 @@ export class HybridRouter extends EventEmitter {
     destination: string,
     gatewayId: string
   ): Promise<boolean> {
-    // Placeholder - gateway routing will be implemented in Part 4-5
-    this.logger.debug('Routing via gateway', {
-      destination,
-      gatewayId,
-      type: message.type,
-    });
+    const gateway = this.gatewayManager.getGateway(gatewayId);
 
-    this.emit('route:gateway', {
-      destination,
-      gatewayId,
-      messageType: message.type,
-      timestamp: Date.now(),
-    });
+    if (!gateway) {
+      this.logger.error('Gateway not found', { gatewayId });
+      return false;
+    }
 
-    return true; // Implementation will be completed in Part 4-5
+    // Bridge message through gateway
+    return await this.gatewayManager.bridgeMessage(
+      message,
+      gateway,
+      destination
+    );
   }
 
   /**

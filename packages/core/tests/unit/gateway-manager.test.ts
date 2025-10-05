@@ -582,6 +582,338 @@ describe('GatewayManager', () => {
       expect(true).toBe(true);
     });
   });
+
+  describe('Gateway Selection & Load Balancing', () => {
+    test('should select gateway with lowest load', async () => {
+      vi.spyOn(CryptographicService, 'verify').mockReturnValue(true);
+
+      const reg1 = createValidRegistration();
+      const reg2 = { ...createValidRegistration(), nodeId: 'gateway-2' };
+
+      await gatewayManager.start();
+      await gatewayManager.registerGateway(reg1);
+      await gatewayManager.registerGateway(reg2);
+
+      // Set different loads
+      gatewayManager.updateGatewayStatus(reg1.nodeId, { currentLoad: 0.8 });
+      gatewayManager.updateGatewayStatus(reg2.nodeId, { currentLoad: 0.3 });
+
+      const selected = gatewayManager.selectOptimalGateway();
+
+      expect(selected?.id).toBe(reg2.nodeId);
+    });
+
+    test('should filter gateways by max load criteria', async () => {
+      vi.spyOn(CryptographicService, 'verify').mockReturnValue(true);
+
+      const reg1 = createValidRegistration();
+      const reg2 = { ...createValidRegistration(), nodeId: 'gateway-2' };
+
+      await gatewayManager.start();
+      await gatewayManager.registerGateway(reg1);
+      await gatewayManager.registerGateway(reg2);
+
+      gatewayManager.updateGatewayStatus(reg1.nodeId, { currentLoad: 0.9 });
+      gatewayManager.updateGatewayStatus(reg2.nodeId, { currentLoad: 0.4 });
+
+      const selected = gatewayManager.selectOptimalGateway({ maxLoad: 0.5 });
+
+      expect(selected?.id).toBe(reg2.nodeId);
+    });
+
+    test('should filter gateways by required protocols', async () => {
+      vi.spyOn(CryptographicService, 'verify').mockReturnValue(true);
+
+      const reg1 = {
+        ...createValidRegistration(),
+        capabilities: {
+          ...createValidRegistration().capabilities,
+          supportedProtocols: ['utxo', 'block'],
+        },
+      };
+
+      const reg2 = {
+        ...createValidRegistration(),
+        nodeId: 'gateway-2',
+        capabilities: {
+          ...createValidRegistration().capabilities,
+          supportedProtocols: ['utxo', 'block', 'transaction'],
+        },
+      };
+
+      await gatewayManager.start();
+      await gatewayManager.registerGateway(reg1);
+      await gatewayManager.registerGateway(reg2);
+
+      const selected = gatewayManager.selectOptimalGateway({
+        requiredProtocols: ['transaction'],
+      });
+
+      expect(selected?.id).toBe(reg2.nodeId);
+    });
+
+    test('should return null when no gateways available', async () => {
+      await gatewayManager.start();
+
+      const selected = gatewayManager.selectOptimalGateway();
+
+      expect(selected).toBeNull();
+    });
+
+    test('should use fallback when no gateways match criteria', async () => {
+      vi.spyOn(CryptographicService, 'verify').mockReturnValue(true);
+
+      const reg1 = createValidRegistration();
+      await gatewayManager.start();
+      await gatewayManager.registerGateway(reg1);
+
+      gatewayManager.updateGatewayStatus(reg1.nodeId, { currentLoad: 0.9 });
+
+      const selected = gatewayManager.selectOptimalGateway({ maxLoad: 0.1 });
+
+      expect(selected?.id).toBe(reg1.nodeId); // Fallback to first available
+    });
+
+    test('should emit gateway:selected event', async () => {
+      const selectedSpy = vi.fn();
+      gatewayManager.on('gateway:selected', selectedSpy);
+
+      vi.spyOn(CryptographicService, 'verify').mockReturnValue(true);
+
+      const reg1 = createValidRegistration();
+      await gatewayManager.start();
+      await gatewayManager.registerGateway(reg1);
+
+      gatewayManager.selectOptimalGateway();
+
+      expect(selectedSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          gatewayId: reg1.nodeId,
+          score: expect.any(Number),
+          timestamp: expect.any(Number),
+        })
+      );
+    });
+
+    test('should filter by preferred latency', async () => {
+      vi.spyOn(CryptographicService, 'verify').mockReturnValue(true);
+
+      const reg1 = createValidRegistration();
+      const reg2 = { ...createValidRegistration(), nodeId: 'gateway-2' };
+
+      await gatewayManager.start();
+      await gatewayManager.registerGateway(reg1);
+      await gatewayManager.registerGateway(reg2);
+
+      gatewayManager.updateGatewayMetrics(reg1.nodeId, { averageLatency: 200 });
+      gatewayManager.updateGatewayMetrics(reg2.nodeId, { averageLatency: 50 });
+
+      const selected = gatewayManager.selectOptimalGateway({
+        preferredLatency: 100,
+      });
+
+      expect(selected?.id).toBe(reg2.nodeId);
+    });
+
+    test('should filter by minimum score', async () => {
+      vi.spyOn(CryptographicService, 'verify').mockReturnValue(true);
+
+      const reg1 = createValidRegistration();
+      const reg2 = { ...createValidRegistration(), nodeId: 'gateway-2' };
+
+      await gatewayManager.start();
+      await gatewayManager.registerGateway(reg1);
+      await gatewayManager.registerGateway(reg2);
+
+      // Make reg1 have very poor metrics for low score
+      gatewayManager.updateGatewayStatus(reg1.nodeId, { currentLoad: 0.95 });
+      gatewayManager.updateGatewayMetrics(reg1.nodeId, {
+        errorRate: 0.5,
+        averageLatency: 500,
+      });
+
+      // Make reg2 have good metrics for high score
+      gatewayManager.updateGatewayStatus(reg2.nodeId, { currentLoad: 0.2 });
+      gatewayManager.updateGatewayMetrics(reg2.nodeId, {
+        errorRate: 0.01,
+        averageLatency: 50,
+      });
+
+      const selected = gatewayManager.selectOptimalGateway({ minScore: 50 });
+
+      expect(selected?.id).toBe(reg2.nodeId);
+    });
+  });
+
+  describe('Gateway Scoring', () => {
+    test('should calculate score based on load, error rate, and latency', async () => {
+      vi.spyOn(CryptographicService, 'verify').mockReturnValue(true);
+
+      const reg1 = createValidRegistration();
+      await gatewayManager.start();
+      await gatewayManager.registerGateway(reg1);
+
+      const gateway = gatewayManager.getGateway(reg1.nodeId)!;
+      gateway.status.currentLoad = 0.2;
+      gateway.metrics.errorRate = 0.01;
+      gateway.metrics.averageLatency = 50;
+      gateway.status.queueSize = 5;
+
+      const score = gatewayManager['calculateGatewayScore'](gateway);
+
+      expect(score).toBeGreaterThan(70); // Good gateway should score high
+    });
+
+    test('should score low-load gateways higher', async () => {
+      vi.spyOn(CryptographicService, 'verify').mockReturnValue(true);
+
+      const reg1 = createValidRegistration();
+      const reg2 = { ...createValidRegistration(), nodeId: 'gateway-2' };
+
+      await gatewayManager.start();
+      await gatewayManager.registerGateway(reg1);
+      await gatewayManager.registerGateway(reg2);
+
+      gatewayManager.updateGatewayStatus(reg1.nodeId, { currentLoad: 0.1 });
+      gatewayManager.updateGatewayStatus(reg2.nodeId, { currentLoad: 0.9 });
+
+      const gw1 = gatewayManager.getGateway(reg1.nodeId)!;
+      const gw2 = gatewayManager.getGateway(reg2.nodeId)!;
+
+      const score1 = gatewayManager['calculateGatewayScore'](gw1);
+      const score2 = gatewayManager['calculateGatewayScore'](gw2);
+
+      expect(score1).toBeGreaterThan(score2);
+    });
+  });
+
+  describe('Load Distribution', () => {
+    test('should calculate average load across gateways', async () => {
+      vi.spyOn(CryptographicService, 'verify').mockReturnValue(true);
+
+      const reg1 = createValidRegistration();
+      const reg2 = { ...createValidRegistration(), nodeId: 'gateway-2' };
+
+      await gatewayManager.start();
+      await gatewayManager.registerGateway(reg1);
+      await gatewayManager.registerGateway(reg2);
+
+      gatewayManager.updateGatewayStatus(reg1.nodeId, { currentLoad: 0.6 });
+      gatewayManager.updateGatewayStatus(reg2.nodeId, { currentLoad: 0.4 });
+
+      const distributedSpy = vi.fn();
+      gatewayManager.on('load:distributed', distributedSpy);
+
+      gatewayManager.distributeLoad();
+
+      expect(distributedSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          avgLoad: 0.5,
+          gatewayCount: 2,
+        })
+      );
+    });
+
+    test('should detect load imbalance', async () => {
+      vi.spyOn(CryptographicService, 'verify').mockReturnValue(true);
+
+      const reg1 = createValidRegistration();
+      const reg2 = { ...createValidRegistration(), nodeId: 'gateway-2' };
+
+      await gatewayManager.start();
+      await gatewayManager.registerGateway(reg1);
+      await gatewayManager.registerGateway(reg2);
+
+      gatewayManager.updateGatewayStatus(reg1.nodeId, { currentLoad: 0.9 }); // Overloaded
+      gatewayManager.updateGatewayStatus(reg2.nodeId, { currentLoad: 0.1 }); // Underloaded
+
+      const imbalancedSpy = vi.fn();
+      gatewayManager.on('load:imbalanced', imbalancedSpy);
+
+      gatewayManager.distributeLoad();
+
+      expect(imbalancedSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          overloaded: expect.arrayContaining([reg1.nodeId]),
+          underloaded: expect.arrayContaining([reg2.nodeId]),
+        })
+      );
+    });
+
+    test('should rebalance traffic', async () => {
+      const rebalancedSpy = vi.fn();
+      gatewayManager.on('traffic:rebalanced', rebalancedSpy);
+
+      await gatewayManager.start();
+
+      gatewayManager.rebalanceTraffic();
+
+      expect(rebalancedSpy).toHaveBeenCalled();
+    });
+  });
+
+  describe('Message Bridging', () => {
+    test('should bridge message and update gateway metrics', async () => {
+      vi.spyOn(CryptographicService, 'verify').mockReturnValue(true);
+
+      const reg1 = createValidRegistration();
+      await gatewayManager.start();
+      await gatewayManager.registerGateway(reg1);
+
+      const gateway = gatewayManager.getGateway(reg1.nodeId)!;
+      const message = { type: 'transaction', payload: new Uint8Array() };
+
+      const result = await gatewayManager.bridgeMessage(
+        message,
+        gateway,
+        'node-123'
+      );
+
+      expect(result).toBe(true);
+      expect(gateway.metrics.messagesProcessed).toBe(1);
+    });
+
+    test('should emit message:bridged event on success', async () => {
+      const bridgedSpy = vi.fn();
+      gatewayManager.on('message:bridged', bridgedSpy);
+
+      vi.spyOn(CryptographicService, 'verify').mockReturnValue(true);
+
+      const reg1 = createValidRegistration();
+      await gatewayManager.start();
+      await gatewayManager.registerGateway(reg1);
+
+      const gateway = gatewayManager.getGateway(reg1.nodeId)!;
+      const message = { type: 'block', payload: new Uint8Array() };
+
+      await gatewayManager.bridgeMessage(message, gateway, 'node-456');
+
+      expect(bridgedSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          gatewayId: reg1.nodeId,
+          destination: 'node-456',
+          messageType: 'block',
+        })
+      );
+    });
+
+    test('should track gateway queue and load during bridging', async () => {
+      vi.spyOn(CryptographicService, 'verify').mockReturnValue(true);
+
+      const reg1 = createValidRegistration();
+      await gatewayManager.start();
+      await gatewayManager.registerGateway(reg1);
+
+      const gateway = gatewayManager.getGateway(reg1.nodeId)!;
+      const initialQueue = gateway.status.queueSize;
+      const message = { type: 'transaction', payload: new Uint8Array() };
+
+      await gatewayManager.bridgeMessage(message, gateway, 'node-789');
+
+      // Queue should return to initial size after successful bridging
+      expect(gateway.status.queueSize).toBe(initialQueue);
+    });
+  });
 });
 
 /**

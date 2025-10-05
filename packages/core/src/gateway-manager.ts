@@ -95,6 +95,22 @@ export interface GatewayRegistration {
 }
 
 /**
+ * Gateway selection criteria interface
+ */
+export interface GatewaySelectionCriteria {
+  /** Prefer full node gateways over light nodes */
+  preferFullNodes?: boolean;
+  /** Minimum gateway score threshold (0-100) */
+  minScore?: number;
+  /** Maximum acceptable load (0-1 scale) */
+  maxLoad?: number;
+  /** Required protocol support list */
+  requiredProtocols?: string[];
+  /** Preferred maximum latency in milliseconds */
+  preferredLatency?: number;
+}
+
+/**
  * GatewayManager - Manages gateway node registration and lifecycle
  *
  * Provides gateway registration with cryptographic authentication,
@@ -441,6 +457,269 @@ export class GatewayManager extends EventEmitter {
    * @param registration - Gateway registration request
    * @returns Promise resolving to true if authentication valid
    */
+
+  /**
+   * Select optimal gateway based on criteria
+   *
+   * Evaluates available gateways using a scoring algorithm that considers:
+   * - Current load (30% weight)
+   * - Error rate (30% weight)
+   * - Latency (20% weight)
+   * - Queue size (20% weight)
+   *
+   * Emits 'gateway:selected' event with gateway ID and score.
+   *
+   * @param criteria - Selection criteria to filter and score gateways
+   * @returns Selected gateway node or null if none available
+   */
+  selectOptimalGateway(
+    criteria: GatewaySelectionCriteria = {}
+  ): GatewayNode | null {
+    const available = this.getAvailableGateways();
+
+    if (available.length === 0) {
+      this.logger.warn('No available gateways for selection');
+      return null;
+    }
+
+    // Filter by criteria
+    const filtered = available.filter(gateway => {
+      // Check minimum score
+      if (
+        criteria.minScore &&
+        this.calculateGatewayScore(gateway) < criteria.minScore
+      ) {
+        return false;
+      }
+
+      // Check maximum load
+      if (criteria.maxLoad && gateway.status.currentLoad > criteria.maxLoad) {
+        return false;
+      }
+
+      // Check required protocols
+      if (criteria.requiredProtocols) {
+        const hasAll = criteria.requiredProtocols.every(proto =>
+          gateway.capabilities.supportedProtocols.includes(proto)
+        );
+        if (!hasAll) return false;
+      }
+
+      // Check preferred latency
+      if (
+        criteria.preferredLatency &&
+        gateway.metrics.averageLatency > criteria.preferredLatency
+      ) {
+        return false;
+      }
+
+      return true;
+    });
+
+    if (filtered.length === 0) {
+      this.logger.warn('No gateways match selection criteria, using fallback');
+      // Fallback to first available if no matches
+      return available[0];
+    }
+
+    // Select gateway with best score
+    const selected = filtered.reduce((best, current) => {
+      const bestScore = this.calculateGatewayScore(best);
+      const currentScore = this.calculateGatewayScore(current);
+
+      return currentScore > bestScore ? current : best;
+    });
+
+    this.logger.debug('Selected optimal gateway', {
+      gatewayId: selected.id,
+      score: this.calculateGatewayScore(selected),
+      load: selected.status.currentLoad,
+    });
+
+    this.emit('gateway:selected', {
+      gatewayId: selected.id,
+      score: this.calculateGatewayScore(selected),
+      timestamp: Date.now(),
+    });
+
+    return selected;
+  }
+
+  /**
+   * Distribute load across available gateways
+   *
+   * Calculates average load and identifies overloaded/underloaded gateways.
+   * Emits 'load:distributed' event with load statistics.
+   * Emits 'load:imbalanced' event if significant imbalance detected.
+   */
+  distributeLoad(): void {
+    const gateways = this.getAvailableGateways();
+
+    if (gateways.length === 0) {
+      this.logger.warn('No gateways available for load distribution');
+      return;
+    }
+
+    const totalLoad = gateways.reduce(
+      (sum, g) => sum + g.status.currentLoad,
+      0
+    );
+    const avgLoad = totalLoad / gateways.length;
+
+    this.logger.debug('Distributing gateway load', {
+      totalLoad,
+      avgLoad,
+      gatewayCount: gateways.length,
+    });
+
+    // Identify overloaded and underloaded gateways
+    const overloaded = gateways.filter(
+      g => g.status.currentLoad > avgLoad * 1.5
+    );
+    const underloaded = gateways.filter(
+      g => g.status.currentLoad < avgLoad * 0.5
+    );
+
+    if (overloaded.length > 0 && underloaded.length > 0) {
+      this.emit('load:imbalanced', {
+        overloaded: overloaded.map(g => g.id),
+        underloaded: underloaded.map(g => g.id),
+        avgLoad,
+        timestamp: Date.now(),
+      });
+    }
+
+    this.emit('load:distributed', {
+      totalLoad,
+      avgLoad,
+      gatewayCount: gateways.length,
+      timestamp: Date.now(),
+    });
+  }
+
+  /**
+   * Rebalance traffic across gateways
+   *
+   * Triggers load distribution and emits 'traffic:rebalanced' event.
+   */
+  rebalanceTraffic(): void {
+    this.logger.info('Rebalancing traffic across gateways');
+
+    this.distributeLoad();
+
+    this.emit('traffic:rebalanced', {
+      timestamp: Date.now(),
+    });
+  }
+
+  /**
+   * Bridge message through gateway
+   *
+   * Tracks gateway usage, updates metrics, and handles message bridging.
+   * This is a placeholder implementation that will be completed in Part 6.
+   *
+   * Emits 'message:bridged' on success or 'message:bridge-failed' on error.
+   *
+   * @param message - Message to bridge
+   * @param gateway - Gateway node to use
+   * @param destination - Destination node identifier
+   * @returns Promise resolving to true if bridging successful
+   */
+  async bridgeMessage(
+    message: any,
+    gateway: GatewayNode,
+    destination: string
+  ): Promise<boolean> {
+    try {
+      // Track gateway usage
+      gateway.status.queueSize++;
+      gateway.status.currentLoad =
+        gateway.status.queueSize / gateway.capabilities.maxThroughput;
+
+      // Bridge the message (actual implementation in Part 6)
+      this.logger.debug('Bridging message via gateway', {
+        gatewayId: gateway.id,
+        destination,
+        messageType: message.type,
+      });
+
+      // Update metrics
+      gateway.metrics.messagesProcessed++;
+      gateway.status.queueSize--;
+
+      this.emit('message:bridged', {
+        gatewayId: gateway.id,
+        destination,
+        messageType: message.type,
+        timestamp: Date.now(),
+      });
+
+      return true;
+    } catch (error) {
+      this.logger.error('Failed to bridge message', {
+        error,
+        gatewayId: gateway.id,
+      });
+
+      gateway.metrics.errorRate =
+        (gateway.metrics.errorRate * gateway.metrics.messagesProcessed + 1) /
+        (gateway.metrics.messagesProcessed + 1);
+
+      this.emit('message:bridge-failed', {
+        gatewayId: gateway.id,
+        destination,
+        error,
+        timestamp: Date.now(),
+      });
+
+      return false;
+    }
+  }
+
+  /**
+   * Calculate gateway score based on performance metrics
+   *
+   * Scoring algorithm:
+   * - Load score (30%): Lower load = higher score
+   * - Error score (30%): Lower error rate = higher score
+   * - Latency score (20%): Lower latency = higher score
+   * - Queue score (20%): Smaller queue = higher score
+   *
+   * @param gateway - Gateway node to score
+   * @returns Score from 0-100 (higher is better)
+   */
+  private calculateGatewayScore(gateway: GatewayNode): number {
+    // Score based on load (0-100, higher is better)
+    const loadScore = (1 - gateway.status.currentLoad) * 100;
+
+    // Score based on error rate (0-100, higher is better)
+    const errorScore = (1 - gateway.metrics.errorRate) * 100;
+
+    // Score based on latency (0-100, higher is better)
+    // Assume latency below 100ms is excellent
+    const latencyScore = Math.max(0, 100 - gateway.metrics.averageLatency / 10);
+
+    // Score based on queue size (0-100, higher is better)
+    const queueScore =
+      (1 - gateway.status.queueSize / gateway.capabilities.maxThroughput) * 100;
+
+    // Weighted average
+    const weights = {
+      load: 0.3,
+      error: 0.3,
+      latency: 0.2,
+      queue: 0.2,
+    };
+
+    const totalScore =
+      loadScore * weights.load +
+      errorScore * weights.error +
+      latencyScore * weights.latency +
+      queueScore * weights.queue;
+
+    return Math.max(0, Math.min(100, totalScore));
+  }
+
   private async verifyGatewayAuthentication(
     registration: GatewayRegistration
   ): Promise<boolean> {
