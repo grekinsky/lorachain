@@ -283,3 +283,29 @@ export { UTXOChainSelector } from './utxo-chain-selector.js';
 export { UTXOForkDetector } from './utxo-fork-detector.js';
 export { UTXOReorganizationManager } from './utxo-reorganization-manager.js';
 export { UTXOChainSplitProtector } from './utxo-chain-split-protector.js';
+
+// Hybrid Routing System exports
+export * from './hybrid-router.js';
+export * from './gateway-manager.js';
+export * from './network-bridge.js';
+export * from './traffic-optimizer.js';
+
+export { HybridRouter } from './hybrid-router.js';
+export { GatewayManager } from './gateway-manager.js';
+export { NetworkBridge } from './network-bridge.js';
+export { TrafficOptimizer } from './traffic-optimizer.js';
+
+// Hybrid routing type exports
+export type {
+  RouteDecision,
+  HybridRouterConfig,
+  RoutePerformance,
+  HybridRoutingMessage,
+} from './hybrid-router.js';
+
+// Gateway manager type exports
+export type {
+  GatewayNode,
+  GatewayCapabilities,
+  GatewayRegistration,
+} from './gateway-manager.js';
