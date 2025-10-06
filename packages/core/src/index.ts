@@ -315,9 +315,11 @@ export * from './blockchain-message-types.js';
 export * from './blockchain-message-interfaces.js';
 export * from './blockchain-message-handler-interface.js';
 export * from './base-blockchain-message-handler.js';
+export * from './blockchain-message-router.js';
 
 export { BlockchainMessageType } from './blockchain-message-types.js';
 export { BaseBlockchainMessageHandler } from './base-blockchain-message-handler.js';
+export { BlockchainMessageRouter } from './blockchain-message-router.js';
 
 // Blockchain message type exports
 export type {
