@@ -376,6 +376,7 @@ export interface CheckpointFragmentPayload {
   totalFragments: number;
   fragmentData: Buffer;
   checksum: string;
+  compressionAlgorithm: CompressionAlgorithm; // Algorithm used for checkpoint compression
 }
 
 /**

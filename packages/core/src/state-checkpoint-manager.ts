@@ -245,10 +245,6 @@ export class StateCheckpointManager extends EventEmitter {
     cacheMisses: 0,
   };
 
-  // Fragment cache for reassembly
-  private fragmentCache: Map<string, Map<number, CheckpointFragmentPayload>> =
-    new Map();
-
   constructor(
     blockchain: Blockchain,
     persistence: UTXOPersistenceManager,
@@ -1089,6 +1085,8 @@ export class StateCheckpointManager extends EventEmitter {
     let totalFragments = 0;
 
     return new Promise((resolve, reject) => {
+      let isCleanedUp = false;
+
       // Fragment handler
       const fragmentHandler = (fragment: CheckpointFragmentPayload): void => {
         if (fragment.checkpointHash !== checkpointHash) {
@@ -1107,6 +1105,7 @@ export class StateCheckpointManager extends EventEmitter {
 
         // Check if all fragments received
         if (receivedFragments.size === totalFragments) {
+          cleanup();
           this.reassembleCheckpoint(
             Array.from(receivedFragments.values()).sort(
               (a, b) => a.fragmentIndex - b.fragmentIndex
@@ -1117,12 +1116,22 @@ export class StateCheckpointManager extends EventEmitter {
         }
       };
 
+      // Cleanup function to remove all listeners and timers
+      const cleanup = (): void => {
+        if (isCleanedUp) return;
+        isCleanedUp = true;
+
+        this.off('fragment-received', fragmentHandler);
+        clearTimeout(timeoutId);
+        clearInterval(checkInterval);
+      };
+
       // Register fragment handler (this would be called by mesh protocol)
       this.on('fragment-received', fragmentHandler);
 
       // Timeout handler
       const timeoutId = setTimeout(() => {
-        this.off('fragment-received', fragmentHandler);
+        cleanup();
 
         const failedFragments = [];
         for (let i = 0; i < totalFragments; i++) {
@@ -1143,8 +1152,7 @@ export class StateCheckpointManager extends EventEmitter {
       // Check timeout periodically
       const checkInterval = setInterval(() => {
         if (Date.now() - startTime > timeout) {
-          clearInterval(checkInterval);
-          clearTimeout(timeoutId);
+          cleanup();
         }
       }, 1000);
     });
@@ -1185,9 +1193,11 @@ export class StateCheckpointManager extends EventEmitter {
         utxoManager.addUTXO(utxo);
       }
 
-      // Update blockchain state to checkpoint height
-      // Note: This assumes the blockchain class has a method to set the current height
-      // You may need to adjust based on actual Blockchain API
+      // Note: The blockchain height is determined by the blocks array length.
+      // After applying a checkpoint, the node should sync remaining blocks
+      // from the checkpoint height to the current chain tip using the normal
+      // block sync process (syncUTXOBlocks). The checkpoint only bootstraps
+      // the UTXO set to avoid downloading all historical blocks.
 
       this.emit('checkpoint:applied', {
         checkpointHash: checkpoint.checkpointHash,
@@ -1305,6 +1315,7 @@ export class StateCheckpointManager extends EventEmitter {
         totalFragments,
         fragmentData,
         checksum,
+        compressionAlgorithm: compressed.algorithm,
       });
     }
 
@@ -1348,9 +1359,12 @@ export class StateCheckpointManager extends EventEmitter {
     // Combine fragment data
     const combinedData = Buffer.concat(fragments.map(f => f.fragmentData));
 
+    // Get compression algorithm from first fragment (all fragments use same algorithm)
+    const compressionAlgorithm = fragments[0].compressionAlgorithm;
+
     // Decompress
     const decompressed = await this.compression.decompress({
-      algorithm: 'gzip', // Assuming gzip, may need to store algorithm in fragment
+      algorithm: compressionAlgorithm,
       data: new Uint8Array(combinedData),
       originalSize: 0, // Will be ignored if decompression works
       metadata: {

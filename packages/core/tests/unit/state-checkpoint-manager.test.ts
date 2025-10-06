@@ -1340,7 +1340,9 @@ describe('StateCheckpointManager', () => {
 
         await distributionManager.handleCheckpointRequest('peer1', request);
 
-        expect(mockReliableDelivery.sendReliableMessage).toHaveBeenCalledTimes(1);
+        expect(mockReliableDelivery.sendReliableMessage).toHaveBeenCalledTimes(
+          1
+        );
       });
 
       it('should use reliable delivery for fragments', async () => {
