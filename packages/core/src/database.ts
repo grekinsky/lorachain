@@ -38,6 +38,7 @@ export const SubLevels = {
   CONFIG: 'config',
   NODES: 'nodes',
   CRYPTOGRAPHIC_KEYS: 'crypto_keys',
+  CHECKPOINTS: 'checkpoints',
 } as const;
 
 // Key prefixes within sublevels

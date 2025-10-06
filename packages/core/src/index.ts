@@ -195,6 +195,7 @@ export type {
 export * from './sync-types.js';
 export * from './sync-manager.js';
 export * from './sync-strategies.js';
+export * from './state-checkpoint-manager.js';
 
 export { UTXOSyncManager } from './sync-manager.js';
 export {
@@ -202,6 +203,11 @@ export {
   MeshSyncStrategy,
   HybridSyncStrategy,
 } from './sync-strategies.js';
+export {
+  StateCheckpointManager,
+  CheckpointCreationError,
+  CheckpointNotFoundError,
+} from './state-checkpoint-manager.js';
 
 // Sync protocol type exports
 export type {
@@ -224,6 +230,12 @@ export type {
   UTXOSpentProof,
   SyncCapability,
 } from './sync-types.js';
+
+export type {
+  StateCheckpoint,
+  CheckpointCreationOptions,
+  ValidatorSignature,
+} from './state-checkpoint-manager.js';
 
 // Peer Management System exports
 export * from './peer-management-types.js';
