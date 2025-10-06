@@ -46,7 +46,6 @@ import {
   type FragmentationConfig,
   type DutyCycleConfig,
   type ReliableDeliveryConfig,
-  type DiscoveryConfig,
   type UTXOSyncConfig,
 } from '@lorachain/core';
 
@@ -715,7 +714,7 @@ export class EnhancedLorachainNode {
    * @param message - Incoming message
    * @param source - Source peer ID
    */
-  async handleIncomingMessage(message: any, source: string): Promise<void> {
+  async handleIncomingMessage(message: any, _source: string): Promise<void> {
     try {
       // Check if routing message (existing handler would go here)
       if (this.isRoutingMessage(message.type)) {
@@ -779,7 +778,7 @@ export class EnhancedLorachainNode {
       // Create handshake init message
       const challenge = this.generateChallenge();
 
-      const handshakeMessage: BlockchainNetworkMessage = {
+      const _handshakeMessage: BlockchainNetworkMessage = {
         type: 'peer_handshake_init' as any,
         payload: {
           data: {
