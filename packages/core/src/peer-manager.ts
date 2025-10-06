@@ -1630,14 +1630,10 @@ export class PeerManager extends EventEmitter implements IPeerManager {
     const peer = this.peers.get(peerId);
     if (peer) {
       peer.protocolVersion = versionInfo.version;
-      if (!peer.capabilities) {
-        peer.capabilities = [];
-      }
-      // Store features as capabilities
-      peer.capabilities.push(`version:${versionInfo.version}`);
+      peer.featureFlags = versionInfo.features; // Store full ProtocolFeatureFlags structure
 
       this.logger.info(
-        `Updated peer ${peerId} version to ${versionInfo.version}`
+        `Updated peer ${peerId} version to ${versionInfo.version} with features: ${JSON.stringify(versionInfo.features)}`
       );
     }
   }

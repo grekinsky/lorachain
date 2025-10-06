@@ -15,7 +15,7 @@
  * @module protocol-version-handler
  */
 
-import { Logger } from '@lorachain/shared';
+import { randomUUID } from 'crypto';
 import { BaseBlockchainMessageHandler } from './base-blockchain-message-handler.js';
 import { BlockchainMessageType } from './blockchain-message-types.js';
 import type { CryptographicService } from './cryptographic.js';
@@ -244,7 +244,7 @@ export class ProtocolVersionHandler extends BaseBlockchainMessageHandler {
           source: message.metadata.source,
           hopCount: 0,
           signature: '',
-          nonce: `nonce_${Date.now()}`,
+          nonce: randomUUID(),
         },
       };
 
@@ -307,6 +307,12 @@ export class ProtocolVersionHandler extends BaseBlockchainMessageHandler {
    * Check if peer version meets minimum requirement
    *
    * Uses semantic versioning comparison (major.minor.patch).
+   *
+   * NOTE: This implementation is sufficient for simple semver strings (major.minor.patch).
+   * If version strings become more complex (pre-release versions, build metadata),
+   * consider using a well-tested library like 'semver' for more robust comparison.
+   * Current implementation is acceptable given we only support version 1.0.0 with
+   * no backwards compatibility.
    *
    * @param version - Peer's version string
    * @returns True if version meets minimum requirement
