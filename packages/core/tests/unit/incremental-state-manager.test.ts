@@ -3,8 +3,6 @@ import {
   IncrementalStateManager,
   StateUpdateError,
   InvalidSequenceError,
-  SubscriptionError,
-  BroadcastError,
 } from '../../src/incremental-state-manager.js';
 import { Blockchain } from '../../src/blockchain.js';
 import { CryptographicService } from '../../src/cryptographic.js';
@@ -1124,6 +1122,7 @@ describe('IncrementalStateManager', () => {
           peerId: 'wallet-light',
           type: 'address_specific' as const,
           addresses: ['address1'],
+          addressSet: new Set(['address1']),
           startSequence: 0,
           subscribedAt: Date.now(),
         };

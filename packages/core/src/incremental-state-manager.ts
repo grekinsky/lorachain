@@ -89,6 +89,7 @@ export interface SubscriptionInfo {
   peerId: string;
   type: 'all' | 'address_specific';
   addresses?: string[];
+  addressSet?: Set<string>; // O(1) lookup for address filtering
   startSequence: number;
   subscribedAt: number;
   expiresAt?: number;
@@ -625,6 +626,9 @@ export class IncrementalStateManager extends EventEmitter {
       peerId: subscription.peerId,
       type: subscription.subscriptionType,
       addresses: subscription.addresses,
+      addressSet: subscription.addresses
+        ? new Set(subscription.addresses)
+        : undefined,
       startSequence: subscription.startSequence ?? this.sequenceNumber,
       subscribedAt: Date.now(),
       expiresAt: subscription.expiresAt,
@@ -1010,11 +1014,12 @@ export class IncrementalStateManager extends EventEmitter {
     }
 
     // Address-specific mode - filter by addresses
-    if (subscription.type === 'address_specific' && subscription.addresses) {
+    if (subscription.type === 'address_specific' && subscription.addressSet) {
       // Check if any UTXO change involves subscribed addresses
+      // Use Set.has() for O(1) lookup instead of Array.includes() which is O(n)
       const hasRelevantUTXO =
         update.utxosCreated.some(utxo =>
-          subscription.addresses!.includes(utxo.address)
+          subscription.addressSet!.has(utxo.address)
         ) ||
         update.utxosSpent.some(utxo => {
           // Look up UTXO to get address
@@ -1023,7 +1028,7 @@ export class IncrementalStateManager extends EventEmitter {
             .getUTXO(utxo.txId, utxo.outputIndex);
           return (
             originalUTXO &&
-            subscription.addresses!.includes(originalUTXO.lockingScript)
+            subscription.addressSet!.has(originalUTXO.lockingScript)
           );
         });
 
@@ -1064,8 +1069,26 @@ export class IncrementalStateManager extends EventEmitter {
           Logger.getInstance().debug('Compressed state update batch', {
             originalSize: serialized.length,
             compressedSize: compressedResult.data.length,
-            ratio: (compressedResult.data.length / serialized.length).toFixed(2),
+            ratio: (compressedResult.data.length / serialized.length).toFixed(
+              2
+            ),
           });
+
+          // Check if compressed batch exceeds LoRa payload limit
+          // Reserve 56 bytes for message headers, leaving 200 bytes for payload
+          const MAX_LORA_PAYLOAD = 200;
+          if (compressedResult.data.length > MAX_LORA_PAYLOAD) {
+            Logger.getInstance().warn(
+              'Batch exceeds LoRa payload limit - will require fragmentation',
+              {
+                compressedSize: compressedResult.data.length,
+                maxLoRaPayload: MAX_LORA_PAYLOAD,
+                fragmentsNeeded: Math.ceil(
+                  compressedResult.data.length / MAX_LORA_PAYLOAD
+                ),
+              }
+            );
+          }
         }
       } catch (error) {
         Logger.getInstance().warn(
