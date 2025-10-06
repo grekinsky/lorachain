@@ -245,10 +245,11 @@ export type {
 
 export type {
   StateUpdate,
-  StateChange,
   CompressedUTXO,
   UTXOSpentProof as IncrementalUTXOSpentProof,
-} from './incremental-state-manager.js';
+} from './sync-types.js';
+
+export type { StateChange } from './incremental-state-manager.js';
 
 // Peer Management System exports
 export * from './peer-management-types.js';

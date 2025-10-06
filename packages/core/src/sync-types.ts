@@ -81,6 +81,11 @@ export enum UTXOSyncMessageType {
   CHECKPOINT_REQUEST = 'checkpoint_request',
   CHECKPOINT_FRAGMENT = 'checkpoint_fragment',
   CHECKPOINT_COMPLETE = 'checkpoint_complete',
+
+  // State Update Subscription (Task 5)
+  STATE_UPDATE_SUBSCRIBE = 'state_update_subscribe',
+  STATE_UPDATE_UNSUBSCRIBE = 'state_update_unsubscribe',
+  STATE_UPDATE_BATCH = 'state_update_batch',
 }
 
 /**
@@ -204,21 +209,23 @@ export interface UTXOSetDelta {
 }
 
 /**
- * Compressed UTXO
+ * Compressed UTXO (for incremental state updates)
  */
 export interface CompressedUTXO {
-  id: string;
-  data: Uint8Array;
+  txId: string;
+  outputIndex: number;
+  value: number;
+  address: string;
 }
 
 /**
- * UTXO spent proof
+ * UTXO spent proof (for incremental state updates)
  */
 export interface UTXOSpentProof {
-  utxoId: string;
+  txId: string;
+  outputIndex: number;
   spentInBlock: number;
-  spentByTx: string;
-  signature: string; // Proof of spend
+  spentInTxId: string;
 }
 
 /**
@@ -388,4 +395,44 @@ export interface CheckpointStats {
   newestHeight: number;
   totalSize: number;
   averageSize: number;
+}
+
+/**
+ * State update subscription payload
+ */
+export interface StateUpdateSubscribePayload {
+  peerId: string;
+  subscriptionType: 'all' | 'address_specific';
+  addresses?: string[]; // For address-specific subscriptions
+  startSequence?: number; // Resume from specific sequence
+  expiresAt?: number; // Optional expiration timestamp
+}
+
+/**
+ * State update batch payload
+ */
+export interface StateUpdateBatchPayload {
+  updates: StateUpdate[];
+  batchSequence: number;
+  timestamp: number;
+  compressed: boolean;
+}
+
+/**
+ * State update for incremental sync
+ */
+export interface StateUpdate {
+  sequenceNumber: number;
+  blockHeight: number;
+  blockHash: string;
+  timestamp: number;
+  previousUpdateHash: string;
+  utxosCreated: CompressedUTXO[];
+  utxosSpent: UTXOSpentProof[];
+  merkleRootBefore: string;
+  merkleRootAfter: string;
+  merkleProof: string[];
+  signature: string;
+  publicKey: string;
+  algorithm: 'secp256k1' | 'ed25519';
 }

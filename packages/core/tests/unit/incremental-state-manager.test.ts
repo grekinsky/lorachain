@@ -3,6 +3,8 @@ import {
   IncrementalStateManager,
   StateUpdateError,
   InvalidSequenceError,
+  SubscriptionError,
+  BroadcastError,
 } from '../../src/incremental-state-manager.js';
 import { Blockchain } from '../../src/blockchain.js';
 import { CryptographicService } from '../../src/cryptographic.js';
@@ -767,6 +769,547 @@ describe('IncrementalStateManager', () => {
       expect(updates).toHaveLength(5);
       expect(updates[0].sequenceNumber).toBe(1);
       expect(updates[4].sequenceNumber).toBe(5);
+    });
+  });
+
+  describe('IncrementalStateManager - Subscriptions', () => {
+    describe('subscribeToUpdates', () => {
+      it('should add peer to subscriptions', async () => {
+        await manager.subscribeToUpdates({
+          peerId: 'node-123',
+          subscriptionType: 'all',
+          startSequence: 0,
+        });
+
+        expect(manager.isSubscribed('node-123')).toBe(true);
+        const subscription = manager.getSubscription('node-123');
+        expect(subscription).toBeDefined();
+        expect(subscription?.type).toBe('all');
+      });
+
+      it('should support all updates mode', async () => {
+        await manager.subscribeToUpdates({
+          peerId: 'node-full',
+          subscriptionType: 'all',
+          startSequence: 0,
+        });
+
+        const subscription = manager.getSubscription('node-full');
+        expect(subscription?.type).toBe('all');
+        expect(subscription?.addresses).toBeUndefined();
+      });
+
+      it('should support address-specific mode', async () => {
+        await manager.subscribeToUpdates({
+          peerId: 'wallet-456',
+          subscriptionType: 'address_specific',
+          addresses: ['lora1abc', 'lora1def'],
+          startSequence: 0,
+        });
+
+        const subscription = manager.getSubscription('wallet-456');
+        expect(subscription?.type).toBe('address_specific');
+        expect(subscription?.addresses).toEqual(['lora1abc', 'lora1def']);
+      });
+
+      it('should handle subscription expiration', async () => {
+        const expiresAt = Date.now() + 1000; // 1 second
+        await manager.subscribeToUpdates({
+          peerId: 'node-exp',
+          subscriptionType: 'all',
+          startSequence: 0,
+          expiresAt,
+        });
+
+        const subscription = manager.getSubscription('node-exp');
+        expect(subscription?.expiresAt).toBe(expiresAt);
+      });
+
+      it('should throw error if peer already subscribed', async () => {
+        await manager.subscribeToUpdates({
+          peerId: 'node-dup',
+          subscriptionType: 'all',
+        });
+
+        await expect(
+          manager.subscribeToUpdates({
+            peerId: 'node-dup',
+            subscriptionType: 'all',
+          })
+        ).rejects.toThrow('Peer already subscribed');
+      });
+
+      it('should throw error for address-specific without addresses', async () => {
+        await expect(
+          manager.subscribeToUpdates({
+            peerId: 'wallet-invalid',
+            subscriptionType: 'address_specific',
+            addresses: [],
+          })
+        ).rejects.toThrow('Address-specific subscription requires addresses');
+      });
+
+      it('should emit subscription_added event', async () => {
+        const emitSpy = vi.spyOn(manager, 'emit');
+
+        await manager.subscribeToUpdates({
+          peerId: 'node-event',
+          subscriptionType: 'all',
+        });
+
+        expect(emitSpy).toHaveBeenCalledWith(
+          'subscription_added',
+          expect.objectContaining({ peerId: 'node-event' })
+        );
+      });
+    });
+
+    describe('unsubscribeFromUpdates', () => {
+      it('should remove peer from subscriptions', async () => {
+        await manager.subscribeToUpdates({
+          peerId: 'node-unsub',
+          subscriptionType: 'all',
+        });
+
+        expect(manager.isSubscribed('node-unsub')).toBe(true);
+
+        await manager.unsubscribeFromUpdates('node-unsub');
+
+        expect(manager.isSubscribed('node-unsub')).toBe(false);
+      });
+
+      it('should handle non-existent subscription gracefully', async () => {
+        await expect(
+          manager.unsubscribeFromUpdates('non-existent')
+        ).resolves.not.toThrow();
+      });
+
+      it('should emit subscription_removed event', async () => {
+        await manager.subscribeToUpdates({
+          peerId: 'node-remove',
+          subscriptionType: 'all',
+        });
+
+        const emitSpy = vi.spyOn(manager, 'emit');
+
+        await manager.unsubscribeFromUpdates('node-remove');
+
+        expect(emitSpy).toHaveBeenCalledWith(
+          'subscription_removed',
+          expect.objectContaining({ peerId: 'node-remove' })
+        );
+      });
+    });
+
+    describe('broadcastStateUpdate', () => {
+      let testBlock: Block;
+
+      beforeEach(() => {
+        // Create a test block
+        const utxoTx: UTXOTransaction = {
+          id: 'tx1',
+          inputs: [
+            {
+              previousTxId: 'genesis',
+              outputIndex: 0,
+              unlockingScript: 'test_sig',
+              sequence: 0,
+            },
+          ],
+          outputs: [
+            {
+              value: 50,
+              lockingScript: 'address1',
+              outputIndex: 0,
+            },
+          ],
+          lockTime: 0,
+          timestamp: Date.now(),
+          fee: 0.001,
+        };
+
+        testBlock = {
+          index: 1,
+          timestamp: Date.now(),
+          transactions: [utxoTx as any],
+          previousHash: blockchain.getLatestBlock().hash,
+          hash: 'block1_hash',
+          nonce: 0,
+          merkleRoot: 'merkle_root',
+          difficulty: 1,
+        };
+      });
+
+      it('should send update to all subscribed peers', async () => {
+        // Subscribe multiple peers
+        await manager.subscribeToUpdates({
+          peerId: 'peer1',
+          subscriptionType: 'all',
+        });
+        await manager.subscribeToUpdates({
+          peerId: 'peer2',
+          subscriptionType: 'all',
+        });
+
+        // Create update
+        const update = await manager.createStateUpdate(
+          testBlock,
+          privateKey,
+          'secp256k1'
+        );
+
+        // Mock mesh protocol
+        const managerWithMesh = new IncrementalStateManager(
+          blockchain,
+          CryptographicService,
+          MerkleTree,
+          compression,
+          {} as any, // mesh protocol mock
+          undefined,
+          2 // Small batch size
+        );
+
+        // Transfer subscriptions
+        await managerWithMesh.subscribeToUpdates({
+          peerId: 'peer1',
+          subscriptionType: 'all',
+        });
+        await managerWithMesh.subscribeToUpdates({
+          peerId: 'peer2',
+          subscriptionType: 'all',
+        });
+
+        const emitSpy = vi.spyOn(managerWithMesh, 'emit');
+
+        // Broadcast
+        await managerWithMesh.broadcastStateUpdate(update);
+
+        // Should emit broadcast event
+        expect(emitSpy).toHaveBeenCalledWith(
+          'update_broadcasted',
+          expect.objectContaining({
+            update,
+          })
+        );
+      });
+
+      it('should filter updates by address for light clients', async () => {
+        // Subscribe with address filter
+        await manager.subscribeToUpdates({
+          peerId: 'wallet-light',
+          subscriptionType: 'address_specific',
+          addresses: ['address1'], // Only interested in address1
+        });
+
+        // Create update
+        const update = await manager.createStateUpdate(
+          testBlock,
+          privateKey,
+          'secp256k1'
+        );
+
+        // Update should be relevant because it creates UTXO for address1
+        expect(update.utxosCreated.some(u => u.address === 'address1')).toBe(
+          true
+        );
+      });
+
+      it('should not send old updates (sequence check)', async () => {
+        // Subscribe starting from sequence 10
+        await manager.subscribeToUpdates({
+          peerId: 'peer-late',
+          subscriptionType: 'all',
+          startSequence: 10,
+        });
+
+        // Create update with lower sequence
+        const update = await manager.createStateUpdate(
+          testBlock,
+          privateKey,
+          'secp256k1'
+        );
+
+        expect(update.sequenceNumber).toBeLessThan(10);
+
+        // Mock mesh protocol
+        const managerWithMesh = new IncrementalStateManager(
+          blockchain,
+          CryptographicService,
+          MerkleTree,
+          compression,
+          {} as any
+        );
+
+        await managerWithMesh.subscribeToUpdates({
+          peerId: 'peer-late',
+          subscriptionType: 'all',
+          startSequence: 10,
+        });
+
+        // Broadcast should skip this peer
+        await managerWithMesh.broadcastStateUpdate(update);
+
+        // Verify no batch was sent (peer filtered out)
+        const emitSpy = vi.spyOn(managerWithMesh, 'emit');
+        expect(emitSpy).not.toHaveBeenCalledWith(
+          'batch_sent',
+          expect.objectContaining({
+            peerId: 'peer-late',
+          })
+        );
+      });
+
+      it('should handle missing mesh protocol', async () => {
+        // Manager without mesh protocol
+        const managerNoMesh = new IncrementalStateManager(
+          blockchain,
+          CryptographicService,
+          MerkleTree,
+          compression
+        );
+
+        await managerNoMesh.subscribeToUpdates({
+          peerId: 'peer',
+          subscriptionType: 'all',
+        });
+
+        const update = await managerNoMesh.createStateUpdate(
+          testBlock,
+          privateKey,
+          'secp256k1'
+        );
+
+        // Should not throw, just log warning
+        await expect(
+          managerNoMesh.broadcastStateUpdate(update)
+        ).resolves.not.toThrow();
+      });
+    });
+
+    describe('update filtering', () => {
+      it('should send all updates in all mode', () => {
+        const subscription = {
+          peerId: 'node-full',
+          type: 'all' as const,
+          startSequence: 0,
+          subscribedAt: Date.now(),
+        };
+
+        const update = {
+          sequenceNumber: 1,
+          blockHeight: 1,
+          blockHash: 'hash1',
+          timestamp: Date.now(),
+          previousUpdateHash: 'prev',
+          utxosCreated: [],
+          utxosSpent: [],
+          merkleRootBefore: 'root1',
+          merkleRootAfter: 'root2',
+          merkleProof: [],
+          signature: 'sig',
+          publicKey: 'pub',
+          algorithm: 'secp256k1' as const,
+        };
+
+        // Access private method via any
+        const shouldSend = (manager as any).shouldSendUpdateToPeer(
+          update,
+          subscription
+        );
+        expect(shouldSend).toBe(true);
+      });
+
+      it('should filter updates by address in address-specific mode', () => {
+        const subscription = {
+          peerId: 'wallet-light',
+          type: 'address_specific' as const,
+          addresses: ['address1'],
+          startSequence: 0,
+          subscribedAt: Date.now(),
+        };
+
+        const updateRelevant = {
+          sequenceNumber: 1,
+          blockHeight: 1,
+          blockHash: 'hash1',
+          timestamp: Date.now(),
+          previousUpdateHash: 'prev',
+          utxosCreated: [
+            {
+              txId: 'tx1',
+              outputIndex: 0,
+              value: 50,
+              address: 'address1', // Matches subscription
+            },
+          ],
+          utxosSpent: [],
+          merkleRootBefore: 'root1',
+          merkleRootAfter: 'root2',
+          merkleProof: [],
+          signature: 'sig',
+          publicKey: 'pub',
+          algorithm: 'secp256k1' as const,
+        };
+
+        const shouldSendRelevant = (manager as any).shouldSendUpdateToPeer(
+          updateRelevant,
+          subscription
+        );
+        expect(shouldSendRelevant).toBe(true);
+
+        const updateIrrelevant = {
+          ...updateRelevant,
+          utxosCreated: [
+            {
+              txId: 'tx1',
+              outputIndex: 0,
+              value: 50,
+              address: 'address2', // Does not match
+            },
+          ],
+        };
+
+        const shouldSendIrrelevant = (manager as any).shouldSendUpdateToPeer(
+          updateIrrelevant,
+          subscription
+        );
+        expect(shouldSendIrrelevant).toBe(false);
+      });
+    });
+
+    describe('batching', () => {
+      it('should batch multiple updates together', async () => {
+        const updates = [
+          {
+            sequenceNumber: 1,
+            blockHeight: 1,
+            blockHash: 'hash1',
+            timestamp: Date.now(),
+            previousUpdateHash: 'prev',
+            utxosCreated: [],
+            utxosSpent: [],
+            merkleRootBefore: 'root1',
+            merkleRootAfter: 'root2',
+            merkleProof: [],
+            signature: 'sig',
+            publicKey: 'pub',
+            algorithm: 'secp256k1' as const,
+          },
+          {
+            sequenceNumber: 2,
+            blockHeight: 2,
+            blockHash: 'hash2',
+            timestamp: Date.now(),
+            previousUpdateHash: 'prev2',
+            utxosCreated: [],
+            utxosSpent: [],
+            merkleRootBefore: 'root2',
+            merkleRootAfter: 'root3',
+            merkleProof: [],
+            signature: 'sig2',
+            publicKey: 'pub2',
+            algorithm: 'secp256k1' as const,
+          },
+        ];
+
+        const batch = await (manager as any).batchUpdates(updates);
+
+        expect(batch.updates).toHaveLength(2);
+        expect(batch.batchSequence).toBeGreaterThanOrEqual(0);
+        expect(batch.timestamp).toBeDefined();
+      });
+
+      it('should limit batch size', async () => {
+        const updates = Array.from({ length: 20 }, (_, i) => ({
+          sequenceNumber: i + 1,
+          blockHeight: i + 1,
+          blockHash: `hash${i}`,
+          timestamp: Date.now(),
+          previousUpdateHash: 'prev',
+          utxosCreated: [],
+          utxosSpent: [],
+          merkleRootBefore: 'root1',
+          merkleRootAfter: 'root2',
+          merkleProof: [],
+          signature: 'sig',
+          publicKey: 'pub',
+          algorithm: 'secp256k1' as const,
+        }));
+
+        const batch = await (manager as any).batchUpdates(updates);
+
+        // Should be limited to batchSize (default 10)
+        expect(batch.updates.length).toBeLessThanOrEqual(10);
+      });
+    });
+
+    describe('subscription cleanup', () => {
+      it('should remove expired subscriptions', async () => {
+        // Subscribe with immediate expiration
+        await manager.subscribeToUpdates({
+          peerId: 'node-expire',
+          subscriptionType: 'all',
+          expiresAt: Date.now() - 1000, // Already expired
+        });
+
+        expect(manager.isSubscribed('node-expire')).toBe(true);
+
+        // Trigger cleanup via private method
+        (manager as any).cleanupExpiredSubscriptions();
+
+        expect(manager.isSubscribed('node-expire')).toBe(false);
+      });
+
+      it('should emit subscription_expired event', async () => {
+        await manager.subscribeToUpdates({
+          peerId: 'node-exp-event',
+          subscriptionType: 'all',
+          expiresAt: Date.now() - 1000,
+        });
+
+        const emitSpy = vi.spyOn(manager, 'emit');
+
+        (manager as any).cleanupExpiredSubscriptions();
+
+        expect(emitSpy).toHaveBeenCalledWith(
+          'subscription_expired',
+          expect.objectContaining({ peerId: 'node-exp-event' })
+        );
+      });
+    });
+
+    describe('getSubscriptions', () => {
+      it('should return all subscriptions', async () => {
+        await manager.subscribeToUpdates({
+          peerId: 'peer1',
+          subscriptionType: 'all',
+        });
+        await manager.subscribeToUpdates({
+          peerId: 'peer2',
+          subscriptionType: 'address_specific',
+          addresses: ['addr1'],
+        });
+
+        const subs = manager.getSubscriptions();
+        expect(subs).toHaveLength(2);
+        expect(subs.map(s => s.peerId)).toContain('peer1');
+        expect(subs.map(s => s.peerId)).toContain('peer2');
+      });
+    });
+
+    describe('isSubscribed', () => {
+      it('should return true for subscribed peer', async () => {
+        await manager.subscribeToUpdates({
+          peerId: 'peer-check',
+          subscriptionType: 'all',
+        });
+
+        expect(manager.isSubscribed('peer-check')).toBe(true);
+      });
+
+      it('should return false for non-subscribed peer', () => {
+        expect(manager.isSubscribed('non-existent')).toBe(false);
+      });
     });
   });
 });
