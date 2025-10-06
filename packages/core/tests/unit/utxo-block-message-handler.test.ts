@@ -523,9 +523,6 @@ describe('UTXOBlockMessageHandler', () => {
       };
 
       // Trigger announcement to create pending request
-      await handler.handle(announcementMessage, mockContext);
-
-      // Extract actual request ID from announcement response
       const announcementResult = await handler.handle(
         announcementMessage,
         mockContext

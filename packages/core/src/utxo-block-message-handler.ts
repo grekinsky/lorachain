@@ -117,9 +117,7 @@ export class UTXOBlockMessageHandler extends BaseBlockchainMessageHandler {
     }
 
     if (cleanedCount > 0) {
-      this.logger.debug(
-        `Cleaned up ${cleanedCount} expired block request(s)`
-      );
+      this.logger.debug(`Cleaned up ${cleanedCount} expired block request(s)`);
     }
   }
 
@@ -422,12 +420,9 @@ export class UTXOBlockMessageHandler extends BaseBlockchainMessageHandler {
       );
 
       if (!validation.isValid) {
-        this.logger.warn(
-          `Invalid block received: ${payload.block.hash}`,
-          {
-            errors: validation.errors,
-          }
-        );
+        this.logger.warn(`Invalid block received: ${payload.block.hash}`, {
+          errors: validation.errors,
+        });
         return this.createResponse(
           false,
           undefined,
