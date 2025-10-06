@@ -3,6 +3,8 @@ import {
   IncrementalStateManager,
   StateUpdateError,
   InvalidSequenceError,
+  MissingUpdateError,
+  UpdateBufferOverflowError,
 } from '../../src/incremental-state-manager.js';
 import { Blockchain } from '../../src/blockchain.js';
 import { CryptographicService } from '../../src/cryptographic.js';
@@ -1308,6 +1310,606 @@ describe('IncrementalStateManager', () => {
 
       it('should return false for non-subscribed peer', () => {
         expect(manager.isSubscribed('non-existent')).toBe(false);
+      });
+    });
+  });
+
+  // Task 6: Missing Update Recovery Protocol
+  describe('Missing Update Recovery (Task 6)', () => {
+    let meshProtocol: any;
+    let managerWithMesh: IncrementalStateManager;
+
+    beforeEach(() => {
+      // Mock mesh protocol
+      meshProtocol = {
+        sendMessage: vi.fn(),
+      };
+
+      managerWithMesh = new IncrementalStateManager(
+        blockchain,
+        CryptographicService,
+        MerkleTree,
+        compression,
+        meshProtocol,
+        undefined,
+        10, // batchSize
+        1000, // batchIntervalMs
+        100, // maxBufferSize
+        60000 // bufferTimeoutMs
+      );
+    });
+
+    describe('handleStateUpdate with gap detection', () => {
+      let testUpdate: any;
+
+      beforeEach(async () => {
+        const testBlock: Block = {
+          index: 1,
+          timestamp: Date.now(),
+          transactions: [],
+          previousHash: blockchain.getLatestBlock().hash,
+          hash: 'block1_hash',
+          nonce: 0,
+          merkleRoot: 'merkle_root',
+          difficulty: 1,
+        };
+
+        testUpdate = await managerWithMesh.createStateUpdate(
+          testBlock,
+          privateKey,
+          'secp256k1'
+        );
+      });
+
+      it('should detect missing sequence numbers and emit gap_detected event', async () => {
+        const emitSpy = vi.spyOn(managerWithMesh, 'emit');
+
+        // Create properly signed updates for sequence 1, 2, and 3
+        const testBlock: Block = {
+          index: 1,
+          timestamp: Date.now(),
+          transactions: [],
+          previousHash: blockchain.getLatestBlock().hash,
+          hash: 'block1_hash',
+          nonce: 0,
+          merkleRoot: 'merkle_root',
+          difficulty: 1,
+        };
+
+        const update1 = await managerWithMesh.createStateUpdate(
+          testBlock,
+          privateKey,
+          'secp256k1'
+        );
+        await managerWithMesh.createStateUpdate(
+          { ...testBlock, index: 2, hash: 'block2_hash' },
+          privateKey,
+          'secp256k1'
+        );
+        const update3 = await managerWithMesh.createStateUpdate(
+          { ...testBlock, index: 3, hash: 'block3_hash' },
+          privateKey,
+          'secp256k1'
+        );
+
+        // Skip update 1 and 2, receive update 3 directly (gap detected)
+        await managerWithMesh.handleStateUpdate(update3);
+
+        expect(emitSpy).toHaveBeenCalledWith(
+          'gap_detected',
+          expect.objectContaining({ receivedSequence: 3 })
+        );
+      });
+
+      it('should buffer out-of-order updates', async () => {
+        const emitSpy = vi.spyOn(managerWithMesh, 'emit');
+
+        // Create properly signed update with sequence 3
+        const testBlock: Block = {
+          index: 1,
+          timestamp: Date.now(),
+          transactions: [],
+          previousHash: blockchain.getLatestBlock().hash,
+          hash: 'block1_hash',
+          nonce: 0,
+          merkleRoot: 'merkle_root',
+          difficulty: 1,
+        };
+
+        await managerWithMesh.createStateUpdate(
+          testBlock,
+          privateKey,
+          'secp256k1'
+        );
+        await managerWithMesh.createStateUpdate(
+          { ...testBlock, index: 2, hash: 'block2_hash' },
+          privateKey,
+          'secp256k1'
+        );
+        const update3 = await managerWithMesh.createStateUpdate(
+          { ...testBlock, index: 3, hash: 'block3_hash' },
+          privateKey,
+          'secp256k1'
+        );
+
+        await managerWithMesh.handleStateUpdate(update3);
+
+        expect(emitSpy).toHaveBeenCalledWith(
+          'update_buffered',
+          expect.objectContaining({ sequenceNumber: 3 })
+        );
+
+        const stats = managerWithMesh.getGapDetectionStats();
+        expect(stats.bufferedUpdates).toBe(1);
+      });
+
+      it('should apply buffered updates when gaps filled', async () => {
+        // Create 3 updates in correct order
+        const block1: Block = {
+          index: 1,
+          timestamp: Date.now(),
+          transactions: [],
+          previousHash: blockchain.getLatestBlock().hash,
+          hash: 'block1_hash',
+          nonce: 0,
+          merkleRoot: 'merkle_root',
+          difficulty: 1,
+        };
+
+        const update1 = await managerWithMesh.createStateUpdate(
+          block1,
+          privateKey,
+          'secp256k1'
+        );
+
+        const update2 = await managerWithMesh.createStateUpdate(
+          { ...block1, index: 2, hash: 'block2_hash' },
+          privateKey,
+          'secp256k1'
+        );
+
+        const update3 = await managerWithMesh.createStateUpdate(
+          { ...block1, index: 3, hash: 'block3_hash' },
+          privateKey,
+          'secp256k1'
+        );
+
+        // Receive updates out of order: 1, 3, 2
+        await managerWithMesh.handleStateUpdate(update1);
+        await managerWithMesh.handleStateUpdate(update3);
+
+        // Update 3 should be buffered
+        expect(managerWithMesh.getGapDetectionStats().bufferedUpdates).toBe(1);
+
+        // Receive update 2 - should fill gap and process buffer
+        await managerWithMesh.handleStateUpdate(update2);
+
+        // Buffer should be empty now
+        expect(managerWithMesh.getGapDetectionStats().bufferedUpdates).toBe(0);
+
+        // All updates should be applied
+        expect(managerWithMesh.getSequenceNumber()).toBe(3);
+      });
+
+      it('should handle duplicate updates gracefully', async () => {
+        await managerWithMesh.handleStateUpdate(testUpdate);
+
+        // Try to apply same update again
+        await managerWithMesh.handleStateUpdate(testUpdate);
+
+        // Should still be at sequence 1 (not increment)
+        expect(managerWithMesh.getSequenceNumber()).toBe(1);
+      });
+
+      it('should throw UpdateBufferOverflowError when buffer is full', async () => {
+        // Create manager with small buffer
+        const smallBufferManager = new IncrementalStateManager(
+          blockchain,
+          CryptographicService,
+          MerkleTree,
+          compression,
+          meshProtocol,
+          undefined,
+          10,
+          1000,
+          2 // maxBufferSize = 2
+        );
+
+        const block: Block = {
+          index: 1,
+          timestamp: Date.now(),
+          transactions: [],
+          previousHash: blockchain.getLatestBlock().hash,
+          hash: 'block1_hash',
+          nonce: 0,
+          merkleRoot: 'merkle_root',
+          difficulty: 1,
+        };
+
+        const update1 = await smallBufferManager.createStateUpdate(
+          block,
+          privateKey,
+          'secp256k1'
+        );
+        const update2 = await smallBufferManager.createStateUpdate(
+          { ...block, index: 2, hash: 'block2_hash' },
+          privateKey,
+          'secp256k1'
+        );
+        const update3 = await smallBufferManager.createStateUpdate(
+          { ...block, index: 3, hash: 'block3_hash' },
+          privateKey,
+          'secp256k1'
+        );
+
+        // Buffer updates 1 and 2 (by receiving 3, 4)
+        await smallBufferManager.handleStateUpdate(update3); // Buffers 3
+
+        const update4 = await smallBufferManager.createStateUpdate(
+          { ...block, index: 4, hash: 'block4_hash' },
+          privateKey,
+          'secp256k1'
+        );
+
+        await smallBufferManager.handleStateUpdate(update4); // Buffers 4
+
+        // Try to buffer one more - should overflow
+        const update5 = await smallBufferManager.createStateUpdate(
+          { ...block, index: 5, hash: 'block5_hash' },
+          privateKey,
+          'secp256k1'
+        );
+
+        await expect(
+          smallBufferManager.handleStateUpdate(update5)
+        ).rejects.toThrow(UpdateBufferOverflowError);
+      });
+    });
+
+    describe('requestMissingUpdates', () => {
+      it('should request specific sequences from peers', async () => {
+        await managerWithMesh.subscribeToUpdates({
+          peerId: 'peer1',
+          subscriptionType: 'all',
+        });
+
+        const emitSpy = vi.spyOn(managerWithMesh, 'emit');
+
+        // Request missing updates (non-blocking)
+        const requestPromise = managerWithMesh.requestMissingUpdates([1, 2, 3]);
+
+        // Should emit request event
+        expect(emitSpy).toHaveBeenCalledWith(
+          'missing_update_request_sent',
+          expect.objectContaining({
+            peerId: 'peer1',
+            request: expect.objectContaining({
+              sequenceNumbers: [1, 2, 3],
+            }),
+          })
+        );
+
+        // Wait for timeout
+        await expect(requestPromise).resolves.toBeDefined();
+      });
+
+      it('should throw MissingUpdateError if no peers available', async () => {
+        await expect(
+          managerWithMesh.requestMissingUpdates([1, 2])
+        ).rejects.toThrow(MissingUpdateError);
+      });
+
+      it('should throw error if mesh protocol not configured', async () => {
+        const managerNoMesh = new IncrementalStateManager(
+          blockchain,
+          CryptographicService,
+          MerkleTree,
+          compression
+        );
+
+        await expect(
+          managerNoMesh.requestMissingUpdates([1, 2])
+        ).rejects.toThrow('Mesh protocol not configured');
+      });
+    });
+
+    describe('handleMissingUpdateRequest', () => {
+      it('should serve requested updates to peer', async () => {
+        // Create some updates
+        const block: Block = {
+          index: 1,
+          timestamp: Date.now(),
+          transactions: [],
+          previousHash: blockchain.getLatestBlock().hash,
+          hash: 'block1_hash',
+          nonce: 0,
+          merkleRoot: 'merkle_root',
+          difficulty: 1,
+        };
+
+        await managerWithMesh.createStateUpdate(block, privateKey, 'secp256k1');
+        await managerWithMesh.createStateUpdate(
+          { ...block, index: 2, hash: 'block2_hash' },
+          privateKey,
+          'secp256k1'
+        );
+
+        const emitSpy = vi.spyOn(managerWithMesh, 'emit');
+
+        const request = {
+          requestId: 'req-123',
+          sequenceNumbers: [1, 2],
+          requestedBy: 'peer1',
+          timestamp: Date.now(),
+        };
+
+        await managerWithMesh.handleMissingUpdateRequest(request);
+
+        expect(emitSpy).toHaveBeenCalledWith(
+          'missing_update_response_sent',
+          expect.objectContaining({
+            peerId: 'peer1',
+            response: expect.objectContaining({
+              requestId: 'req-123',
+              updates: expect.arrayContaining([
+                expect.objectContaining({ sequenceNumber: 1 }),
+                expect.objectContaining({ sequenceNumber: 2 }),
+              ]),
+            }),
+          })
+        );
+      });
+
+      it('should indicate sequences not found', async () => {
+        const emitSpy = vi.spyOn(managerWithMesh, 'emit');
+
+        const request = {
+          requestId: 'req-456',
+          sequenceNumbers: [999, 1000],
+          requestedBy: 'peer1',
+          timestamp: Date.now(),
+        };
+
+        await managerWithMesh.handleMissingUpdateRequest(request);
+
+        expect(emitSpy).toHaveBeenCalledWith(
+          'missing_update_response_sent',
+          expect.objectContaining({
+            response: expect.objectContaining({
+              missingSequences: [999, 1000],
+            }),
+          })
+        );
+      });
+    });
+
+    describe('gap detection statistics', () => {
+      it('should track total updates received', async () => {
+        const block: Block = {
+          index: 1,
+          timestamp: Date.now(),
+          transactions: [],
+          previousHash: blockchain.getLatestBlock().hash,
+          hash: 'block1_hash',
+          nonce: 0,
+          merkleRoot: 'merkle_root',
+          difficulty: 1,
+        };
+
+        const update = await managerWithMesh.createStateUpdate(
+          block,
+          privateKey,
+          'secp256k1'
+        );
+        await managerWithMesh.handleStateUpdate(update);
+
+        const stats = managerWithMesh.getGapDetectionStats();
+        expect(stats.totalUpdatesReceived).toBe(1);
+      });
+
+      it('should track gaps detected', async () => {
+        const block: Block = {
+          index: 1,
+          timestamp: Date.now(),
+          transactions: [],
+          previousHash: blockchain.getLatestBlock().hash,
+          hash: 'block1_hash',
+          nonce: 0,
+          merkleRoot: 'merkle_root',
+          difficulty: 1,
+        };
+
+        await managerWithMesh.createStateUpdate(
+          block,
+          privateKey,
+          'secp256k1'
+        );
+        await managerWithMesh.createStateUpdate(
+          { ...block, index: 2, hash: 'block2_hash' },
+          privateKey,
+          'secp256k1'
+        );
+
+        // Create update 3 and receive it directly (skipping 1 and 2)
+        const update3 = await managerWithMesh.createStateUpdate(
+          { ...block, index: 3, hash: 'block3_hash' },
+          privateKey,
+          'secp256k1'
+        );
+        await managerWithMesh.handleStateUpdate(update3);
+
+        const stats = managerWithMesh.getGapDetectionStats();
+        expect(stats.totalGapsDetected).toBeGreaterThan(0);
+      });
+
+      it('should report current gaps', async () => {
+        const block: Block = {
+          index: 1,
+          timestamp: Date.now(),
+          transactions: [],
+          previousHash: blockchain.getLatestBlock().hash,
+          hash: 'block1_hash',
+          nonce: 0,
+          merkleRoot: 'merkle_root',
+          difficulty: 1,
+        };
+
+        await managerWithMesh.createStateUpdate(
+          block,
+          privateKey,
+          'secp256k1'
+        );
+        await managerWithMesh.createStateUpdate(
+          { ...block, index: 2, hash: 'block2_hash' },
+          privateKey,
+          'secp256k1'
+        );
+
+        // Create gap by receiving update 3 directly
+        const update3 = await managerWithMesh.createStateUpdate(
+          { ...block, index: 3, hash: 'block3_hash' },
+          privateKey,
+          'secp256k1'
+        );
+        await managerWithMesh.handleStateUpdate(update3);
+
+        const stats = managerWithMesh.getGapDetectionStats();
+        expect(stats.currentGaps).toContain(1);
+        expect(stats.currentGaps).toContain(2);
+      });
+
+      it('should track buffered updates count', async () => {
+        const block: Block = {
+          index: 1,
+          timestamp: Date.now(),
+          transactions: [],
+          previousHash: blockchain.getLatestBlock().hash,
+          hash: 'block1_hash',
+          nonce: 0,
+          merkleRoot: 'merkle_root',
+          difficulty: 1,
+        };
+
+        await managerWithMesh.createStateUpdate(
+          block,
+          privateKey,
+          'secp256k1'
+        );
+
+        // Buffer update 2 by receiving it out of order
+        const update2 = await managerWithMesh.createStateUpdate(
+          { ...block, index: 2, hash: 'block2_hash' },
+          privateKey,
+          'secp256k1'
+        );
+        await managerWithMesh.handleStateUpdate(update2);
+
+        const stats = managerWithMesh.getGapDetectionStats();
+        expect(stats.bufferedUpdates).toBe(1);
+      });
+    });
+
+    describe('buffer cleanup', () => {
+      it('should cleanup expired buffered updates', async () => {
+        // Create manager with short timeout
+        const shortTimeoutManager = new IncrementalStateManager(
+          blockchain,
+          CryptographicService,
+          MerkleTree,
+          compression,
+          meshProtocol,
+          undefined,
+          10,
+          1000,
+          100,
+          100 // bufferTimeoutMs = 100ms
+        );
+
+        const block: Block = {
+          index: 1,
+          timestamp: Date.now(),
+          transactions: [],
+          previousHash: blockchain.getLatestBlock().hash,
+          hash: 'block1_hash',
+          nonce: 0,
+          merkleRoot: 'merkle_root',
+          difficulty: 1,
+        };
+
+        await shortTimeoutManager.createStateUpdate(
+          block,
+          privateKey,
+          'secp256k1'
+        );
+
+        // Buffer update 2
+        const update2 = await shortTimeoutManager.createStateUpdate(
+          { ...block, index: 2, hash: 'block2_hash' },
+          privateKey,
+          'secp256k1'
+        );
+        await shortTimeoutManager.handleStateUpdate(update2);
+
+        expect(shortTimeoutManager.getGapDetectionStats().bufferedUpdates).toBe(
+          1
+        );
+
+        // Wait for timeout
+        await new Promise(resolve => setTimeout(resolve, 150));
+
+        // Trigger cleanup
+        const stats = shortTimeoutManager.getGapDetectionStats();
+        expect(stats.bufferedUpdates).toBe(0);
+      });
+
+      it('should emit buffer_cleanup event', async () => {
+        const shortTimeoutManager = new IncrementalStateManager(
+          blockchain,
+          CryptographicService,
+          MerkleTree,
+          compression,
+          meshProtocol,
+          undefined,
+          10,
+          1000,
+          100,
+          100
+        );
+
+        const emitSpy = vi.spyOn(shortTimeoutManager, 'emit');
+
+        const block: Block = {
+          index: 1,
+          timestamp: Date.now(),
+          transactions: [],
+          previousHash: blockchain.getLatestBlock().hash,
+          hash: 'block1_hash',
+          nonce: 0,
+          merkleRoot: 'merkle_root',
+          difficulty: 1,
+        };
+
+        await shortTimeoutManager.createStateUpdate(
+          block,
+          privateKey,
+          'secp256k1'
+        );
+
+        const update2 = await shortTimeoutManager.createStateUpdate(
+          { ...block, index: 2, hash: 'block2_hash' },
+          privateKey,
+          'secp256k1'
+        );
+        await shortTimeoutManager.handleStateUpdate(update2);
+
+        await new Promise(resolve => setTimeout(resolve, 150));
+
+        shortTimeoutManager.getGapDetectionStats();
+
+        expect(emitSpy).toHaveBeenCalledWith(
+          'buffer_cleanup',
+          expect.objectContaining({ expiredCount: 1 })
+        );
       });
     });
   });

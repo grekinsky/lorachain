@@ -86,6 +86,10 @@ export enum UTXOSyncMessageType {
   STATE_UPDATE_SUBSCRIBE = 'state_update_subscribe',
   STATE_UPDATE_UNSUBSCRIBE = 'state_update_unsubscribe',
   STATE_UPDATE_BATCH = 'state_update_batch',
+
+  // Missing Update Recovery (Task 6)
+  MISSING_UPDATE_REQUEST = 'missing_update_request',
+  MISSING_UPDATE_RESPONSE = 'missing_update_response',
 }
 
 /**
@@ -435,4 +439,23 @@ export interface StateUpdate {
   signature: string;
   publicKey: string;
   algorithm: 'secp256k1' | 'ed25519';
+}
+
+/**
+ * Missing update request payload (Task 6)
+ */
+export interface MissingUpdateRequestPayload {
+  requestId: string;
+  sequenceNumbers: number[]; // List of missing sequences
+  requestedBy: string; // Peer ID making request
+  timestamp: number;
+}
+
+/**
+ * Missing update response payload (Task 6)
+ */
+export interface MissingUpdateResponsePayload {
+  requestId: string;
+  updates: StateUpdate[];
+  missingSequences: number[]; // Sequences not found
 }

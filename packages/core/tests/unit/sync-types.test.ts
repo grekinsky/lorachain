@@ -455,7 +455,12 @@ describe('UTXO Sync Types', () => {
           type === 'checkpoint_announce' ||
           type === 'checkpoint_request' ||
           type === 'checkpoint_fragment' ||
-          type === 'checkpoint_complete'
+          type === 'checkpoint_complete' ||
+          type === 'state_update_subscribe' ||
+          type === 'state_update_unsubscribe' ||
+          type === 'state_update_batch' ||
+          type === 'missing_update_request' ||
+          type === 'missing_update_response'
       );
 
       expect(utxoSpecificTypes.length).toBe(utxoMessageTypes.length);
