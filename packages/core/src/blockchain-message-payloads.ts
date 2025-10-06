@@ -131,3 +131,166 @@ export interface UTXOTransactionRequestPayload {
    */
   requestId: string;
 }
+
+/**
+ * Peer node capabilities
+ *
+ * Describes the capabilities and features supported by a peer node.
+ * Exchanged during peer handshake to enable feature negotiation.
+ */
+export interface PeerNodeCapabilities {
+  /**
+   * Whether this is a full node (stores complete blockchain)
+   */
+  isFullNode: boolean;
+
+  /**
+   * Whether this node participates in mining
+   */
+  isMiningNode: boolean;
+
+  /**
+   * Whether compression is supported for message transmission
+   */
+  supportsCompression: boolean;
+
+  /**
+   * List of supported compression algorithms (e.g., 'gzip', 'zlib', 'brotli')
+   */
+  compressionAlgorithms: string[];
+
+  /**
+   * Maximum message size this node can handle (bytes)
+   */
+  maxMessageSize: number;
+
+  /**
+   * Network type this node operates on
+   */
+  networkType: 'mesh' | 'internet' | 'hybrid';
+
+  /**
+   * Port number this node is listening on for peer connections
+   */
+  listeningPort: number;
+
+  /**
+   * Optional API port for HTTP/WebSocket connections (internet nodes)
+   */
+  apiPort?: number;
+}
+
+/**
+ * Peer handshake init payload
+ *
+ * First message in three-way handshake protocol.
+ * Initiator sends their identity, capabilities, and a challenge for authentication.
+ */
+export interface PeerHandshakeInitPayload {
+  /**
+   * Unique node identifier
+   */
+  nodeId: string;
+
+  /**
+   * Node's public key for cryptographic operations
+   */
+  publicKey: string;
+
+  /**
+   * Node capabilities and features
+   */
+  capabilities: PeerNodeCapabilities;
+
+  /**
+   * Protocol version being used
+   */
+  protocolVersion: string;
+
+  /**
+   * Random challenge for authentication (hex string)
+   * Recipient must sign this to prove identity
+   */
+  challenge: string;
+
+  /**
+   * Message creation timestamp (milliseconds since epoch)
+   */
+  timestamp: number;
+}
+
+/**
+ * Peer handshake response payload
+ *
+ * Second message in three-way handshake protocol.
+ * Responder proves identity by signing initiator's challenge,
+ * and issues their own challenge.
+ */
+export interface PeerHandshakeResponsePayload {
+  /**
+   * Unique node identifier
+   */
+  nodeId: string;
+
+  /**
+   * Node's public key for cryptographic operations
+   */
+  publicKey: string;
+
+  /**
+   * Node capabilities and features
+   */
+  capabilities: PeerNodeCapabilities;
+
+  /**
+   * Protocol version being used
+   */
+  protocolVersion: string;
+
+  /**
+   * Signed response to initiator's challenge
+   * Proves ownership of public key
+   */
+  challengeResponse: string;
+
+  /**
+   * New challenge for initiator
+   * Initiator must sign this in ACK
+   */
+  challenge: string;
+
+  /**
+   * Message creation timestamp (milliseconds since epoch)
+   */
+  timestamp: number;
+}
+
+/**
+ * Peer handshake ACK payload
+ *
+ * Third and final message in three-way handshake protocol.
+ * Initiator proves identity by signing responder's challenge,
+ * completing the mutual authentication.
+ */
+export interface PeerHandshakeAckPayload {
+  /**
+   * Unique node identifier
+   */
+  nodeId: string;
+
+  /**
+   * Signed response to responder's challenge
+   * Proves ownership of public key
+   */
+  challengeResponse: string;
+
+  /**
+   * Whether the connection is successfully established
+   */
+  connectionEstablished: boolean;
+
+  /**
+   * Message creation timestamp (milliseconds since epoch)
+   */
+  timestamp: number;
+}
