@@ -302,11 +302,20 @@ export class BlockchainMessageRouter {
    *
    * @param hex - Hex string to convert
    * @returns Uint8Array of bytes
+   * @throws Error if hex string is invalid (odd length or non-hex characters)
    */
   private hexToBytes(hex: string): Uint8Array {
+    // Validate hex string
+    if (hex.length % 2 !== 0) {
+      throw new Error('Invalid hex string: odd length');
+    }
+    if (!/^[0-9a-fA-F]*$/.test(hex)) {
+      throw new Error('Invalid hex string: contains non-hex characters');
+    }
+
     const bytes = new Uint8Array(hex.length / 2);
     for (let i = 0; i < hex.length; i += 2) {
-      bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
+      bytes[i / 2] = parseInt(hex.substring(i, i + 2), 16);
     }
     return bytes;
   }
@@ -363,18 +372,22 @@ export class BlockchainMessageRouter {
   }
 
   /**
-   * Gets a copy of the registered handlers map.
+   * Gets a deep copy of the registered handlers map.
    *
-   * Useful for testing and debugging. Returns a new Map to prevent
-   * external modification of internal state.
+   * Useful for testing and debugging. Returns a new Map with deep copies
+   * of handler arrays to prevent external modification of internal state.
    *
-   * @returns Copy of the handlers map
+   * @returns Deep copy of the handlers map
    */
   getRegisteredHandlers(): Map<
     BlockchainMessageType,
     BlockchainMessageHandler[]
   > {
-    return new Map(this.handlers);
+    const copy = new Map<BlockchainMessageType, BlockchainMessageHandler[]>();
+    for (const [type, handlers] of this.handlers) {
+      copy.set(type, [...handlers]); // Deep copy handler arrays
+    }
+    return copy;
   }
 
   /**

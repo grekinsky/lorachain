@@ -188,9 +188,11 @@ describe('BlockchainMessageRouter', () => {
       payload: { data: 'test', version: '1.0.0', timestamp: Date.now() },
       metadata: {
         receivedAt: Date.now(),
-        source: 'peer1',
+        source:
+          '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef', // Valid hex
         hopCount: 1,
-        signature: 'valid_signature',
+        signature:
+          'fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210', // Valid hex
         nonce: `nonce_${Date.now()}_${Math.random()}`,
       },
     });
@@ -368,9 +370,11 @@ describe('BlockchainMessageRouter', () => {
       payload: { data: 'test', version: '1.0.0', timestamp: Date.now() },
       metadata: {
         receivedAt: Date.now(),
-        source: 'peer1',
+        source:
+          '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef', // Valid hex
         hopCount: 1,
-        signature: 'valid_signature',
+        signature:
+          'fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210', // Valid hex
         nonce: `nonce_${Date.now()}_${Math.random()}`,
       },
     });
@@ -431,6 +435,46 @@ describe('BlockchainMessageRouter', () => {
         'Invalid cryptographic signature'
       );
     });
+
+    it('should reject messages with invalid hex signatures (odd length)', async () => {
+      router.registerHandler(mockHandler);
+      const message = createValidMessage();
+      message.metadata.signature = 'abc'; // Odd length hex string
+
+      await expect(router.routeMessage(message, mockContext)).rejects.toThrow(
+        'Invalid cryptographic signature'
+      );
+    });
+
+    it('should reject messages with invalid hex signatures (non-hex characters)', async () => {
+      router.registerHandler(mockHandler);
+      const message = createValidMessage();
+      message.metadata.signature = 'gghhii'; // Invalid hex characters
+
+      await expect(router.routeMessage(message, mockContext)).rejects.toThrow(
+        'Invalid cryptographic signature'
+      );
+    });
+
+    it('should reject messages with invalid hex source addresses (odd length)', async () => {
+      router.registerHandler(mockHandler);
+      const message = createValidMessage();
+      message.metadata.source = 'def'; // Odd length hex string
+
+      await expect(router.routeMessage(message, mockContext)).rejects.toThrow(
+        'Invalid cryptographic signature'
+      );
+    });
+
+    it('should reject messages with invalid hex source addresses (non-hex characters)', async () => {
+      router.registerHandler(mockHandler);
+      const message = createValidMessage();
+      message.metadata.source = 'zzaabb'; // Invalid hex characters
+
+      await expect(router.routeMessage(message, mockContext)).rejects.toThrow(
+        'Invalid cryptographic signature'
+      );
+    });
   });
 
   describe('nonce cleanup', () => {
@@ -456,9 +500,11 @@ describe('BlockchainMessageRouter', () => {
         payload: { data: 'test', version: '1.0.0', timestamp: Date.now() },
         metadata: {
           receivedAt: Date.now(),
-          source: 'peer1',
+          source:
+            '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef', // Valid hex
           hopCount: 1,
-          signature: 'valid_signature',
+          signature:
+            'fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210', // Valid hex
           nonce: 'test_nonce_1',
         },
       };
@@ -511,6 +557,32 @@ describe('BlockchainMessageRouter', () => {
       expect(handlers1).toEqual(handlers2);
     });
 
+    it('should return deep copy of handler arrays to prevent modification', () => {
+      router.registerHandler(mockHandler);
+      const handlers = router.getRegisteredHandlers();
+      const blockHandlers = handlers.get(
+        BlockchainMessageType.BLOCK_ANNOUNCEMENT
+      );
+
+      // Modify the returned array
+      if (blockHandlers) {
+        blockHandlers.push({
+          canHandle: vi.fn().mockReturnValue(true),
+          handle: vi.fn().mockResolvedValue({ success: true }),
+          getHandlerPriority: vi.fn().mockReturnValue(1),
+        });
+      }
+
+      // Original handlers should not be modified
+      const handlersAfterModification = router.getRegisteredHandlers();
+      const blockHandlersAfterModification = handlersAfterModification.get(
+        BlockchainMessageType.BLOCK_ANNOUNCEMENT
+      );
+
+      expect(blockHandlersAfterModification?.length).toBe(1);
+      expect(blockHandlers?.length).toBe(2);
+    });
+
     it('should return cryptographic service', () => {
       expect(router.getCryptoService()).toBe(mockCryptoService);
     });
@@ -551,9 +623,11 @@ describe('BlockchainMessageRouter', () => {
         payload: { data: 'test', version: '1.0.0', timestamp: Date.now() },
         metadata: {
           receivedAt: Date.now(),
-          source: 'peer1',
+          source:
+            '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef', // Valid hex
           hopCount: 1,
-          signature: 'valid_signature',
+          signature:
+            'fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210', // Valid hex
           nonce: `nonce_${Date.now()}_${Math.random()}`,
         },
       };
@@ -574,9 +648,9 @@ describe('BlockchainMessageRouter', () => {
         payload: { data: `test${i}`, version: '1.0.0', timestamp: Date.now() },
         metadata: {
           receivedAt: Date.now(),
-          source: `peer${i}`,
+          source: `${i.toString().padStart(64, '0')}`, // Valid hex (numeric padded to 64 chars)
           hopCount: 1,
-          signature: 'valid_signature',
+          signature: `${i.toString().padStart(64, 'f')}`, // Valid hex (numeric padded to 64 chars)
           nonce: `nonce_${Date.now()}_${i}_${Math.random()}`,
         },
       }));
