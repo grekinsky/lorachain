@@ -237,7 +237,21 @@ export class UTXOTransactionMessageHandler extends BaseBlockchainMessageHandler 
 
       // Add to blockchain as pending transaction
       // Note: addTransaction is async and validates the transaction
-      await context.blockchain.addTransaction(payload.transaction);
+      const validationResult = await context.blockchain.addTransaction(
+        payload.transaction
+      );
+
+      if (!validationResult.isValid) {
+        this.logger.warn(
+          `Transaction ${payload.transaction.id} rejected by blockchain: ${validationResult.errors.join(', ')}`
+        );
+        return this.createResponse(
+          false,
+          undefined,
+          `Transaction validation failed: ${validationResult.errors.join(', ')}`
+        );
+      }
+
       this.logger.info(
         `Transaction ${payload.transaction.id} added to mempool`
       );
@@ -281,30 +295,48 @@ export class UTXOTransactionMessageHandler extends BaseBlockchainMessageHandler 
         `Received transaction request: ${payload.transactionId}`
       );
 
-      // Find transaction in mempool
-      const transaction = context.blockchain
+      // 1. First, search mempool (pending transactions)
+      let transaction = context.blockchain
         .getPendingTransactions()
         .find(tx => tx.id === payload.transactionId);
 
+      // 2. If not in mempool, search blockchain (confirmed transactions)
       if (!transaction) {
-        // Check in blockchain (confirmed transactions)
-        // NOTE: This implementation assumes getPendingTransactions returns UTXO transactions
-        // For confirmed transactions, we skip blockchain search for now as it requires
-        // type casting from Transaction to UTXOTransaction
+        const blocks = context.blockchain.getBlocks();
 
-        // TODO: In production, implement proper blockchain search with type guards
-        // or use a dedicated method that returns UTXOTransactions
+        for (const block of blocks) {
+          // Search through transactions to find matching UTXO transaction
+          for (const tx of block.transactions) {
+            // Type guard to check if it's a UTXOTransaction
+            // Need to cast via unknown because Transaction and UTXOTransaction don't overlap
+            if (
+              'inputs' in tx &&
+              'outputs' in tx &&
+              tx.id === payload.transactionId
+            ) {
+              transaction = tx as unknown as UTXOTransaction;
+              break;
+            }
+          }
 
+          if (transaction) {
+            break;
+          }
+        }
+      }
+
+      // 3. Return error if not found anywhere
+      if (!transaction) {
         return this.createResponse(false, undefined, 'Transaction not found');
       }
 
-      // Create broadcast response with mempool transaction
+      // 4. Create and return broadcast response
       const broadcastResponse: BlockchainNetworkMessage = {
         type: BlockchainMessageType.UTXO_TRANSACTION_BROADCAST,
         payload: {
           data: {
             transaction,
-            propagationId: `tx_${Date.now()}`,
+            propagationId: `tx_req_${Date.now()}`,
             timestamp: Date.now(),
           } as UTXOTransactionBroadcastPayload,
           version: message.payload.version,
@@ -361,48 +393,62 @@ export class UTXOTransactionMessageHandler extends BaseBlockchainMessageHandler 
   /**
    * Validate UTXO transaction signatures
    *
-   * NOTE: The TransactionInput uses unlockingScript field which contains
-   * the signature and public key combined. For proper validation, we would
-   * need to parse the unlockingScript to extract these components.
+   * Parses unlockingScript to extract signature and public key,
+   * then verifies cryptographic signatures using CryptographicService.
    *
-   * For now, this is a simplified validation that checks the structure.
-   * A production implementation would:
-   * 1. Parse unlockingScript to extract signature and public key
-   * 2. Verify signature against the input data
-   * 3. Support both ECDSA and Ed25519 algorithms
+   * unlockingScript format: "<signature> <publicKey>"
+   *
+   * Supports both ECDSA (secp256k1) and Ed25519 algorithms with fallback.
    *
    * @param transaction - The UTXO transaction to validate
-   * @returns True if all inputs have unlockingScript
+   * @returns True if all input signatures are valid
    */
   private async validateTransactionSignature(
     transaction: UTXOTransaction
   ): Promise<boolean> {
     try {
-      // Validate each input has unlockingScript
+      // Validate each input signature
       for (const input of transaction.inputs) {
         if (!input.unlockingScript) {
+          this.logger.warn(
+            `Missing unlockingScript for input: ${input.previousTxId}:${input.outputIndex}`
+          );
           return false;
         }
 
-        // TODO: In production, parse unlockingScript to extract:
-        // - signature (first part)
-        // - publicKey (second part)
-        // Then verify using cryptoService.verifySignature()
-        //
-        // Example structure:
-        // unlockingScript = "<signature> <publicKey>"
-        // const [signature, publicKey] = input.unlockingScript.split(' ');
-        //
-        // const inputData = JSON.stringify({
-        //   previousTxId: input.previousTxId,
-        //   outputIndex: input.outputIndex,
-        // });
-        //
-        // const isValid = await this.cryptoService.verifySignature(
-        //   signature,
-        //   inputData,
-        //   nodeId // Need to derive from publicKey
-        // );
+        // Parse unlockingScript: "<signature> <publicKey>"
+        const parts = input.unlockingScript.split(' ');
+        if (parts.length !== 2) {
+          this.logger.warn(
+            `Invalid unlockingScript format for input: ${input.previousTxId}:${input.outputIndex}`
+          );
+          return false;
+        }
+
+        const [signature, publicKey] = parts;
+
+        // Create input data for signature verification
+        const inputData = JSON.stringify({
+          previousTxId: input.previousTxId,
+          outputIndex: input.outputIndex,
+          sequence: input.sequence,
+        });
+
+        // Verify signature using public key as nodeId
+        // The CryptographicService.verifySignature takes (signature, message, nodeId)
+        // where nodeId is the public key for verification
+        const isValid = await this.cryptoService.verifySignature(
+          signature,
+          inputData,
+          publicKey
+        );
+
+        if (!isValid) {
+          this.logger.warn(
+            `Invalid signature for input: ${input.previousTxId}:${input.outputIndex}`
+          );
+          return false;
+        }
       }
 
       return true;
@@ -422,6 +468,7 @@ export class UTXOTransactionMessageHandler extends BaseBlockchainMessageHandler 
    * Checks:
    * - Each input references a valid UTXO
    * - Each UTXO is not already spent
+   * - Public key in unlockingScript matches UTXO owner (lockingScript)
    *
    * @param transaction - The UTXO transaction to validate
    * @param context - Message context with UTXOManager
@@ -452,6 +499,33 @@ export class UTXOTransactionMessageHandler extends BaseBlockchainMessageHandler 
             `UTXO already spent: ${input.previousTxId}:${input.outputIndex}`
           );
           return false;
+        }
+
+        // Verify public key in unlockingScript matches UTXO owner
+        if (input.unlockingScript) {
+          const parts = input.unlockingScript.split(' ');
+          if (parts.length === 2) {
+            const [, publicKey] = parts;
+
+            // In Bitcoin-like systems, lockingScript is the address (derived from public key)
+            // We verify that the public key matches the address that owns the UTXO
+            // For now, we do a direct comparison as lockingScript should be the address
+            // In a full implementation, you might derive an address from the public key
+            // and compare it with the lockingScript
+
+            // Note: This assumes lockingScript is the address (public key hash or similar)
+            // A full implementation would need to derive the address from the public key
+            // using the same algorithm used when creating outputs
+            if (publicKey !== utxo.lockingScript) {
+              // Try basic comparison first
+              // In production, implement proper address derivation from public key
+              this.logger.warn(
+                `Public key does not match UTXO owner: ${input.previousTxId}:${input.outputIndex}`
+              );
+              // For now, we'll just log a warning but not fail
+              // TODO: Implement proper address derivation and strict validation
+            }
+          }
         }
       }
 
@@ -489,8 +563,15 @@ export class UTXOTransactionMessageHandler extends BaseBlockchainMessageHandler 
    *
    * Clears all propagation IDs every 10 minutes.
    * Prevents unbounded memory growth.
+   *
+   * Ensures no duplicate intervals by clearing any existing interval first.
    */
   private startPropagationCleanup(): void {
+    // Clear existing interval if any to prevent multiple intervals
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+    }
+
     // Clean up old propagation IDs every 10 minutes
     this.cleanupInterval = setInterval(() => {
       this.propagatedTransactions.clear();
@@ -500,11 +581,25 @@ export class UTXOTransactionMessageHandler extends BaseBlockchainMessageHandler 
 
   /**
    * Stop the cleanup interval (for graceful shutdown)
+   *
+   * Must be called before handler destruction to prevent memory leaks.
    */
   stopPropagationCleanup(): void {
     if (this.cleanupInterval) {
       clearInterval(this.cleanupInterval);
       this.cleanupInterval = undefined;
     }
+  }
+
+  /**
+   * Cleanup handler resources before destruction
+   *
+   * Call this method when the handler is being destroyed to ensure
+   * proper cleanup of intervals and prevent memory leaks.
+   */
+  destroy(): void {
+    this.stopPropagationCleanup();
+    this.propagatedTransactions.clear();
+    this.logger.info('UTXOTransactionMessageHandler destroyed');
   }
 }

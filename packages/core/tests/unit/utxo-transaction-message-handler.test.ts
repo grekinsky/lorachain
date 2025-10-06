@@ -56,7 +56,9 @@ describe('UTXOTransactionMessageHandler', () => {
     mockContext = {
       blockchain: {
         getPendingTransactions: vi.fn().mockReturnValue([]),
-        addTransaction: vi.fn().mockResolvedValue(undefined),
+        addTransaction: vi
+          .fn()
+          .mockResolvedValue({ isValid: true, errors: [] }),
         getBlocks: vi.fn().mockReturnValue([]),
       },
       utxoManager: {
@@ -271,7 +273,6 @@ describe('UTXOTransactionMessageHandler', () => {
       expect(mockContext.blockchain.addTransaction).not.toHaveBeenCalled();
     });
 
-
     it('should reject transaction with missing unlockingScript', async () => {
       const invalidTx = {
         ...mockTransaction,
@@ -458,7 +459,6 @@ describe('UTXOTransactionMessageHandler', () => {
         BlockchainMessageType.UTXO_TRANSACTION_BROADCAST
       );
     });
-
 
     it('should return error if transaction not found', async () => {
       const message: BlockchainNetworkMessage = {
