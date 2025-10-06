@@ -89,3 +89,45 @@ export interface BlockResponsePayload {
    */
   requestId: string;
 }
+
+/**
+ * UTXO transaction broadcast payload
+ *
+ * Sent when a node creates or receives a new UTXO transaction.
+ * Used for flooding protocol to propagate transactions across the network.
+ */
+export interface UTXOTransactionBroadcastPayload {
+  /**
+   * The UTXO transaction to broadcast
+   */
+  transaction: import('./types.js').UTXOTransaction;
+
+  /**
+   * Unique propagation ID for deduplication
+   * Prevents flooding loops by tracking which transactions have been seen
+   */
+  propagationId: string;
+
+  /**
+   * Transaction broadcast timestamp (milliseconds since epoch)
+   */
+  timestamp: number;
+}
+
+/**
+ * UTXO transaction request payload
+ *
+ * Sent when a node needs to retrieve a specific UTXO transaction.
+ * Can be used to request transactions from mempool or confirmed blocks.
+ */
+export interface UTXOTransactionRequestPayload {
+  /**
+   * Transaction ID to request
+   */
+  transactionId: string;
+
+  /**
+   * Request ID for response correlation
+   */
+  requestId: string;
+}
