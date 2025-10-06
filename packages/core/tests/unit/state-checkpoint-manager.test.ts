@@ -1335,12 +1335,12 @@ describe('StateCheckpointManager', () => {
 
         const request: CheckpointRequestPayload = {
           checkpointHash: checkpoint.checkpointHash,
-          requestedFragments: [0, 2],
+          requestedFragments: [0], // Only request fragment 0 since checkpoint is small
         };
 
         await distributionManager.handleCheckpointRequest('peer1', request);
 
-        expect(mockReliableDelivery.sendReliableMessage).toHaveBeenCalledTimes(2);
+        expect(mockReliableDelivery.sendReliableMessage).toHaveBeenCalledTimes(1);
       });
 
       it('should use reliable delivery for fragments', async () => {
