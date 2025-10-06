@@ -316,10 +316,13 @@ export * from './blockchain-message-interfaces.js';
 export * from './blockchain-message-handler-interface.js';
 export * from './base-blockchain-message-handler.js';
 export * from './blockchain-message-router.js';
+export * from './blockchain-message-payloads.js';
+export * from './utxo-block-message-handler.js';
 
 export { BlockchainMessageType } from './blockchain-message-types.js';
 export { BaseBlockchainMessageHandler } from './base-blockchain-message-handler.js';
 export { BlockchainMessageRouter } from './blockchain-message-router.js';
+export { UTXOBlockMessageHandler } from './utxo-block-message-handler.js';
 
 // Blockchain message type exports
 export type {
@@ -331,3 +334,10 @@ export type {
 } from './blockchain-message-interfaces.js';
 
 export type { BlockchainMessageHandler } from './blockchain-message-handler-interface.js';
+
+// Blockchain message payload exports
+export type {
+  BlockAnnouncementPayload,
+  BlockRequestPayload,
+  BlockResponsePayload,
+} from './blockchain-message-payloads.js';
