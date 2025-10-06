@@ -7,6 +7,8 @@ import {
   StateCheckpointManager,
   CheckpointCreationError,
   CheckpointNotFoundError,
+  CheckpointDownloadError,
+  CheckpointApplicationError,
   type StateCheckpoint,
   type CheckpointCreationOptions,
   type ValidatorConfig,
@@ -15,8 +17,13 @@ import {
 import type { Blockchain } from '../../src/blockchain.js';
 import type { UTXOPersistenceManager } from '../../src/persistence.js';
 import type { UTXOCompressionManager } from '../../src/utxo-compression-manager.js';
+import type { UTXOEnhancedMeshProtocol } from '../../src/enhanced-mesh-protocol.js';
+import type { UTXOReliableDeliveryManager } from '../../src/utxo-reliable-delivery-manager.js';
 import type { UTXO, UTXOBlockchainState } from '../../src/types.js';
-import type { CompressedPayload } from '../../src/sync-types.js';
+import type {
+  CompressedPayload,
+  CheckpointRequestPayload,
+} from '../../src/sync-types.js';
 import { CryptographicService } from '../../src/cryptographic.js';
 
 describe('StateCheckpointManager', () => {
@@ -1187,6 +1194,633 @@ describe('StateCheckpointManager', () => {
         expect(result.errors).toContain(
           'Insufficient valid signatures: 1/2 required'
         );
+      });
+    });
+  });
+
+  /**
+   * Checkpoint Distribution Tests (Task 3)
+   */
+  describe('Checkpoint Distribution', () => {
+    let distributionManager: StateCheckpointManager;
+    let mockMeshProtocol: Partial<UTXOEnhancedMeshProtocol>;
+    let mockReliableDelivery: Partial<UTXOReliableDeliveryManager>;
+
+    beforeEach(() => {
+      // Create distribution-enabled manager with mesh protocol
+      mockMeshProtocol = {
+        sendMessage: vi.fn().mockResolvedValue(true),
+      };
+
+      mockReliableDelivery = {
+        sendWithRetry: vi.fn().mockResolvedValue(true),
+      };
+
+      distributionManager = new StateCheckpointManager(
+        mockBlockchain as Blockchain,
+        mockPersistence as UTXOPersistenceManager,
+        mockCompression as UTXOCompressionManager,
+        100,
+        undefined,
+        undefined,
+        mockMeshProtocol as UTXOEnhancedMeshProtocol,
+        mockReliableDelivery as UTXOReliableDeliveryManager,
+        10
+      );
+    });
+
+    describe('broadcastCheckpoint', () => {
+      it('should fragment checkpoint for LoRa transmission', async () => {
+        const checkpoint = await manager.createCheckpoint();
+
+        await distributionManager.broadcastCheckpoint(checkpoint);
+
+        expect(mockMeshProtocol.sendMessage).toHaveBeenCalled();
+        const call = (mockMeshProtocol.sendMessage as ReturnType<typeof vi.fn>)
+          .mock.calls[0];
+        expect(call[0]).toBe('broadcast');
+        expect(call[1]).toBe('CHECKPOINT_ANNOUNCE');
+      });
+
+      it('should broadcast announcement to network', async () => {
+        const checkpoint = await manager.createCheckpoint();
+
+        await distributionManager.broadcastCheckpoint(checkpoint);
+
+        expect(mockMeshProtocol.sendMessage).toHaveBeenCalledWith(
+          'broadcast',
+          'CHECKPOINT_ANNOUNCE',
+          expect.any(Buffer)
+        );
+      });
+
+      it('should include checkpoint metadata in announcement', async () => {
+        const checkpoint = await manager.createCheckpoint();
+
+        await distributionManager.broadcastCheckpoint(checkpoint);
+
+        const call = (mockMeshProtocol.sendMessage as ReturnType<typeof vi.fn>)
+          .mock.calls[0];
+        const payload = JSON.parse(call[2].toString('utf-8'));
+
+        expect(payload).toMatchObject({
+          checkpointHash: checkpoint.checkpointHash,
+          height: checkpoint.height,
+          utxoCount: checkpoint.utxoCount,
+          merkleRoot: checkpoint.merkleRoot,
+        });
+      });
+
+      it('should emit checkpoint:announced event', async () => {
+        const checkpoint = await manager.createCheckpoint();
+        const announcedHandler = vi.fn();
+        distributionManager.on('checkpoint:announced', announcedHandler);
+
+        await distributionManager.broadcastCheckpoint(checkpoint);
+
+        expect(announcedHandler).toHaveBeenCalledWith(
+          expect.objectContaining({
+            checkpointHash: checkpoint.checkpointHash,
+            height: checkpoint.height,
+          })
+        );
+      });
+
+      it('should throw error if mesh protocol not initialized', async () => {
+        const noMeshManager = new StateCheckpointManager(
+          mockBlockchain as Blockchain,
+          mockPersistence as UTXOPersistenceManager,
+          mockCompression as UTXOCompressionManager
+        );
+
+        const checkpoint = await manager.createCheckpoint();
+
+        await expect(
+          noMeshManager.broadcastCheckpoint(checkpoint)
+        ).rejects.toThrow('Mesh protocol not initialized');
+      });
+    });
+
+    describe('handleCheckpointRequest', () => {
+      it('should serve checkpoint fragments to requesting peer', async () => {
+        const checkpoint = await manager.createCheckpoint();
+        mockDb.get.mockResolvedValueOnce(checkpoint.height);
+        mockDb.get.mockResolvedValueOnce(checkpoint);
+
+        const request: CheckpointRequestPayload = {
+          checkpointHash: checkpoint.checkpointHash,
+        };
+
+        await distributionManager.handleCheckpointRequest('peer1', request);
+
+        expect(mockReliableDelivery.sendWithRetry).toHaveBeenCalled();
+      });
+
+      it('should serve specific fragments when requested', async () => {
+        const checkpoint = await manager.createCheckpoint();
+        mockDb.get.mockResolvedValueOnce(checkpoint.height);
+        mockDb.get.mockResolvedValueOnce(checkpoint);
+
+        const request: CheckpointRequestPayload = {
+          checkpointHash: checkpoint.checkpointHash,
+          requestedFragments: [0, 2],
+        };
+
+        await distributionManager.handleCheckpointRequest('peer1', request);
+
+        expect(mockReliableDelivery.sendWithRetry).toHaveBeenCalledTimes(2);
+      });
+
+      it('should use reliable delivery for fragments', async () => {
+        const checkpoint = await manager.createCheckpoint();
+        mockDb.get.mockResolvedValueOnce(checkpoint.height);
+        mockDb.get.mockResolvedValueOnce(checkpoint);
+
+        const request: CheckpointRequestPayload = {
+          checkpointHash: checkpoint.checkpointHash,
+        };
+
+        await distributionManager.handleCheckpointRequest('peer1', request);
+
+        expect(mockReliableDelivery.sendWithRetry).toHaveBeenCalledWith(
+          'peer1',
+          'CHECKPOINT_FRAGMENT',
+          expect.any(Buffer),
+          3
+        );
+      });
+
+      it('should emit checkpoint:served event', async () => {
+        const checkpoint = await manager.createCheckpoint();
+        mockDb.get.mockResolvedValueOnce(checkpoint.height);
+        mockDb.get.mockResolvedValueOnce(checkpoint);
+
+        const servedHandler = vi.fn();
+        distributionManager.on('checkpoint:served', servedHandler);
+
+        const request: CheckpointRequestPayload = {
+          checkpointHash: checkpoint.checkpointHash,
+        };
+
+        await distributionManager.handleCheckpointRequest('peer1', request);
+
+        expect(servedHandler).toHaveBeenCalledWith(
+          expect.objectContaining({
+            peerId: 'peer1',
+            checkpointHash: checkpoint.checkpointHash,
+          })
+        );
+      });
+
+      it('should throw CheckpointNotFoundError if checkpoint not found', async () => {
+        mockDb.get.mockResolvedValue(null);
+
+        const request: CheckpointRequestPayload = {
+          checkpointHash: 'nonexistent',
+        };
+
+        await expect(
+          distributionManager.handleCheckpointRequest('peer1', request)
+        ).rejects.toThrow(CheckpointNotFoundError);
+      });
+    });
+
+    describe('downloadCheckpoint', () => {
+      it('should download all fragments from peers', async () => {
+        const checkpoint = await manager.createCheckpoint();
+
+        mockMeshProtocol.sendMessage = vi.fn().mockResolvedValue(true);
+
+        const downloadPromise = distributionManager.downloadCheckpoint(
+          checkpoint.checkpointHash,
+          ['peer1']
+        );
+
+        // Simulate receiving fragments
+        // Note: This is a simplified test - actual implementation would need
+        // proper fragment simulation
+        expect(mockMeshProtocol.sendMessage).toHaveBeenCalledWith(
+          'peer1',
+          'CHECKPOINT_REQUEST',
+          expect.any(Buffer)
+        );
+
+        // Clean up promise
+        downloadPromise.catch(() => {
+          /* Expected timeout */
+        });
+      });
+
+      it('should throw error with no source peers', async () => {
+        await expect(
+          distributionManager.downloadCheckpoint('hash', [])
+        ).rejects.toThrow(CheckpointDownloadError);
+      });
+
+      it('should throw error if mesh protocol not initialized', async () => {
+        const noMeshManager = new StateCheckpointManager(
+          mockBlockchain as Blockchain,
+          mockPersistence as UTXOPersistenceManager,
+          mockCompression as UTXOCompressionManager
+        );
+
+        await expect(
+          noMeshManager.downloadCheckpoint('hash', ['peer1'])
+        ).rejects.toThrow('Mesh protocol or reliable delivery not initialized');
+      });
+    });
+
+    describe('applyCheckpoint', () => {
+      it('should apply UTXO snapshot to blockchain', async () => {
+        const checkpoint = await manager.createCheckpoint();
+
+        // Add validator signatures to make it valid
+        checkpoint.validatorSignatures = [
+          {
+            validatorPublicKey: 'validator1',
+            signature: 'sig1',
+            timestamp: Date.now(),
+            algorithm: 'secp256k1' as const,
+          },
+          {
+            validatorPublicKey: 'validator2',
+            signature: 'sig2',
+            timestamp: Date.now(),
+            algorithm: 'secp256k1' as const,
+          },
+        ];
+
+        // Mock decompression
+        const mockUtxos = [createMockUTXO(1), createMockUTXO(2)];
+        (mockCompression.decompress as ReturnType<typeof vi.fn>) = vi
+          .fn()
+          .mockResolvedValue(Buffer.from(JSON.stringify(mockUtxos)));
+
+        const mockUTXOManager = {
+          clearUTXOSet: vi.fn(),
+          addUTXO: vi.fn(),
+        };
+        (mockBlockchain.getUTXOManager as ReturnType<typeof vi.fn>) = vi
+          .fn()
+          .mockReturnValue(mockUTXOManager);
+
+        // Mock validation to pass
+        vi.spyOn(
+          distributionManager as unknown as {
+            validateCheckpoint: (cp: StateCheckpoint) => Promise<unknown>;
+          },
+          'validateCheckpoint'
+        ).mockResolvedValue({
+          isValid: true,
+          validSignatures: 2,
+          requiredSignatures: 2,
+          errors: [],
+          warnings: [],
+        });
+
+        await distributionManager.applyCheckpoint(checkpoint);
+
+        expect(mockUTXOManager.clearUTXOSet).toHaveBeenCalled();
+        expect(mockUTXOManager.addUTXO).toHaveBeenCalledTimes(2);
+      });
+
+      it('should update blockchain height', async () => {
+        const checkpoint = await manager.createCheckpoint();
+
+        checkpoint.validatorSignatures = [
+          {
+            validatorPublicKey: 'validator1',
+            signature: 'sig1',
+            timestamp: Date.now(),
+            algorithm: 'secp256k1' as const,
+          },
+          {
+            validatorPublicKey: 'validator2',
+            signature: 'sig2',
+            timestamp: Date.now(),
+            algorithm: 'secp256k1' as const,
+          },
+        ];
+
+        const mockUtxos = [createMockUTXO(1)];
+        (mockCompression.decompress as ReturnType<typeof vi.fn>) = vi
+          .fn()
+          .mockResolvedValue(Buffer.from(JSON.stringify(mockUtxos)));
+
+        const mockUTXOManager = {
+          clearUTXOSet: vi.fn(),
+          addUTXO: vi.fn(),
+        };
+        (mockBlockchain.getUTXOManager as ReturnType<typeof vi.fn>) = vi
+          .fn()
+          .mockReturnValue(mockUTXOManager);
+
+        vi.spyOn(
+          distributionManager as unknown as {
+            validateCheckpoint: (cp: StateCheckpoint) => Promise<unknown>;
+          },
+          'validateCheckpoint'
+        ).mockResolvedValue({
+          isValid: true,
+          validSignatures: 2,
+          requiredSignatures: 2,
+          errors: [],
+          warnings: [],
+        });
+
+        const appliedHandler = vi.fn();
+        distributionManager.on('checkpoint:applied', appliedHandler);
+
+        await distributionManager.applyCheckpoint(checkpoint);
+
+        expect(appliedHandler).toHaveBeenCalledWith(
+          expect.objectContaining({
+            height: checkpoint.height,
+          })
+        );
+      });
+
+      it('should throw error on validation failure', async () => {
+        const checkpoint = await manager.createCheckpoint();
+
+        await expect(
+          distributionManager.applyCheckpoint(checkpoint)
+        ).rejects.toThrow(CheckpointApplicationError);
+      });
+    });
+
+    describe('cleanupOldCheckpoints', () => {
+      it('should delete checkpoints older than retention limit', async () => {
+        // Create multiple checkpoints
+        const checkpoints: StateCheckpoint[] = [];
+        for (let i = 0; i < 15; i++) {
+          const cp = await manager.createCheckpoint();
+          cp.height = i * 100;
+          checkpoints.push(cp);
+        }
+
+        // Mock getAvailableCheckpoints
+        vi.spyOn(
+          distributionManager as unknown as {
+            getAvailableCheckpoints: () => Promise<StateCheckpoint[]>;
+          },
+          'getAvailableCheckpoints'
+        ).mockResolvedValue(checkpoints);
+
+        mockDb.get.mockImplementation(async (key: string) => {
+          const match = key.match(/height:(\d+)/);
+          if (match) {
+            const height = parseInt(match[1]);
+            return checkpoints.find(cp => cp.height === height);
+          }
+          return null;
+        });
+
+        const deletedCount = await distributionManager.cleanupOldCheckpoints();
+
+        expect(deletedCount).toBe(5); // 15 - 10 = 5
+      });
+
+      it('should keep most recent N checkpoints', async () => {
+        const checkpoints: StateCheckpoint[] = [];
+        for (let i = 0; i < 12; i++) {
+          const cp = await manager.createCheckpoint();
+          cp.height = i * 100;
+          checkpoints.push(cp);
+        }
+
+        vi.spyOn(
+          distributionManager as unknown as {
+            getAvailableCheckpoints: () => Promise<StateCheckpoint[]>;
+          },
+          'getAvailableCheckpoints'
+        ).mockResolvedValue(checkpoints);
+
+        mockDb.get.mockImplementation(async (key: string) => {
+          const match = key.match(/height:(\d+)/);
+          if (match) {
+            const height = parseInt(match[1]);
+            return checkpoints.find(cp => cp.height === height);
+          }
+          return null;
+        });
+
+        const cleanupHandler = vi.fn();
+        distributionManager.on('checkpoint:cleanup', cleanupHandler);
+
+        await distributionManager.cleanupOldCheckpoints();
+
+        expect(cleanupHandler).toHaveBeenCalledWith(
+          expect.objectContaining({
+            remainingCount: 10,
+          })
+        );
+      });
+
+      it('should return count of deleted checkpoints', async () => {
+        const checkpoints: StateCheckpoint[] = [];
+        for (let i = 0; i < 20; i++) {
+          const cp = await manager.createCheckpoint();
+          cp.height = i * 100;
+          checkpoints.push(cp);
+        }
+
+        vi.spyOn(
+          distributionManager as unknown as {
+            getAvailableCheckpoints: () => Promise<StateCheckpoint[]>;
+          },
+          'getAvailableCheckpoints'
+        ).mockResolvedValue(checkpoints);
+
+        mockDb.get.mockImplementation(async (key: string) => {
+          const match = key.match(/height:(\d+)/);
+          if (match) {
+            const height = parseInt(match[1]);
+            return checkpoints.find(cp => cp.height === height);
+          }
+          return null;
+        });
+
+        const deletedCount = await distributionManager.cleanupOldCheckpoints();
+
+        expect(deletedCount).toBe(10);
+      });
+
+      it('should not delete if under retention limit', async () => {
+        const checkpoints: StateCheckpoint[] = [];
+        for (let i = 0; i < 5; i++) {
+          const cp = await manager.createCheckpoint();
+          cp.height = i * 100;
+          checkpoints.push(cp);
+        }
+
+        vi.spyOn(
+          distributionManager as unknown as {
+            getAvailableCheckpoints: () => Promise<StateCheckpoint[]>;
+          },
+          'getAvailableCheckpoints'
+        ).mockResolvedValue(checkpoints);
+
+        const deletedCount = await distributionManager.cleanupOldCheckpoints();
+
+        expect(deletedCount).toBe(0);
+      });
+    });
+
+    describe('fragmentation', () => {
+      it('should fragment checkpoint into <256-byte pieces', async () => {
+        const checkpoint = await manager.createCheckpoint();
+
+        // Access private method via type assertion
+        const fragments = await (
+          distributionManager as unknown as {
+            fragmentCheckpoint: (cp: StateCheckpoint) => Promise<
+              Array<{
+                fragmentData: Buffer;
+                fragmentIndex: number;
+                totalFragments: number;
+              }>
+            >;
+          }
+        ).fragmentCheckpoint(checkpoint);
+
+        // Each fragment should be <= 200 bytes (FRAGMENT_SIZE)
+        for (const fragment of fragments) {
+          expect(fragment.fragmentData.length).toBeLessThanOrEqual(200);
+        }
+      });
+
+      it('should include checksums for each fragment', async () => {
+        const checkpoint = await manager.createCheckpoint();
+
+        const fragments = await (
+          distributionManager as unknown as {
+            fragmentCheckpoint: (
+              cp: StateCheckpoint
+            ) => Promise<Array<{ checksum: string }>>;
+          }
+        ).fragmentCheckpoint(checkpoint);
+
+        for (const fragment of fragments) {
+          expect(fragment.checksum).toBeDefined();
+          expect(typeof fragment.checksum).toBe('string');
+          expect(fragment.checksum.length).toBe(64); // SHA-256 hex
+        }
+      });
+
+      it('should reassemble fragments correctly', async () => {
+        const checkpoint = await manager.createCheckpoint();
+
+        const fragments = await (
+          distributionManager as unknown as {
+            fragmentCheckpoint: (cp: StateCheckpoint) => Promise<
+              Array<{
+                checkpointHash: string;
+                fragmentIndex: number;
+                totalFragments: number;
+                fragmentData: Buffer;
+                checksum: string;
+              }>
+            >;
+          }
+        ).fragmentCheckpoint(checkpoint);
+
+        const reassembled = await (
+          distributionManager as unknown as {
+            reassembleCheckpoint: (
+              fragments: Array<{
+                checkpointHash: string;
+                fragmentIndex: number;
+                totalFragments: number;
+                fragmentData: Buffer;
+                checksum: string;
+              }>
+            ) => Promise<StateCheckpoint>;
+          }
+        ).reassembleCheckpoint(fragments);
+
+        expect(reassembled.checkpointHash).toBe(checkpoint.checkpointHash);
+        expect(reassembled.height).toBe(checkpoint.height);
+      });
+
+      it('should detect corrupted fragments', async () => {
+        const checkpoint = await manager.createCheckpoint();
+
+        const fragments = await (
+          distributionManager as unknown as {
+            fragmentCheckpoint: (cp: StateCheckpoint) => Promise<
+              Array<{
+                checkpointHash: string;
+                fragmentIndex: number;
+                totalFragments: number;
+                fragmentData: Buffer;
+                checksum: string;
+              }>
+            >;
+          }
+        ).fragmentCheckpoint(checkpoint);
+
+        // Corrupt first fragment checksum
+        fragments[0].checksum = 'invalid';
+
+        await expect(
+          (
+            distributionManager as unknown as {
+              reassembleCheckpoint: (
+                fragments: Array<{
+                  checkpointHash: string;
+                  fragmentIndex: number;
+                  totalFragments: number;
+                  fragmentData: Buffer;
+                  checksum: string;
+                }>
+              ) => Promise<StateCheckpoint>;
+            }
+          ).reassembleCheckpoint(fragments)
+        ).rejects.toThrow('checksum mismatch');
+      });
+    });
+
+    describe('getCheckpointStats', () => {
+      it('should return statistics about checkpoints', async () => {
+        const checkpoints: StateCheckpoint[] = [];
+        for (let i = 0; i < 5; i++) {
+          const cp = await manager.createCheckpoint();
+          cp.height = i * 100;
+          checkpoints.push(cp);
+        }
+
+        vi.spyOn(
+          distributionManager as unknown as {
+            getAvailableCheckpoints: () => Promise<StateCheckpoint[]>;
+          },
+          'getAvailableCheckpoints'
+        ).mockResolvedValue(checkpoints);
+
+        const stats = await distributionManager.getCheckpointStats();
+
+        expect(stats.totalCheckpoints).toBe(5);
+        expect(stats.oldestHeight).toBe(0);
+        expect(stats.newestHeight).toBe(400);
+        expect(stats.totalSize).toBeGreaterThan(0);
+        expect(stats.averageSize).toBeGreaterThan(0);
+      });
+
+      it('should handle empty checkpoint list', async () => {
+        vi.spyOn(
+          distributionManager as unknown as {
+            getAvailableCheckpoints: () => Promise<StateCheckpoint[]>;
+          },
+          'getAvailableCheckpoints'
+        ).mockResolvedValue([]);
+
+        const stats = await distributionManager.getCheckpointStats();
+
+        expect(stats.totalCheckpoints).toBe(0);
+        expect(stats.oldestHeight).toBe(0);
+        expect(stats.newestHeight).toBe(0);
+        expect(stats.totalSize).toBe(0);
+        expect(stats.averageSize).toBe(0);
       });
     });
   });

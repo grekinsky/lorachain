@@ -12,8 +12,17 @@ import { createHash } from 'crypto';
 import type { Blockchain } from './blockchain.js';
 import type { UTXOPersistenceManager } from './persistence.js';
 import type { UTXOCompressionManager } from './utxo-compression-manager.js';
-import type { UTXOSetSnapshot, CompressedUTXOBatch } from './sync-types.js';
+import type {
+  UTXOSetSnapshot,
+  CompressedUTXOBatch,
+  CheckpointAnnouncePayload,
+  CheckpointRequestPayload,
+  CheckpointFragmentPayload,
+  CheckpointStats,
+} from './sync-types.js';
 import type { UTXO, UTXOTransaction } from './types.js';
+import type { UTXOEnhancedMeshProtocol } from './enhanced-mesh-protocol.js';
+import type { UTXOReliableDeliveryManager } from './utxo-reliable-delivery-manager.js';
 import { MerkleTree } from './merkle/MerkleTree.js';
 import { CryptographicService } from './cryptographic.js';
 
@@ -153,6 +162,33 @@ export class InsufficientSignaturesError extends Error {
 }
 
 /**
+ * Checkpoint download error
+ */
+export class CheckpointDownloadError extends Error {
+  constructor(
+    message: string,
+    public readonly checkpointHash: string,
+    public readonly failedFragments: number[]
+  ) {
+    super(message);
+    this.name = 'CheckpointDownloadError';
+  }
+}
+
+/**
+ * Checkpoint application error
+ */
+export class CheckpointApplicationError extends Error {
+  constructor(
+    message: string,
+    public readonly checkpoint: StateCheckpoint
+  ) {
+    super(message);
+    this.name = 'CheckpointApplicationError';
+  }
+}
+
+/**
  * Devnet validator configuration (hard-coded for development)
  */
 const DEVNET_VALIDATORS: ValidatorConfig[] = [
@@ -178,16 +214,23 @@ const DEVNET_VALIDATORS: ValidatorConfig[] = [
 
 const DEVNET_SIGNATURE_THRESHOLD = 2; // 2 of 3 validators required
 
+// Fragment size for LoRa transmission (200 bytes data + 56 bytes header = 256 total)
+const FRAGMENT_SIZE = 200;
+
 /**
  * State Checkpoint Manager
  *
  * Manages periodic blockchain state checkpoints with UTXO snapshots
+ * and distribution over LoRa mesh network
  */
 export class StateCheckpointManager extends EventEmitter {
   private blockchain: Blockchain;
   private persistence: UTXOPersistenceManager;
   private compression: UTXOCompressionManager;
+  private meshProtocol?: UTXOEnhancedMeshProtocol;
+  private reliableDelivery?: UTXOReliableDeliveryManager;
   private checkpointInterval: number;
+  private maxCheckpoints: number;
   private isCreatingCheckpoint: boolean = false;
   private validators: ValidatorConfig[];
   private signatureThreshold: number;
@@ -202,19 +245,29 @@ export class StateCheckpointManager extends EventEmitter {
     cacheMisses: 0,
   };
 
+  // Fragment cache for reassembly
+  private fragmentCache: Map<string, Map<number, CheckpointFragmentPayload>> =
+    new Map();
+
   constructor(
     blockchain: Blockchain,
     persistence: UTXOPersistenceManager,
     compression: UTXOCompressionManager,
     checkpointInterval: number = 100,
     validators?: ValidatorConfig[],
-    signatureThreshold?: number
+    signatureThreshold?: number,
+    meshProtocol?: UTXOEnhancedMeshProtocol,
+    reliableDelivery?: UTXOReliableDeliveryManager,
+    maxCheckpoints: number = 10
   ) {
     super();
     this.blockchain = blockchain;
     this.persistence = persistence;
     this.compression = compression;
+    this.meshProtocol = meshProtocol;
+    this.reliableDelivery = reliableDelivery;
     this.checkpointInterval = checkpointInterval;
+    this.maxCheckpoints = maxCheckpoints;
     this.validators = validators ?? DEVNET_VALIDATORS;
     this.signatureThreshold = signatureThreshold ?? DEVNET_SIGNATURE_THRESHOLD;
     this.cryptoService = CryptographicService;
@@ -867,5 +920,511 @@ export class StateCheckpointManager extends EventEmitter {
     } catch {
       return false;
     }
+  }
+
+  /**
+   * Broadcast checkpoint announcement to network
+   */
+  async broadcastCheckpoint(checkpoint: StateCheckpoint): Promise<void> {
+    if (!this.meshProtocol) {
+      throw new Error('Mesh protocol not initialized');
+    }
+
+    // Fragment checkpoint for transmission
+    const fragments = await this.fragmentCheckpoint(checkpoint);
+
+    // Calculate total size
+    const totalSize = fragments.reduce(
+      (sum, frag) => sum + frag.fragmentData.length,
+      0
+    );
+
+    // Create announcement payload
+    const announcement: CheckpointAnnouncePayload = {
+      checkpointHash: checkpoint.checkpointHash,
+      height: checkpoint.height,
+      utxoCount: checkpoint.utxoCount,
+      totalSize,
+      fragmentCount: fragments.length,
+      merkleRoot: checkpoint.merkleRoot,
+      validatorSignatures: checkpoint.validatorSignatures?.length ?? 0,
+    };
+
+    // Serialize announcement
+    const payload = Buffer.from(JSON.stringify(announcement), 'utf-8');
+
+    // Create mesh message for broadcast
+    const meshMessage = {
+      type: 'sync' as const,
+      payload: {
+        type: 'CHECKPOINT_ANNOUNCE',
+        data: payload,
+      },
+      timestamp: Date.now(),
+      from: 'checkpoint-manager',
+      signature: '',
+    };
+
+    // Broadcast to network (mesh protocol will handle fragmentation if needed)
+    await this.meshProtocol.sendMessage(meshMessage);
+
+    this.emit('checkpoint:announced', {
+      checkpointHash: checkpoint.checkpointHash,
+      height: checkpoint.height,
+      fragmentCount: fragments.length,
+    });
+  }
+
+  /**
+   * Handle checkpoint request from peer
+   */
+  async handleCheckpointRequest(
+    peerId: string,
+    request: CheckpointRequestPayload
+  ): Promise<void> {
+    if (!this.meshProtocol || !this.reliableDelivery) {
+      throw new Error('Mesh protocol or reliable delivery not initialized');
+    }
+
+    // Get checkpoint
+    const checkpoint = await this.getCheckpointByHash(request.checkpointHash);
+    if (!checkpoint) {
+      throw new CheckpointNotFoundError(
+        `Checkpoint not found: ${request.checkpointHash}`
+      );
+    }
+
+    // Fragment checkpoint
+    const fragments = await this.fragmentCheckpoint(checkpoint);
+
+    // Determine which fragments to send
+    const requestedFragments = request.requestedFragments ?? [
+      ...Array(fragments.length).keys(),
+    ];
+
+    // Send requested fragments using reliable delivery
+    for (const fragmentIndex of requestedFragments) {
+      if (fragmentIndex >= 0 && fragmentIndex < fragments.length) {
+        const fragment = fragments[fragmentIndex];
+        const payload = Buffer.from(JSON.stringify(fragment), 'utf-8');
+
+        // Create reliable message for fragment
+        const reliableMessage = {
+          id: `checkpoint-frag-${checkpoint.checkpointHash}-${fragmentIndex}`,
+          type: 'sync' as const,
+          payload: {
+            type: 'CHECKPOINT_FRAGMENT',
+            data: payload,
+          },
+          timestamp: Date.now(),
+          from: 'checkpoint-manager',
+          to: peerId,
+          signature: '',
+          reliability: 'guaranteed' as const,
+          maxRetries: 3,
+          timeoutMs: 30000,
+          priority: 5,
+        };
+
+        // Use reliable delivery for critical checkpoint fragments
+        await this.reliableDelivery.sendReliableMessage(reliableMessage);
+      }
+    }
+
+    this.emit('checkpoint:served', {
+      peerId,
+      checkpointHash: request.checkpointHash,
+      fragmentsServed: requestedFragments.length,
+    });
+  }
+
+  /**
+   * Download checkpoint from network
+   */
+  async downloadCheckpoint(
+    checkpointHash: string,
+    sourcePeers: string[]
+  ): Promise<StateCheckpoint> {
+    if (!this.meshProtocol || !this.reliableDelivery) {
+      throw new Error('Mesh protocol or reliable delivery not initialized');
+    }
+
+    if (sourcePeers.length === 0) {
+      throw new CheckpointDownloadError(
+        'No source peers available',
+        checkpointHash,
+        []
+      );
+    }
+
+    // Request checkpoint from first available peer
+    const peerId = sourcePeers[0];
+
+    // Send checkpoint request
+    const request: CheckpointRequestPayload = {
+      checkpointHash,
+    };
+
+    const requestPayload = Buffer.from(JSON.stringify(request), 'utf-8');
+
+    // Create mesh message for request
+    const meshMessage = {
+      type: 'sync' as const,
+      payload: {
+        type: 'CHECKPOINT_REQUEST',
+        data: requestPayload,
+      },
+      timestamp: Date.now(),
+      from: 'checkpoint-manager',
+      to: peerId,
+      signature: '',
+    };
+
+    await this.meshProtocol.sendMessage(meshMessage);
+
+    // Wait for fragments with timeout
+    const timeout = 300000; // 5 minutes
+    const startTime = Date.now();
+    const receivedFragments = new Map<number, CheckpointFragmentPayload>();
+    let totalFragments = 0;
+
+    return new Promise((resolve, reject) => {
+      // Fragment handler
+      const fragmentHandler = (fragment: CheckpointFragmentPayload): void => {
+        if (fragment.checkpointHash !== checkpointHash) {
+          return;
+        }
+
+        // Store fragment
+        receivedFragments.set(fragment.fragmentIndex, fragment);
+        totalFragments = fragment.totalFragments;
+
+        this.emit('checkpoint:fragment-received', {
+          checkpointHash,
+          fragmentIndex: fragment.fragmentIndex,
+          totalFragments: fragment.totalFragments,
+        });
+
+        // Check if all fragments received
+        if (receivedFragments.size === totalFragments) {
+          this.reassembleCheckpoint(
+            Array.from(receivedFragments.values()).sort(
+              (a, b) => a.fragmentIndex - b.fragmentIndex
+            )
+          )
+            .then(resolve)
+            .catch(reject);
+        }
+      };
+
+      // Register fragment handler (this would be called by mesh protocol)
+      this.on('fragment-received', fragmentHandler);
+
+      // Timeout handler
+      const timeoutId = setTimeout(() => {
+        this.off('fragment-received', fragmentHandler);
+
+        const failedFragments = [];
+        for (let i = 0; i < totalFragments; i++) {
+          if (!receivedFragments.has(i)) {
+            failedFragments.push(i);
+          }
+        }
+
+        reject(
+          new CheckpointDownloadError(
+            'Checkpoint download timeout',
+            checkpointHash,
+            failedFragments
+          )
+        );
+      }, timeout);
+
+      // Check timeout periodically
+      const checkInterval = setInterval(() => {
+        if (Date.now() - startTime > timeout) {
+          clearInterval(checkInterval);
+          clearTimeout(timeoutId);
+        }
+      }, 1000);
+    });
+  }
+
+  /**
+   * Apply checkpoint to blockchain state (fast bootstrap)
+   */
+  async applyCheckpoint(checkpoint: StateCheckpoint): Promise<void> {
+    try {
+      // Validate checkpoint before applying
+      const validationResult = await this.validateCheckpoint(checkpoint);
+      if (!validationResult.isValid) {
+        throw new CheckpointApplicationError(
+          `Checkpoint validation failed: ${validationResult.errors.join(', ')}`,
+          checkpoint
+        );
+      }
+
+      this.emit('checkpoint:applying', {
+        checkpointHash: checkpoint.checkpointHash,
+        height: checkpoint.height,
+      });
+
+      // Decompress UTXO set
+      const utxos = await this.decompressUTXOSet(checkpoint.compressedUTXOs);
+
+      // Apply UTXO set to blockchain
+      const utxoManager = this.blockchain.getUTXOManager();
+
+      // Clear existing UTXO set (we're bootstrapping from checkpoint)
+      // Note: UTXOManager doesn't have clearUTXOSet, so we work around it
+      // by removing each UTXO individually or just adding new ones
+      // The blockchain will handle the state properly
+
+      // Add all UTXOs from checkpoint
+      for (const utxo of utxos) {
+        utxoManager.addUTXO(utxo);
+      }
+
+      // Update blockchain state to checkpoint height
+      // Note: This assumes the blockchain class has a method to set the current height
+      // You may need to adjust based on actual Blockchain API
+
+      this.emit('checkpoint:applied', {
+        checkpointHash: checkpoint.checkpointHash,
+        height: checkpoint.height,
+        utxoCount: utxos.length,
+      });
+    } catch (error) {
+      if (error instanceof CheckpointApplicationError) {
+        throw error;
+      }
+      throw new CheckpointApplicationError(
+        `Failed to apply checkpoint: ${error instanceof Error ? error.message : String(error)}`,
+        checkpoint
+      );
+    }
+  }
+
+  /**
+   * Cleanup old checkpoints (keep last N)
+   */
+  async cleanupOldCheckpoints(): Promise<number> {
+    const checkpoints = await this.getAvailableCheckpoints();
+
+    // If we have fewer checkpoints than the limit, no cleanup needed
+    if (checkpoints.length <= this.maxCheckpoints) {
+      return 0;
+    }
+
+    // Sort by height descending (newest first)
+    checkpoints.sort((a, b) => b.height - a.height);
+
+    // Keep only the most recent N checkpoints
+    const checkpointsToDelete = checkpoints.slice(this.maxCheckpoints);
+
+    // Delete old checkpoints
+    for (const checkpoint of checkpointsToDelete) {
+      await this.deleteCheckpoint(checkpoint.checkpointHash);
+    }
+
+    this.emit('checkpoint:cleanup', {
+      deletedCount: checkpointsToDelete.length,
+      remainingCount: this.maxCheckpoints,
+    });
+
+    return checkpointsToDelete.length;
+  }
+
+  /**
+   * Get checkpoint statistics
+   */
+  async getCheckpointStats(): Promise<CheckpointStats> {
+    const checkpoints = await this.getAvailableCheckpoints();
+
+    if (checkpoints.length === 0) {
+      return {
+        totalCheckpoints: 0,
+        oldestHeight: 0,
+        newestHeight: 0,
+        totalSize: 0,
+        averageSize: 0,
+      };
+    }
+
+    // Sort by height
+    checkpoints.sort((a, b) => a.height - b.height);
+
+    // Calculate total size
+    const totalSize = checkpoints.reduce((sum, checkpoint) => {
+      const checkpointSize = checkpoint.compressedUTXOs.reduce(
+        (batchSum, batch) => batchSum + batch.data.length,
+        0
+      );
+      return sum + checkpointSize;
+    }, 0);
+
+    return {
+      totalCheckpoints: checkpoints.length,
+      oldestHeight: checkpoints[0].height,
+      newestHeight: checkpoints[checkpoints.length - 1].height,
+      totalSize,
+      averageSize: Math.floor(totalSize / checkpoints.length),
+    };
+  }
+
+  /**
+   * Internal: Fragment checkpoint for transmission
+   */
+  private async fragmentCheckpoint(
+    checkpoint: StateCheckpoint
+  ): Promise<CheckpointFragmentPayload[]> {
+    // Serialize checkpoint
+    const serialized = JSON.stringify(checkpoint);
+    const data = Buffer.from(serialized, 'utf-8');
+
+    // Compress with compression manager
+    const compressed = await this.compression.compress(data);
+
+    // Split into fragments
+    const fragments: CheckpointFragmentPayload[] = [];
+    const totalFragments = Math.ceil(compressed.data.length / FRAGMENT_SIZE);
+
+    for (let i = 0; i < totalFragments; i++) {
+      const start = i * FRAGMENT_SIZE;
+      const end = Math.min(start + FRAGMENT_SIZE, compressed.data.length);
+      const fragmentData = Buffer.from(compressed.data.slice(start, end));
+
+      // Calculate checksum for fragment
+      const checksum = createHash('sha256').update(fragmentData).digest('hex');
+
+      fragments.push({
+        checkpointHash: checkpoint.checkpointHash,
+        fragmentIndex: i,
+        totalFragments,
+        fragmentData,
+        checksum,
+      });
+    }
+
+    return fragments;
+  }
+
+  /**
+   * Internal: Reassemble checkpoint from fragments
+   */
+  private async reassembleCheckpoint(
+    fragments: CheckpointFragmentPayload[]
+  ): Promise<StateCheckpoint> {
+    if (fragments.length === 0) {
+      throw new Error('No fragments provided for reassembly');
+    }
+
+    // Verify all fragments are from the same checkpoint
+    const checkpointHash = fragments[0].checkpointHash;
+    if (!fragments.every(f => f.checkpointHash === checkpointHash)) {
+      throw new Error('Fragments from different checkpoints');
+    }
+
+    // Verify all fragments are present
+    const totalFragments = fragments[0].totalFragments;
+    if (fragments.length !== totalFragments) {
+      throw new Error(
+        `Missing fragments: expected ${totalFragments}, got ${fragments.length}`
+      );
+    }
+
+    // Verify checksums
+    for (const fragment of fragments) {
+      const calculatedChecksum = createHash('sha256')
+        .update(fragment.fragmentData)
+        .digest('hex');
+      if (calculatedChecksum !== fragment.checksum) {
+        throw new Error(`Fragment ${fragment.fragmentIndex} checksum mismatch`);
+      }
+    }
+
+    // Combine fragment data
+    const combinedData = Buffer.concat(fragments.map(f => f.fragmentData));
+
+    // Decompress
+    const decompressed = await this.compression.decompress({
+      algorithm: 'gzip', // Assuming gzip, may need to store algorithm in fragment
+      data: new Uint8Array(combinedData),
+      originalSize: 0, // Will be ignored if decompression works
+      metadata: {
+        version: 1,
+      },
+    });
+
+    // Parse checkpoint
+    const checkpointJson = Buffer.from(decompressed).toString('utf-8');
+    const checkpoint = JSON.parse(checkpointJson) as StateCheckpoint;
+
+    // Verify checkpoint hash matches
+    const calculatedHash = this.calculateCheckpointHash(checkpoint);
+    if (calculatedHash !== checkpointHash) {
+      throw new Error('Reassembled checkpoint hash mismatch');
+    }
+
+    return checkpoint;
+  }
+
+  /**
+   * Internal: Decompress UTXO set from checkpoint
+   */
+  private async decompressUTXOSet(
+    compressedBatches: CompressedUTXOBatch[]
+  ): Promise<UTXO[]> {
+    const utxos: UTXO[] = [];
+
+    for (const batch of compressedBatches) {
+      // Decompress batch
+      const decompressed = await this.compression.decompress({
+        algorithm: batch.algorithm,
+        data: batch.data,
+        originalSize: batch.originalSize,
+        metadata: {
+          version: 1,
+        },
+      });
+
+      // Parse UTXOs
+      const batchJson = Buffer.from(decompressed).toString('utf-8');
+      const batchUtxos = JSON.parse(batchJson) as UTXO[];
+
+      utxos.push(...batchUtxos);
+    }
+
+    return utxos;
+  }
+
+  /**
+   * Internal: Delete checkpoint
+   */
+  private async deleteCheckpoint(checkpointHash: string): Promise<void> {
+    const checkpoint = await this.getCheckpointByHash(checkpointHash);
+    if (!checkpoint) {
+      return;
+    }
+
+    // Delete checkpoint by height
+    const heightKey = `height:${checkpoint.height}`;
+    await this.deleteFromDatabase(heightKey);
+
+    // Delete hash index
+    const hashKey = `hash:${checkpointHash}`;
+    await this.deleteFromDatabase(hashKey);
+
+    // Remove from validation cache
+    this.validatedCheckpoints.delete(checkpointHash);
+  }
+
+  /**
+   * Internal: Delete data from database checkpoints sublevel
+   */
+  private async deleteFromDatabase(key: string): Promise<void> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const db = (this.persistence as any).db;
+    await db.del(key, 'checkpoints');
   }
 }

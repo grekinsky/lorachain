@@ -75,6 +75,12 @@ export enum UTXOSyncMessageType {
   COMPRESSION_NEGOTIATE = 'compression_negotiate',
   DUTY_CYCLE_STATUS = 'duty_cycle_status',
   PRIORITY_OVERRIDE = 'priority_override',
+
+  // Checkpoint Distribution (Task 3)
+  CHECKPOINT_ANNOUNCE = 'checkpoint_announce',
+  CHECKPOINT_REQUEST = 'checkpoint_request',
+  CHECKPOINT_FRAGMENT = 'checkpoint_fragment',
+  CHECKPOINT_COMPLETE = 'checkpoint_complete',
 }
 
 /**
@@ -338,4 +344,47 @@ export interface UTXOSyncConfig {
   retryAttempts: number;
   minStakeForAuth: number;
   compressionThreshold: number;
+}
+
+/**
+ * Checkpoint announcement payload
+ */
+export interface CheckpointAnnouncePayload {
+  checkpointHash: string;
+  height: number;
+  utxoCount: number;
+  totalSize: number;
+  fragmentCount: number;
+  merkleRoot: string;
+  validatorSignatures: number; // Count of signatures
+}
+
+/**
+ * Checkpoint request payload
+ */
+export interface CheckpointRequestPayload {
+  checkpointHash: string;
+  requestedFragments?: number[]; // Specific fragments, or all if omitted
+}
+
+/**
+ * Checkpoint fragment payload
+ */
+export interface CheckpointFragmentPayload {
+  checkpointHash: string;
+  fragmentIndex: number;
+  totalFragments: number;
+  fragmentData: Buffer;
+  checksum: string;
+}
+
+/**
+ * Checkpoint statistics
+ */
+export interface CheckpointStats {
+  totalCheckpoints: number;
+  oldestHeight: number;
+  newestHeight: number;
+  totalSize: number;
+  averageSize: number;
 }
