@@ -1018,10 +1018,13 @@ export class IncrementalStateManager extends EventEmitter {
         try {
           // Note: In real implementation, this would use mesh protocol's sendMessage
           // For now, we emit an event that can be handled by the network layer
-          this.emit(IncrementalStateManager.EVENTS.MISSING_UPDATE_REQUEST_SENT, {
-            peerId,
-            request,
-          });
+          this.emit(
+            IncrementalStateManager.EVENTS.MISSING_UPDATE_REQUEST_SENT,
+            {
+              peerId,
+              request,
+            }
+          );
 
           // Simulate response timeout (would be replaced with actual network call)
           return await new Promise<StateUpdate[]>((resolve, reject) => {
@@ -1029,23 +1032,23 @@ export class IncrementalStateManager extends EventEmitter {
               reject(new Error('Request timeout'));
             }, this.REQUEST_TIMEOUT_MS);
 
-          // Listen for response event (would come from mesh protocol)
-          this.once(
-            `missing_update_response_${request.requestId}`,
-            (response: MissingUpdateResponsePayload) => {
-              clearTimeout(timeout);
-              resolve(response.updates);
-            }
-          );
-        });
-      } catch (error) {
-        Logger.getInstance().warn('Failed to get response from peer', {
-          peerId,
-          error: error instanceof Error ? error.message : String(error),
-        });
-        return [];
-      }
-    });
+            // Listen for response event (would come from mesh protocol)
+            this.once(
+              `missing_update_response_${request.requestId}`,
+              (response: MissingUpdateResponsePayload) => {
+                clearTimeout(timeout);
+                resolve(response.updates);
+              }
+            );
+          });
+        } catch (error) {
+          Logger.getInstance().warn('Failed to get response from peer', {
+            peerId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          return [];
+        }
+      });
 
     // 4. Wait for first successful response
     const responses = await Promise.race([

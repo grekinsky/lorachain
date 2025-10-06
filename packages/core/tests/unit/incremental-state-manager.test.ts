@@ -1719,11 +1719,7 @@ describe('IncrementalStateManager', () => {
           difficulty: 1,
         };
 
-        await managerWithMesh.createStateUpdate(
-          block,
-          privateKey,
-          'secp256k1'
-        );
+        await managerWithMesh.createStateUpdate(block, privateKey, 'secp256k1');
         await managerWithMesh.createStateUpdate(
           { ...block, index: 2, hash: 'block2_hash' },
           privateKey,
@@ -1754,11 +1750,7 @@ describe('IncrementalStateManager', () => {
           difficulty: 1,
         };
 
-        await managerWithMesh.createStateUpdate(
-          block,
-          privateKey,
-          'secp256k1'
-        );
+        await managerWithMesh.createStateUpdate(block, privateKey, 'secp256k1');
         await managerWithMesh.createStateUpdate(
           { ...block, index: 2, hash: 'block2_hash' },
           privateKey,
@@ -1790,11 +1782,7 @@ describe('IncrementalStateManager', () => {
           difficulty: 1,
         };
 
-        await managerWithMesh.createStateUpdate(
-          block,
-          privateKey,
-          'secp256k1'
-        );
+        await managerWithMesh.createStateUpdate(block, privateKey, 'secp256k1');
 
         // Buffer update 2 by receiving it out of order
         const update2 = await managerWithMesh.createStateUpdate(
