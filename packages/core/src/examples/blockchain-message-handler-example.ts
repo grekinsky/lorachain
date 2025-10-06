@@ -25,17 +25,10 @@ import {
   CryptographicService,
   UTXOPriorityQueue,
   UTXOReliableDeliveryManager,
-  UTXOEnhancedMeshProtocol,
-  PeerManager,
-  Blockchain,
-  UTXOManager,
-  UTXOSyncManager,
   BlockchainMessageType,
   type BlockchainNetworkMessage,
-  type BlockchainMessageContext,
   type ProtocolFeatureFlags,
   type PeerNodeCapabilities,
-  type KeyPair,
 } from '../index.js';
 
 /**
@@ -50,7 +43,7 @@ async function exampleCompleteSetup() {
   );
 
   // Step 1: Initialize cryptographic service and generate key pair
-  const cryptoService = new CryptographicService();
+  const _cryptoService = new CryptographicService();
   const nodeKeyPair = await CryptographicService.generateKeyPair('secp256k1');
 
   console.log('✓ Cryptographic service initialized');
@@ -94,14 +87,14 @@ async function exampleCompleteSetup() {
       enablePriorityCalculation: true,
     },
     undefined,
-    cryptoService
+    _cryptoService
   );
 
   console.log('✓ Reliable delivery manager initialized');
 
   // Step 4: Create blockchain message router
-  const blockchainMessageRouter = new BlockchainMessageRouter(
-    cryptoService,
+  const _blockchainMessageRouter = new BlockchainMessageRouter(
+    _cryptoService,
     priorityQueue,
     reliableDelivery
   );
@@ -134,23 +127,23 @@ async function exampleCompleteSetup() {
   console.log('✓ Node capabilities defined');
 
   // Step 7: Register message handlers with priorities
-  const blockHandler = new UTXOBlockMessageHandler(cryptoService, 20);
-  const txHandler = new UTXOTransactionMessageHandler(cryptoService, 15);
+  const blockHandler = new UTXOBlockMessageHandler(_cryptoService, 20);
+  const txHandler = new UTXOTransactionMessageHandler(_cryptoService, 15);
   const handshakeHandler = new PeerHandshakeMessageHandler(
-    cryptoService,
+    _cryptoService,
     nodeCapabilities,
     25
   );
   const versionHandler = new ProtocolVersionHandler(
-    cryptoService,
+    _cryptoService,
     localFeatures,
     30
   );
 
-  blockchainMessageRouter.registerHandler(blockHandler);
-  blockchainMessageRouter.registerHandler(txHandler);
-  blockchainMessageRouter.registerHandler(handshakeHandler);
-  blockchainMessageRouter.registerHandler(versionHandler);
+  _blockchainMessageRouter.registerHandler(blockHandler);
+  _blockchainMessageRouter.registerHandler(txHandler);
+  _blockchainMessageRouter.registerHandler(handshakeHandler);
+  _blockchainMessageRouter.registerHandler(versionHandler);
 
   console.log('✓ All message handlers registered');
   console.log('  - Version Handler (priority: 30)');
@@ -161,11 +154,11 @@ async function exampleCompleteSetup() {
   console.log('\n✅ Complete setup finished!\n');
 
   return {
-    cryptoService,
+    cryptoService: _cryptoService,
     nodeKeyPair,
     priorityQueue,
     reliableDelivery,
-    blockchainMessageRouter,
+    blockchainMessageRouter: _blockchainMessageRouter,
   };
 }
 
@@ -178,7 +171,11 @@ async function exampleBlockAnnouncement() {
   console.log('=== Example 2: Handling Block Announcement ===\n');
 
   const setup = await exampleCompleteSetup();
-  const { blockchainMessageRouter, cryptoService, nodeKeyPair } = setup;
+  const {
+    blockchainMessageRouter: _blockchainMessageRouter,
+    cryptoService: _cryptoService,
+    nodeKeyPair,
+  } = setup;
 
   // Create a mock block announcement message
   const blockAnnouncement: BlockchainNetworkMessage = {
@@ -246,7 +243,11 @@ async function exampleTransactionBroadcast() {
   console.log('=== Example 3: Transaction Broadcast Flow ===\n');
 
   const setup = await exampleCompleteSetup();
-  const { blockchainMessageRouter, cryptoService, nodeKeyPair } = setup;
+  const {
+    blockchainMessageRouter: _blockchainMessageRouter,
+    cryptoService: _cryptoService,
+    nodeKeyPair,
+  } = setup;
 
   // Create a mock UTXO transaction broadcast message
   const txBroadcast: BlockchainNetworkMessage = {
@@ -333,7 +334,11 @@ async function examplePeerHandshake() {
   console.log('=== Example 4: Peer Handshake Protocol ===\n');
 
   const setup = await exampleCompleteSetup();
-  const { blockchainMessageRouter, cryptoService, nodeKeyPair } = setup;
+  const {
+    blockchainMessageRouter: _blockchainMessageRouter,
+    cryptoService: _cryptoService,
+    nodeKeyPair,
+  } = setup;
 
   // Step 1: Generate challenge for handshake
   const challenge = Array.from(crypto.getRandomValues(new Uint8Array(32)))
@@ -414,7 +419,11 @@ async function exampleVersionNegotiation() {
   console.log('=== Example 5: Protocol Version Negotiation ===\n');
 
   const setup = await exampleCompleteSetup();
-  const { blockchainMessageRouter, cryptoService, nodeKeyPair } = setup;
+  const {
+    blockchainMessageRouter: _blockchainMessageRouter,
+    cryptoService: _cryptoService,
+    nodeKeyPair,
+  } = setup;
 
   // Create version negotiation message
   const versionNegotiation: BlockchainNetworkMessage = {

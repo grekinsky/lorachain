@@ -34,7 +34,7 @@ import type {
   UTXOTransactionBroadcastPayload,
   UTXOTransactionRequestPayload,
 } from './blockchain-message-payloads.js';
-import type { UTXOTransaction, Block } from './types.js';
+import type { UTXOTransaction } from './types.js';
 
 /**
  * UTXO Transaction Message Handler

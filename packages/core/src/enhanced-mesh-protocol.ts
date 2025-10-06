@@ -51,7 +51,6 @@ import { NodeDiscoveryProtocol } from './node-discovery-protocol.js';
 import { Logger } from '@lorachain/shared';
 import { EventEmitter } from 'events';
 import type { BlockchainMessageRouter } from './blockchain-message-router.js';
-import type { BlockchainMessageType } from './blockchain-message-types.js';
 import type {
   BlockchainNetworkMessage,
   BlockchainMessageContext,
