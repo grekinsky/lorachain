@@ -294,3 +294,119 @@ export interface PeerHandshakeAckPayload {
    */
   timestamp: number;
 }
+
+/**
+ * Protocol feature flags
+ *
+ * Describes the protocol features and capabilities supported by a node.
+ * Used during version negotiation to determine agreed features between peers.
+ *
+ * BREAKING CHANGE: No backwards compatibility - all required features must be true.
+ */
+export interface ProtocolFeatureFlags {
+  /**
+   * Whether UTXO-only transactions are supported (REQUIRED - must be true)
+   */
+  supportsUTXOOnly: boolean;
+
+  /**
+   * Whether message compression is supported
+   */
+  supportsCompression: boolean;
+
+  /**
+   * Whether message fragmentation is supported
+   */
+  supportsFragmentation: boolean;
+
+  /**
+   * Whether cryptographic signing is supported (REQUIRED - must be true)
+   */
+  supportsCryptographicSigning: boolean;
+
+  /**
+   * Whether mesh routing is supported
+   */
+  supportsMeshRouting: boolean;
+
+  /**
+   * Whether hybrid networking (mesh + internet) is supported
+   */
+  supportsHybridNetworking: boolean;
+
+  /**
+   * Optional custom features
+   * Map of feature names to boolean values
+   */
+  customFeatures?: Record<string, boolean>;
+}
+
+/**
+ * Version negotiation payload
+ *
+ * Sent during peer connection establishment to negotiate protocol version
+ * and exchange feature capabilities.
+ *
+ * BREAKING CHANGE: No backwards compatibility - only current version supported.
+ */
+export interface VersionNegotiationPayload {
+  /**
+   * Unique node identifier
+   */
+  nodeId: string;
+
+  /**
+   * List of protocol versions this node supports
+   * BREAKING CHANGE: Only current version (no backwards compatibility)
+   */
+  supportedVersions: string[];
+
+  /**
+   * Current protocol version this node is using
+   */
+  currentVersion: string;
+
+  /**
+   * Minimum required version for compatibility
+   */
+  minRequiredVersion: string;
+
+  /**
+   * Protocol features supported by this node
+   */
+  featureFlags: ProtocolFeatureFlags;
+
+  /**
+   * Message creation timestamp (milliseconds since epoch)
+   */
+  timestamp: number;
+}
+
+/**
+ * Version negotiation result
+ *
+ * Result of protocol version negotiation between two peers.
+ * Indicates whether negotiation succeeded and what version/features were agreed upon.
+ */
+export interface VersionNegotiationResult {
+  /**
+   * Whether version negotiation succeeded
+   */
+  success: boolean;
+
+  /**
+   * The negotiated protocol version to use
+   * Empty string if negotiation failed
+   */
+  negotiatedVersion: string;
+
+  /**
+   * The agreed-upon features (intersection of both peers' capabilities)
+   */
+  agreedFeatures: ProtocolFeatureFlags;
+
+  /**
+   * Optional error message if negotiation failed
+   */
+  error?: string;
+}
