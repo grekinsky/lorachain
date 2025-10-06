@@ -319,12 +319,14 @@ export * from './blockchain-message-router.js';
 export * from './blockchain-message-payloads.js';
 export * from './utxo-block-message-handler.js';
 export * from './utxo-transaction-message-handler.js';
+export * from './protocol-version-handler.js';
 
 export { BlockchainMessageType } from './blockchain-message-types.js';
 export { BaseBlockchainMessageHandler } from './base-blockchain-message-handler.js';
 export { BlockchainMessageRouter } from './blockchain-message-router.js';
 export { UTXOBlockMessageHandler } from './utxo-block-message-handler.js';
 export { UTXOTransactionMessageHandler } from './utxo-transaction-message-handler.js';
+export { ProtocolVersionHandler } from './protocol-version-handler.js';
 
 // Blockchain message type exports
 export type {
@@ -344,4 +346,11 @@ export type {
   BlockResponsePayload,
   UTXOTransactionBroadcastPayload,
   UTXOTransactionRequestPayload,
+  VersionNegotiationPayload,
+  ProtocolFeatureFlags,
+  VersionNegotiationResult,
+  PeerNodeCapabilities,
+  PeerHandshakeInitPayload,
+  PeerHandshakeResponsePayload,
+  PeerHandshakeAckPayload,
 } from './blockchain-message-payloads.js';
