@@ -230,6 +230,8 @@ export class IncrementalStateManager extends EventEmitter {
     this.pendingBatches = new Map();
 
     // Initialize gap detection properties (Task 6)
+    // expectedSequence is initialized to 0, matching sequenceNumber
+    // When receiving updates, we expect sequenceNumber + 1 (same as applyStateUpdate)
     this.expectedSequence = 0;
     this.updateBuffer = new Map();
     this.currentGaps = new Set();
@@ -1143,26 +1145,30 @@ export class IncrementalStateManager extends EventEmitter {
    */
   private detectGaps(receivedSequence: number): number[] {
     const gaps: number[] = [];
+    // We expect to receive expectedSequence + 1 (next in order)
+    const nextExpected = this.expectedSequence + 1;
 
     // Check if sequence is in order
-    if (receivedSequence === this.expectedSequence) {
-      // Perfect - increment expected
-      this.expectedSequence++;
+    if (receivedSequence === nextExpected) {
+      // Perfect - increment expected (now matches received)
+      this.expectedSequence = receivedSequence;
       return gaps;
     }
 
-    // Check if already processed (duplicate)
-    if (receivedSequence < this.expectedSequence) {
-      // Duplicate - ignore
-      Logger.getInstance().debug('Duplicate update received', {
+    // Check if already processed (duplicate or old)
+    if (receivedSequence <= this.expectedSequence) {
+      // Duplicate or already processed - ignore
+      Logger.getInstance().debug('Duplicate or old update received', {
         receivedSequence,
         expectedSequence: this.expectedSequence,
+        nextExpected,
       });
       return gaps;
     }
 
     // Gap detected - calculate missing sequences
-    for (let seq = this.expectedSequence; seq < receivedSequence; seq++) {
+    // Missing sequences are from nextExpected to receivedSequence-1
+    for (let seq = nextExpected; seq < receivedSequence; seq++) {
       // Check if already buffered
       if (!this.updateBuffer.has(seq)) {
         gaps.push(seq);
@@ -1201,12 +1207,15 @@ export class IncrementalStateManager extends EventEmitter {
    */
   private async processBufferedUpdates(): Promise<void> {
     let processed = 0;
+    // Process buffered updates starting from the next expected sequence
+    const nextExpected = this.expectedSequence + 1;
 
-    while (this.updateBuffer.has(this.expectedSequence)) {
-      const buffered = this.updateBuffer.get(this.expectedSequence)!;
+    while (this.updateBuffer.has(nextExpected + processed)) {
+      const seq = nextExpected + processed;
+      const buffered = this.updateBuffer.get(seq)!;
 
       // Remove gap when filled
-      this.currentGaps.delete(this.expectedSequence);
+      this.currentGaps.delete(seq);
       this.gapStats.totalGapsRecovered++;
 
       try {
@@ -1214,11 +1223,11 @@ export class IncrementalStateManager extends EventEmitter {
         await this.applyStateUpdate(buffered.update);
 
         // Remove from buffer
-        this.updateBuffer.delete(this.expectedSequence);
+        this.updateBuffer.delete(seq);
         processed++;
       } catch (error) {
         Logger.getInstance().error('Failed to apply buffered update', {
-          sequenceNumber: this.expectedSequence,
+          sequenceNumber: seq,
           error: error instanceof Error ? error.message : String(error),
         });
         break; // Stop processing on error
