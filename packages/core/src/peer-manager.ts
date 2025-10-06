@@ -1635,7 +1635,7 @@ export class PeerManager extends EventEmitter implements IPeerManager {
       }
       // Store features as capabilities
       peer.capabilities.push(`version:${versionInfo.version}`);
-      
+
       this.logger.info(
         `Updated peer ${peerId} version to ${versionInfo.version}`
       );
@@ -1652,10 +1652,10 @@ export class PeerManager extends EventEmitter implements IPeerManager {
     const peer = this.peers.get(peerId);
     if (peer) {
       this.logger.warn(`Rejecting peer ${peerId}: ${reason}`);
-      
+
       // Mark peer as banned temporarily
       this.banPeer(peerId, reason);
-      
+
       // Disconnect from peer
       await this.disconnectFromPeer(peerId);
     }

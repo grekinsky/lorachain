@@ -174,7 +174,10 @@ export class ProtocolVersionHandler extends BaseBlockchainMessageHandler {
         );
 
         // Reject connection - incompatible features
-        await context.peers.rejectPeer(payload.nodeId, featureValidation.error!);
+        await context.peers.rejectPeer(
+          payload.nodeId,
+          featureValidation.error!
+        );
 
         return this.createResponse(
           false,
@@ -208,9 +211,7 @@ export class ProtocolVersionHandler extends BaseBlockchainMessageHandler {
       }
 
       // Determine agreed features (intersection of capabilities)
-      const agreedFeatures = this.determineAgreedFeatures(
-        payload.featureFlags
-      );
+      const agreedFeatures = this.determineAgreedFeatures(payload.featureFlags);
 
       // Store negotiated version and features in peer manager
       await context.peers.updatePeerVersion(payload.nodeId, {
@@ -249,8 +250,12 @@ export class ProtocolVersionHandler extends BaseBlockchainMessageHandler {
 
       return this.createResponse(true, responseMessage);
     } catch (error) {
-      this.logger.error('Error handling version negotiation:', error);
-      return this.createResponse(false, undefined, String(error));
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      this.logger.error('Error handling version negotiation:', {
+        error: errorMessage,
+      });
+      return this.createResponse(false, undefined, errorMessage);
     }
   }
 
@@ -335,14 +340,16 @@ export class ProtocolVersionHandler extends BaseBlockchainMessageHandler {
    * @param peerFeatures - Peer's feature flags
    * @returns Validation result with error message if invalid
    */
-  private validateRequiredFeatures(
-    peerFeatures: ProtocolFeatureFlags
-  ): { isValid: boolean; error?: string } {
+  private validateRequiredFeatures(peerFeatures: ProtocolFeatureFlags): {
+    isValid: boolean;
+    error?: string;
+  } {
     // Check UTXO-only requirement
     if (!peerFeatures.supportsUTXOOnly) {
       return {
         isValid: false,
-        error: 'Peer must support UTXO-only transactions (no backwards compatibility)',
+        error:
+          'Peer must support UTXO-only transactions (no backwards compatibility)',
       };
     }
 
