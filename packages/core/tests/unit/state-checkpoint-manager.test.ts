@@ -152,7 +152,9 @@ describe('StateCheckpointManager', () => {
 
       // Mock iterator to return first checkpoint and update blocks
       const mockIterator = {
-        [Symbol.asyncIterator]: async function* () {
+        [Symbol.asyncIterator]: async function* (): AsyncIterator<
+          [string, StateCheckpoint]
+        > {
           yield ['height:50', first];
         },
       };
@@ -365,7 +367,9 @@ describe('StateCheckpointManager', () => {
 
       // Mock iterator to return checkpoints
       const mockIterator = {
-        [Symbol.asyncIterator]: async function* () {
+        [Symbol.asyncIterator]: async function* (): AsyncIterator<
+          [string, StateCheckpoint | number]
+        > {
           yield ['height:100', checkpoints[0]];
           yield ['height:200', checkpoints[1]];
           yield ['height:50', checkpoints[2]];
@@ -386,7 +390,9 @@ describe('StateCheckpointManager', () => {
 
     it('should return empty array if no checkpoints exist', async () => {
       const mockIterator = {
-        [Symbol.asyncIterator]: async function* () {
+        [Symbol.asyncIterator]: async function* (): AsyncIterator<
+          [string, StateCheckpoint]
+        > {
           // No checkpoints
         },
       };
@@ -415,7 +421,10 @@ describe('StateCheckpointManager', () => {
 
       // Mix of checkpoints and other data
       const mockIterator = {
-        [Symbol.asyncIterator]: async function* () {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        [Symbol.asyncIterator]: async function* (): AsyncIterator<
+          [string, any]
+        > {
           yield ['height:100', checkpoint];
           yield ['hash:hash1', 100]; // Should be filtered out
           yield ['height:invalid', 'string']; // Invalid entry
@@ -464,7 +473,9 @@ describe('StateCheckpointManager', () => {
       ];
 
       const mockIterator = {
-        [Symbol.asyncIterator]: async function* () {
+        [Symbol.asyncIterator]: async function* (): AsyncIterator<
+          [string, StateCheckpoint]
+        > {
           yield ['height:100', checkpoints[0]];
           yield ['height:200', checkpoints[1]];
         },
@@ -481,7 +492,9 @@ describe('StateCheckpointManager', () => {
 
     it('should return null if no checkpoints exist', async () => {
       const mockIterator = {
-        [Symbol.asyncIterator]: async function* () {
+        [Symbol.asyncIterator]: async function* (): AsyncIterator<
+          [string, StateCheckpoint]
+        > {
           // No checkpoints
         },
       };
@@ -503,7 +516,9 @@ describe('StateCheckpointManager', () => {
 
       // Mock iterator to return first checkpoint and update blocks
       const mockIterator1 = {
-        [Symbol.asyncIterator]: async function* () {
+        [Symbol.asyncIterator]: async function* (): AsyncIterator<
+          [string, StateCheckpoint]
+        > {
           yield ['height:100', first];
         },
       };
@@ -521,7 +536,9 @@ describe('StateCheckpointManager', () => {
 
       // Mock iterator to return both checkpoints
       const mockIterator2 = {
-        [Symbol.asyncIterator]: async function* () {
+        [Symbol.asyncIterator]: async function* (): AsyncIterator<
+          [string, StateCheckpoint]
+        > {
           yield ['height:100', first];
           yield ['height:200', second];
         },
@@ -541,7 +558,9 @@ describe('StateCheckpointManager', () => {
 
     it('should handle first checkpoint with no previous hash', async () => {
       const mockIterator = {
-        [Symbol.asyncIterator]: async function* () {
+        [Symbol.asyncIterator]: async function* (): AsyncIterator<
+          [string, StateCheckpoint]
+        > {
           // No checkpoints
         },
       };
@@ -584,7 +603,9 @@ describe('StateCheckpointManager', () => {
       ];
 
       const mockIterator = {
-        [Symbol.asyncIterator]: async function* () {
+        [Symbol.asyncIterator]: async function* (): AsyncIterator<
+          [string, StateCheckpoint]
+        > {
           yield ['height:50', checkpoints[0]];
           yield ['height:100', checkpoints[1]];
         },
