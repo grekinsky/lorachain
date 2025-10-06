@@ -776,33 +776,14 @@ export class EnhancedLorachainNode {
       }
 
       // Create handshake init message
-      const challenge = this.generateChallenge();
+      const _challenge = this.generateChallenge();
 
-      const _handshakeMessage: BlockchainNetworkMessage = {
-        type: 'peer_handshake_init' as any,
-        payload: {
-          data: {
-            nodeId: this.config.id,
-            publicKey: this.nodeKeyPair.publicKey,
-            capabilities: this.getNodeCapabilities(),
-            protocolVersion: '1.0.0',
-            challenge,
-            timestamp: Date.now(),
-          },
-          version: '1.0.0',
-          timestamp: Date.now(),
-        },
-        metadata: {
-          receivedAt: Date.now(),
-          source: this.config.id,
-          hopCount: 0,
-          signature: '',
-          nonce: `nonce_${Date.now()}`,
-        },
-      };
-
-      // Sign and send via mesh protocol
-      // Note: This would need actual mesh protocol integration
+      // TODO: Sign and send handshake message via mesh protocol
+      // This would create a BlockchainNetworkMessage with:
+      // - type: 'peer_handshake_init'
+      // - payload containing nodeId, publicKey, capabilities, protocolVersion, challenge
+      // - signed metadata with source, nonce, signature
+      // Note: Requires actual mesh protocol integration
       this.logger.info('Handshake initiated', { peerId });
       return true;
     } catch (error) {
