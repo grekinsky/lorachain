@@ -15,13 +15,45 @@ import type { UTXOCompressionManager } from './utxo-compression-manager.js';
 import type { UTXOSetSnapshot, CompressedUTXOBatch } from './sync-types.js';
 import type { UTXO, UTXOTransaction } from './types.js';
 import { MerkleTree } from './merkle/MerkleTree.js';
+import { CryptographicService } from './cryptographic.js';
 
 /**
- * Validator signature (placeholder for Task 2)
+ * Validator configuration
+ */
+export interface ValidatorConfig {
+  publicKey: string;
+  algorithm: 'secp256k1' | 'ed25519';
+  name?: string; // Optional validator name
+}
+
+/**
+ * Validator signature
  */
 export interface ValidatorSignature {
   validatorPublicKey: string;
   signature: string;
+  timestamp: number;
+  algorithm: 'secp256k1' | 'ed25519';
+}
+
+/**
+ * Checkpoint validation result
+ */
+export interface CheckpointValidationResult {
+  isValid: boolean;
+  validSignatures: number;
+  requiredSignatures: number;
+  errors: string[];
+  warnings: string[];
+}
+
+/**
+ * Checkpoint signature request for validators
+ */
+export interface CheckpointSignatureRequest {
+  checkpointHash: string;
+  height: number;
+  merkleRoot: string;
   timestamp: number;
 }
 
@@ -82,6 +114,59 @@ export class CheckpointNotFoundError extends Error {
 }
 
 /**
+ * Checkpoint validation error
+ */
+export class CheckpointValidationError extends Error {
+  constructor(
+    message: string,
+    public readonly checkpoint: StateCheckpoint,
+    public readonly validationResult: CheckpointValidationResult
+  ) {
+    super(message);
+    this.name = 'CheckpointValidationError';
+  }
+}
+
+/**
+ * Insufficient signatures error
+ */
+export class InsufficientSignaturesError extends Error {
+  constructor(
+    public readonly required: number,
+    public readonly actual: number
+  ) {
+    super(`Insufficient signatures: required ${required}, got ${actual}`);
+    this.name = 'InsufficientSignaturesError';
+  }
+}
+
+/**
+ * Devnet validator configuration (hard-coded for development)
+ */
+const DEVNET_VALIDATORS: ValidatorConfig[] = [
+  {
+    publicKey:
+      '04a1b2c3d4e5f6789a1b2c3d4e5f6789a1b2c3d4e5f6789a1b2c3d4e5f6789a1b2c3d4e5f6789a1b2c3d4e5f6789a1b2c3d4e5f6789a1b2c3d4e5f6789a',
+    algorithm: 'secp256k1',
+    name: 'devnet-validator-1',
+  },
+  {
+    publicKey:
+      '04d4e5f6789a1b2c3d4e5f6789a1b2c3d4e5f6789a1b2c3d4e5f6789a1b2c3d4e5f6789a1b2c3d4e5f6789a1b2c3d4e5f6789a1b2c3d4e5f6789a1b2c',
+    algorithm: 'secp256k1',
+    name: 'devnet-validator-2',
+  },
+  {
+    publicKey:
+      '04g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6a7b8c9d0e1f2g3h4i5j6k7l8m9n0o1p2q3r4s5t6u7v8w9x0y1z2a3b4c5d6e7f8g9h0i1j2k',
+    algorithm: 'secp256k1',
+    name: 'devnet-validator-3',
+  },
+];
+
+const DEVNET_SIGNATURE_THRESHOLD = 2; // 2 of 3 validators required
+
+/**
  * State Checkpoint Manager
  *
  * Manages periodic blockchain state checkpoints with UTXO snapshots
@@ -92,18 +177,26 @@ export class StateCheckpointManager extends EventEmitter {
   private compression: UTXOCompressionManager;
   private checkpointInterval: number;
   private isCreatingCheckpoint: boolean = false;
+  private validators: ValidatorConfig[];
+  private signatureThreshold: number;
+  private cryptoService: typeof CryptographicService;
 
   constructor(
     blockchain: Blockchain,
     persistence: UTXOPersistenceManager,
     compression: UTXOCompressionManager,
-    checkpointInterval: number = 100
+    checkpointInterval: number = 100,
+    validators?: ValidatorConfig[],
+    signatureThreshold?: number
   ) {
     super();
     this.blockchain = blockchain;
     this.persistence = persistence;
     this.compression = compression;
     this.checkpointInterval = checkpointInterval;
+    this.validators = validators ?? DEVNET_VALIDATORS;
+    this.signatureThreshold = signatureThreshold ?? DEVNET_SIGNATURE_THRESHOLD;
+    this.cryptoService = CryptographicService;
   }
 
   /**
@@ -413,5 +506,297 @@ export class StateCheckpointManager extends EventEmitter {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const db = (this.persistence as any).db;
     await db.put(key, value, 'checkpoints');
+  }
+
+  /**
+   * Sign checkpoint as a validator (if this node is a validator)
+   */
+  async signCheckpoint(
+    checkpoint: StateCheckpoint,
+    privateKey: string,
+    algorithm: 'secp256k1' | 'ed25519'
+  ): Promise<ValidatorSignature> {
+    // Convert private key hex string to Uint8Array
+    const privateKeyBytes = new Uint8Array(
+      privateKey.match(/.{1,2}/g)?.map(byte => parseInt(byte, 16)) ?? []
+    );
+
+    // Hash the checkpoint for signing
+    const messageHash = this.cryptoService.hashMessage(
+      checkpoint.checkpointHash
+    );
+
+    // Sign the checkpoint hash
+    const signature = this.cryptoService.sign(
+      messageHash,
+      privateKeyBytes,
+      algorithm
+    );
+
+    // Get public key from private key
+    const publicKeyBytes =
+      algorithm === 'secp256k1'
+        ? await import('@noble/secp256k1').then(m =>
+            m.getPublicKey(privateKeyBytes)
+          )
+        : await import('@noble/ed25519').then(m =>
+            m.getPublicKey(privateKeyBytes)
+          );
+
+    const publicKey = Buffer.from(publicKeyBytes).toString('hex');
+
+    // Create validator signature
+    const validatorSignature: ValidatorSignature = {
+      validatorPublicKey: publicKey,
+      signature: Buffer.from(signature.signature).toString('hex'),
+      timestamp: Date.now(),
+      algorithm,
+    };
+
+    return validatorSignature;
+  }
+
+  /**
+   * Add validator signature to checkpoint
+   */
+  async addValidatorSignature(
+    checkpointHash: string,
+    signature: ValidatorSignature
+  ): Promise<void> {
+    // Verify validator is authorized
+    if (!this.isAuthorizedValidator(signature.validatorPublicKey)) {
+      throw new Error(
+        `Unauthorized validator: ${signature.validatorPublicKey}`
+      );
+    }
+
+    // Get checkpoint
+    const checkpoint = await this.getCheckpointByHash(checkpointHash);
+    if (!checkpoint) {
+      throw new CheckpointNotFoundError(
+        `Checkpoint not found: ${checkpointHash}`
+      );
+    }
+
+    // Initialize signatures array if needed
+    if (!checkpoint.validatorSignatures) {
+      checkpoint.validatorSignatures = [];
+    }
+
+    // Check for duplicate signature from same validator
+    const existingSignature = checkpoint.validatorSignatures.find(
+      sig => sig.validatorPublicKey === signature.validatorPublicKey
+    );
+    if (existingSignature) {
+      throw new Error(
+        `Duplicate signature from validator: ${signature.validatorPublicKey}`
+      );
+    }
+
+    // Verify signature is valid
+    const isValid = await this.verifyValidatorSignature(
+      checkpointHash,
+      signature
+    );
+    if (!isValid) {
+      throw new Error('Invalid validator signature');
+    }
+
+    // Add signature
+    checkpoint.validatorSignatures.push(signature);
+
+    // Update stored checkpoint
+    await this.storeCheckpoint(checkpoint);
+  }
+
+  /**
+   * Validate checkpoint integrity and signatures
+   */
+  async validateCheckpoint(
+    checkpoint: StateCheckpoint
+  ): Promise<CheckpointValidationResult> {
+    const errors: string[] = [];
+    const warnings: string[] = [];
+
+    // Verify checkpoint hash integrity
+    const calculatedHash = this.calculateCheckpointHash(checkpoint);
+    if (calculatedHash !== checkpoint.checkpointHash) {
+      errors.push(
+        `Checkpoint hash mismatch: expected ${checkpoint.checkpointHash}, got ${calculatedHash}`
+      );
+    }
+
+    // Verify merkle root matches UTXO set
+    const merkleValid = await this.verifyMerkleRoot(checkpoint);
+    if (!merkleValid) {
+      errors.push('Merkle root does not match UTXO set');
+    }
+
+    // Verify checkpoint chain continuity
+    const chainValid = await this.verifyCheckpointChain(checkpoint);
+    if (!chainValid) {
+      warnings.push('Checkpoint chain continuity could not be verified');
+    }
+
+    // Verify validator signatures
+    let validSignatures = 0;
+    if (checkpoint.validatorSignatures) {
+      for (const signature of checkpoint.validatorSignatures) {
+        const isValid = await this.verifyValidatorSignature(
+          checkpoint.checkpointHash,
+          signature
+        );
+        if (isValid) {
+          validSignatures++;
+        } else {
+          warnings.push(
+            `Invalid signature from validator: ${signature.validatorPublicKey}`
+          );
+        }
+      }
+    }
+
+    // Check signature threshold
+    if (validSignatures < this.signatureThreshold) {
+      errors.push(
+        `Insufficient valid signatures: ${validSignatures}/${this.signatureThreshold} required`
+      );
+    }
+
+    const isValid = errors.length === 0;
+
+    return {
+      isValid,
+      validSignatures,
+      requiredSignatures: this.signatureThreshold,
+      errors,
+      warnings,
+    };
+  }
+
+  /**
+   * Internal: Verify single validator signature
+   */
+  private async verifyValidatorSignature(
+    checkpointHash: string,
+    signature: ValidatorSignature
+  ): Promise<boolean> {
+    try {
+      // Verify validator is authorized
+      if (!this.isAuthorizedValidator(signature.validatorPublicKey)) {
+        return false;
+      }
+
+      // Hash the checkpoint
+      const messageHash = this.cryptoService.hashMessage(checkpointHash);
+
+      // Convert signature and public key from hex to Uint8Array
+      const signatureBytes = new Uint8Array(
+        signature.signature.match(/.{1,2}/g)?.map(byte => parseInt(byte, 16)) ??
+          []
+      );
+      const publicKeyBytes = new Uint8Array(
+        signature.validatorPublicKey
+          .match(/.{1,2}/g)
+          ?.map(byte => parseInt(byte, 16)) ?? []
+      );
+
+      // Verify signature
+      const isValid = this.cryptoService.verify(
+        {
+          signature: signatureBytes,
+          algorithm: signature.algorithm,
+        },
+        messageHash,
+        publicKeyBytes
+      );
+
+      return isValid;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Internal: Check if validator is authorized
+   */
+  private isAuthorizedValidator(publicKey: string): boolean {
+    return this.validators.some(validator => validator.publicKey === publicKey);
+  }
+
+  /**
+   * Internal: Verify merkle root matches UTXO set
+   *
+   * Note: This is a basic verification that checks the merkle root
+   * against the checkpoint metadata. Full UTXO set decompression and
+   * verification would require storing original size in CompressedUTXOBatch.
+   */
+  private async verifyMerkleRoot(
+    checkpoint: StateCheckpoint
+  ): Promise<boolean> {
+    try {
+      // Basic validation: ensure merkle root exists and is valid hex
+      if (!checkpoint.merkleRoot || checkpoint.merkleRoot.length === 0) {
+        return false;
+      }
+
+      // Validate merkle root is a valid hex string
+      if (!/^[a-f0-9]+$/i.test(checkpoint.merkleRoot)) {
+        return false;
+      }
+
+      // Ensure we have compressed UTXO data
+      if (checkpoint.compressedUTXOs.length === 0) {
+        return false;
+      }
+
+      // Verify checksum exists for compressed data
+      const batch = checkpoint.compressedUTXOs[0];
+      if (!batch.checksum || batch.checksum.length === 0) {
+        return false;
+      }
+
+      // Basic validation passed
+      // Full verification would require decompressing and recalculating merkle root,
+      // but that requires originalSize to be stored in CompressedUTXOBatch
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Internal: Verify checkpoint chain continuity
+   */
+  private async verifyCheckpointChain(
+    checkpoint: StateCheckpoint
+  ): Promise<boolean> {
+    try {
+      // If no previous checkpoint hash, must be first checkpoint
+      if (!checkpoint.previousCheckpointHash) {
+        return true;
+      }
+
+      // Get previous checkpoint
+      const previousCheckpoint = await this.getCheckpointByHash(
+        checkpoint.previousCheckpointHash
+      );
+
+      if (!previousCheckpoint) {
+        return false;
+      }
+
+      // Verify previous checkpoint is actually before this one
+      if (previousCheckpoint.height >= checkpoint.height) {
+        return false;
+      }
+
+      // Verify previous checkpoint hash matches
+      return (
+        previousCheckpoint.checkpointHash === checkpoint.previousCheckpointHash
+      );
+    } catch {
+      return false;
+    }
   }
 }

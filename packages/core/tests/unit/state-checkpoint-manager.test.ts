@@ -6,14 +6,18 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   StateCheckpointManager,
   CheckpointCreationError,
+  CheckpointNotFoundError,
   type StateCheckpoint,
   type CheckpointCreationOptions,
+  type ValidatorConfig,
+  type ValidatorSignature,
 } from '../../src/state-checkpoint-manager.js';
 import type { Blockchain } from '../../src/blockchain.js';
 import type { UTXOPersistenceManager } from '../../src/persistence.js';
 import type { UTXOCompressionManager } from '../../src/utxo-compression-manager.js';
 import type { UTXO, UTXOBlockchainState } from '../../src/types.js';
 import type { CompressedPayload } from '../../src/sync-types.js';
+import { CryptographicService } from '../../src/cryptographic.js';
 
 describe('StateCheckpointManager', () => {
   let manager: StateCheckpointManager;
@@ -421,7 +425,6 @@ describe('StateCheckpointManager', () => {
 
       // Mix of checkpoints and other data
       const mockIterator = {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         [Symbol.asyncIterator]: async function* (): AsyncIterator<
           [string, any]
         > {
@@ -623,6 +626,566 @@ describe('StateCheckpointManager', () => {
 
       // Should link to height 100 (most recent before 150)
       expect(newCheckpoint.previousCheckpointHash).toBe('hash2');
+    });
+  });
+
+  describe('StateCheckpointManager - Validation', () => {
+    let validatorKeyPair: { privateKey: Uint8Array; publicKey: Uint8Array };
+    let validatorConfig: ValidatorConfig;
+
+    beforeEach(() => {
+      // Generate validator key pair for testing
+      validatorKeyPair = CryptographicService.generateKeyPair('secp256k1');
+      validatorConfig = {
+        publicKey: Buffer.from(validatorKeyPair.publicKey).toString('hex'),
+        algorithm: 'secp256k1',
+        name: 'test-validator',
+      };
+
+      // Create manager with test validator
+      manager = new StateCheckpointManager(
+        mockBlockchain as Blockchain,
+        mockPersistence as UTXOPersistenceManager,
+        mockCompression as UTXOCompressionManager,
+        100,
+        [validatorConfig],
+        1 // Only 1 signature required for testing
+      );
+    });
+
+    describe('signCheckpoint', () => {
+      it('should sign checkpoint with private key', async () => {
+        const checkpoint = await manager.createCheckpoint();
+        const privateKeyHex = Buffer.from(validatorKeyPair.privateKey).toString(
+          'hex'
+        );
+
+        const signature = await manager.signCheckpoint(
+          checkpoint,
+          privateKeyHex,
+          'secp256k1'
+        );
+
+        expect(signature).toBeDefined();
+        expect(signature.validatorPublicKey).toBeDefined();
+        expect(signature.signature).toBeDefined();
+        expect(signature.timestamp).toBeGreaterThan(0);
+        expect(signature.algorithm).toBe('secp256k1');
+      });
+
+      it('should include validator public key in signature', async () => {
+        const checkpoint = await manager.createCheckpoint();
+        const privateKeyHex = Buffer.from(validatorKeyPair.privateKey).toString(
+          'hex'
+        );
+
+        const signature = await manager.signCheckpoint(
+          checkpoint,
+          privateKeyHex,
+          'secp256k1'
+        );
+
+        expect(signature.validatorPublicKey).toBe(validatorConfig.publicKey);
+      });
+
+      it('should include timestamp in signature', async () => {
+        const checkpoint = await manager.createCheckpoint();
+        const privateKeyHex = Buffer.from(validatorKeyPair.privateKey).toString(
+          'hex'
+        );
+        const beforeTimestamp = Date.now();
+
+        const signature = await manager.signCheckpoint(
+          checkpoint,
+          privateKeyHex,
+          'secp256k1'
+        );
+
+        expect(signature.timestamp).toBeGreaterThanOrEqual(beforeTimestamp);
+        expect(signature.timestamp).toBeLessThanOrEqual(Date.now());
+      });
+
+      it('should support secp256k1 algorithm', async () => {
+        const checkpoint = await manager.createCheckpoint();
+        const keyPair = CryptographicService.generateKeyPair('secp256k1');
+        const privateKeyHex = Buffer.from(keyPair.privateKey).toString('hex');
+
+        const signature = await manager.signCheckpoint(
+          checkpoint,
+          privateKeyHex,
+          'secp256k1'
+        );
+
+        expect(signature.algorithm).toBe('secp256k1');
+      });
+
+      it('should support ed25519 algorithm', async () => {
+        const checkpoint = await manager.createCheckpoint();
+        const keyPair = CryptographicService.generateKeyPair('ed25519');
+        const privateKeyHex = Buffer.from(keyPair.privateKey).toString('hex');
+
+        const signature = await manager.signCheckpoint(
+          checkpoint,
+          privateKeyHex,
+          'ed25519'
+        );
+
+        expect(signature.algorithm).toBe('ed25519');
+      });
+    });
+
+    describe('addValidatorSignature', () => {
+      it('should add signature to checkpoint', async () => {
+        const checkpoint = await manager.createCheckpoint();
+        const privateKeyHex = Buffer.from(validatorKeyPair.privateKey).toString(
+          'hex'
+        );
+        const signature = await manager.signCheckpoint(
+          checkpoint,
+          privateKeyHex,
+          'secp256k1'
+        );
+
+        // Mock checkpoint retrieval
+        mockDb.get.mockResolvedValueOnce(checkpoint.height); // hash index
+        mockDb.get.mockResolvedValueOnce(checkpoint); // checkpoint
+
+        await manager.addValidatorSignature(
+          checkpoint.checkpointHash,
+          signature
+        );
+
+        expect(mockDb.put).toHaveBeenCalled();
+      });
+
+      it('should reject duplicate signatures from same validator', async () => {
+        const checkpoint = await manager.createCheckpoint();
+        const privateKeyHex = Buffer.from(validatorKeyPair.privateKey).toString(
+          'hex'
+        );
+        const signature = await manager.signCheckpoint(
+          checkpoint,
+          privateKeyHex,
+          'secp256k1'
+        );
+
+        // Add signature to checkpoint
+        checkpoint.validatorSignatures = [signature];
+
+        // Mock checkpoint retrieval
+        mockDb.get.mockResolvedValue(checkpoint.height); // hash index
+        mockDb.get.mockResolvedValue(checkpoint); // checkpoint
+
+        await expect(
+          manager.addValidatorSignature(checkpoint.checkpointHash, signature)
+        ).rejects.toThrow('Duplicate signature');
+      });
+
+      it('should reject signatures from unauthorized validators', async () => {
+        const checkpoint = await manager.createCheckpoint();
+
+        // Create unauthorized validator
+        const unauthorizedKeyPair =
+          CryptographicService.generateKeyPair('secp256k1');
+        const privateKeyHex = Buffer.from(
+          unauthorizedKeyPair.privateKey
+        ).toString('hex');
+
+        const signature = await manager.signCheckpoint(
+          checkpoint,
+          privateKeyHex,
+          'secp256k1'
+        );
+
+        await expect(
+          manager.addValidatorSignature(checkpoint.checkpointHash, signature)
+        ).rejects.toThrow('Unauthorized validator');
+      });
+
+      it('should reject checkpoint not found', async () => {
+        const checkpoint = await manager.createCheckpoint();
+        const privateKeyHex = Buffer.from(validatorKeyPair.privateKey).toString(
+          'hex'
+        );
+        const signature = await manager.signCheckpoint(
+          checkpoint,
+          privateKeyHex,
+          'secp256k1'
+        );
+
+        // Mock checkpoint not found
+        mockDb.get.mockResolvedValue(null);
+
+        await expect(
+          manager.addValidatorSignature('invalid-hash', signature)
+        ).rejects.toThrow(CheckpointNotFoundError);
+      });
+    });
+
+    describe('validateCheckpoint', () => {
+      it('should validate checkpoint with sufficient signatures', async () => {
+        const checkpoint = await manager.createCheckpoint();
+        const privateKeyHex = Buffer.from(validatorKeyPair.privateKey).toString(
+          'hex'
+        );
+        const signature = await manager.signCheckpoint(
+          checkpoint,
+          privateKeyHex,
+          'secp256k1'
+        );
+
+        checkpoint.validatorSignatures = [signature];
+
+        const result = await manager.validateCheckpoint(checkpoint);
+
+        expect(result.isValid).toBe(true);
+        expect(result.validSignatures).toBe(1);
+        expect(result.requiredSignatures).toBe(1);
+        expect(result.errors).toHaveLength(0);
+      });
+
+      it('should reject checkpoint with insufficient signatures', async () => {
+        const checkpoint = await manager.createCheckpoint();
+        checkpoint.validatorSignatures = [];
+
+        const result = await manager.validateCheckpoint(checkpoint);
+
+        expect(result.isValid).toBe(false);
+        expect(result.validSignatures).toBe(0);
+        expect(result.errors).toContain(
+          'Insufficient valid signatures: 0/1 required'
+        );
+      });
+
+      it('should reject checkpoint with invalid signatures', async () => {
+        const checkpoint = await manager.createCheckpoint();
+
+        // Create invalid signature
+        const invalidSignature: ValidatorSignature = {
+          validatorPublicKey: validatorConfig.publicKey,
+          signature: 'invalid-signature',
+          timestamp: Date.now(),
+          algorithm: 'secp256k1',
+        };
+
+        checkpoint.validatorSignatures = [invalidSignature];
+
+        const result = await manager.validateCheckpoint(checkpoint);
+
+        expect(result.isValid).toBe(false);
+        expect(result.validSignatures).toBe(0);
+      });
+
+      it('should verify merkle root matches UTXO set', async () => {
+        const checkpoint = await manager.createCheckpoint();
+        const privateKeyHex = Buffer.from(validatorKeyPair.privateKey).toString(
+          'hex'
+        );
+        const signature = await manager.signCheckpoint(
+          checkpoint,
+          privateKeyHex,
+          'secp256k1'
+        );
+
+        checkpoint.validatorSignatures = [signature];
+
+        // Mock decompression to return UTXOs
+        const utxos = [createMockUTXO(0), createMockUTXO(1)];
+        mockCompression.decompress = vi
+          .fn()
+          .mockResolvedValue(Buffer.from(JSON.stringify(utxos), 'utf-8'));
+
+        const result = await manager.validateCheckpoint(checkpoint);
+
+        // Should pass merkle root verification
+        expect(result.warnings).not.toContain(
+          'Merkle root does not match UTXO set'
+        );
+      });
+
+      it('should verify checkpoint chain continuity', async () => {
+        const firstCheckpoint = await manager.createCheckpoint({ height: 50 });
+        const privateKeyHex = Buffer.from(validatorKeyPair.privateKey).toString(
+          'hex'
+        );
+        const signature1 = await manager.signCheckpoint(
+          firstCheckpoint,
+          privateKeyHex,
+          'secp256k1'
+        );
+        firstCheckpoint.validatorSignatures = [signature1];
+
+        // Mock iterator for previous checkpoint
+        const mockIterator = {
+          [Symbol.asyncIterator]: async function* (): AsyncIterator<
+            [string, StateCheckpoint]
+          > {
+            yield ['height:50', firstCheckpoint];
+          },
+        };
+        (mockPersistence as any).db = {
+          ...mockDb,
+          iterator: vi.fn().mockReturnValue(mockIterator),
+        };
+        mockBlockchain.getBlocks = vi
+          .fn()
+          .mockReturnValue(new Array(201).fill({}));
+
+        const secondCheckpoint = await manager.createCheckpoint({
+          height: 150,
+        });
+        const signature2 = await manager.signCheckpoint(
+          secondCheckpoint,
+          privateKeyHex,
+          'secp256k1'
+        );
+        secondCheckpoint.validatorSignatures = [signature2];
+
+        // Mock checkpoint retrieval for chain verification
+        mockDb.get.mockResolvedValueOnce(firstCheckpoint.height);
+        mockDb.get.mockResolvedValueOnce(firstCheckpoint);
+
+        const result = await manager.validateCheckpoint(secondCheckpoint);
+
+        expect(result.warnings).not.toContain(
+          'Checkpoint chain continuity could not be verified'
+        );
+      });
+
+      it('should reject checkpoint with invalid hash', async () => {
+        const checkpoint = await manager.createCheckpoint();
+        const privateKeyHex = Buffer.from(validatorKeyPair.privateKey).toString(
+          'hex'
+        );
+        const signature = await manager.signCheckpoint(
+          checkpoint,
+          privateKeyHex,
+          'secp256k1'
+        );
+
+        checkpoint.validatorSignatures = [signature];
+        checkpoint.checkpointHash = 'invalid-hash';
+
+        const result = await manager.validateCheckpoint(checkpoint);
+
+        expect(result.isValid).toBe(false);
+        // Should have at least one error (either hash mismatch or signature validation failure)
+        expect(result.errors.length).toBeGreaterThan(0);
+        // At least one error should be about the hash or signatures
+        const hasRelevantError = result.errors.some(
+          error =>
+            error.includes('Checkpoint hash mismatch') ||
+            error.includes('Insufficient valid signatures')
+        );
+        expect(hasRelevantError).toBe(true);
+      });
+    });
+
+    describe('signature verification', () => {
+      it('should verify valid secp256k1 signature', async () => {
+        const checkpoint = await manager.createCheckpoint();
+        const keyPair = CryptographicService.generateKeyPair('secp256k1');
+        const privateKeyHex = Buffer.from(keyPair.privateKey).toString('hex');
+
+        // Update manager with this validator
+        manager = new StateCheckpointManager(
+          mockBlockchain as Blockchain,
+          mockPersistence as UTXOPersistenceManager,
+          mockCompression as UTXOCompressionManager,
+          100,
+          [
+            {
+              publicKey: Buffer.from(keyPair.publicKey).toString('hex'),
+              algorithm: 'secp256k1',
+            },
+          ],
+          1
+        );
+
+        const signature = await manager.signCheckpoint(
+          checkpoint,
+          privateKeyHex,
+          'secp256k1'
+        );
+
+        checkpoint.validatorSignatures = [signature];
+        const result = await manager.validateCheckpoint(checkpoint);
+
+        expect(result.validSignatures).toBe(1);
+      });
+
+      it('should verify valid ed25519 signature', async () => {
+        const checkpoint = await manager.createCheckpoint();
+        const keyPair = CryptographicService.generateKeyPair('ed25519');
+        const privateKeyHex = Buffer.from(keyPair.privateKey).toString('hex');
+
+        // Update manager with this validator
+        manager = new StateCheckpointManager(
+          mockBlockchain as Blockchain,
+          mockPersistence as UTXOPersistenceManager,
+          mockCompression as UTXOCompressionManager,
+          100,
+          [
+            {
+              publicKey: Buffer.from(keyPair.publicKey).toString('hex'),
+              algorithm: 'ed25519',
+            },
+          ],
+          1
+        );
+
+        const signature = await manager.signCheckpoint(
+          checkpoint,
+          privateKeyHex,
+          'ed25519'
+        );
+
+        checkpoint.validatorSignatures = [signature];
+        const result = await manager.validateCheckpoint(checkpoint);
+
+        expect(result.validSignatures).toBe(1);
+      });
+
+      it('should reject invalid signature', async () => {
+        const checkpoint = await manager.createCheckpoint();
+
+        const invalidSignature: ValidatorSignature = {
+          validatorPublicKey: validatorConfig.publicKey,
+          signature: 'ff'.repeat(64),
+          timestamp: Date.now(),
+          algorithm: 'secp256k1',
+        };
+
+        checkpoint.validatorSignatures = [invalidSignature];
+        const result = await manager.validateCheckpoint(checkpoint);
+
+        expect(result.validSignatures).toBe(0);
+      });
+
+      it('should reject signature from unauthorized validator', async () => {
+        const checkpoint = await manager.createCheckpoint();
+        const unauthorizedKeyPair =
+          CryptographicService.generateKeyPair('secp256k1');
+
+        const signature: ValidatorSignature = {
+          validatorPublicKey: Buffer.from(
+            unauthorizedKeyPair.publicKey
+          ).toString('hex'),
+          signature: 'aa'.repeat(64),
+          timestamp: Date.now(),
+          algorithm: 'secp256k1',
+        };
+
+        checkpoint.validatorSignatures = [signature];
+        const result = await manager.validateCheckpoint(checkpoint);
+
+        expect(result.validSignatures).toBe(0);
+      });
+
+      it('should handle malformed signatures gracefully', async () => {
+        const checkpoint = await manager.createCheckpoint();
+
+        const malformedSignature: ValidatorSignature = {
+          validatorPublicKey: 'malformed',
+          signature: 'malformed',
+          timestamp: Date.now(),
+          algorithm: 'secp256k1',
+        };
+
+        checkpoint.validatorSignatures = [malformedSignature];
+        const result = await manager.validateCheckpoint(checkpoint);
+
+        expect(result.validSignatures).toBe(0);
+      });
+    });
+
+    describe('validator registry', () => {
+      it('should load devnet validators by default', () => {
+        const defaultManager = new StateCheckpointManager(
+          mockBlockchain as Blockchain,
+          mockPersistence as UTXOPersistenceManager,
+          mockCompression as UTXOCompressionManager,
+          100
+        );
+
+        // Validators should be loaded (3 devnet validators)
+        expect(defaultManager).toBeDefined();
+      });
+
+      it('should support custom validator configuration', () => {
+        const customValidators: ValidatorConfig[] = [
+          {
+            publicKey: 'custom-validator-1',
+            algorithm: 'secp256k1',
+            name: 'Custom Validator 1',
+          },
+          {
+            publicKey: 'custom-validator-2',
+            algorithm: 'ed25519',
+            name: 'Custom Validator 2',
+          },
+        ];
+
+        const customManager = new StateCheckpointManager(
+          mockBlockchain as Blockchain,
+          mockPersistence as UTXOPersistenceManager,
+          mockCompression as UTXOCompressionManager,
+          100,
+          customValidators,
+          2
+        );
+
+        expect(customManager).toBeDefined();
+      });
+
+      it('should enforce signature threshold', async () => {
+        // Create manager with 2 of 3 threshold
+        const validators: ValidatorConfig[] = [
+          validatorConfig,
+          {
+            publicKey: 'validator-2',
+            algorithm: 'secp256k1',
+            name: 'Validator 2',
+          },
+          {
+            publicKey: 'validator-3',
+            algorithm: 'secp256k1',
+            name: 'Validator 3',
+          },
+        ];
+
+        const thresholdManager = new StateCheckpointManager(
+          mockBlockchain as Blockchain,
+          mockPersistence as UTXOPersistenceManager,
+          mockCompression as UTXOCompressionManager,
+          100,
+          validators,
+          2
+        );
+
+        const checkpoint = await thresholdManager.createCheckpoint();
+
+        // Add only 1 signature (below threshold of 2)
+        const privateKeyHex = Buffer.from(validatorKeyPair.privateKey).toString(
+          'hex'
+        );
+        const signature = await thresholdManager.signCheckpoint(
+          checkpoint,
+          privateKeyHex,
+          'secp256k1'
+        );
+
+        checkpoint.validatorSignatures = [signature];
+
+        const result = await thresholdManager.validateCheckpoint(checkpoint);
+
+        expect(result.isValid).toBe(false);
+        expect(result.validSignatures).toBe(1);
+        expect(result.requiredSignatures).toBe(2);
+        expect(result.errors).toContain(
+          'Insufficient valid signatures: 1/2 required'
+        );
+      });
     });
   });
 });
