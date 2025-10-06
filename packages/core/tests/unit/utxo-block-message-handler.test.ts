@@ -12,6 +12,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { UTXOBlockMessageHandler } from '../../src/utxo-block-message-handler.js';
 import { BlockchainMessageType } from '../../src/blockchain-message-types.js';
+import { BlockManager } from '../../src/block.js';
 import type {
   BlockchainNetworkMessage,
   BlockchainMessageContext,
@@ -22,6 +23,13 @@ import type {
   BlockResponsePayload,
 } from '../../src/blockchain-message-payloads.js';
 import type { Block } from '../../src/types.js';
+
+// Mock BlockManager
+vi.mock('../../src/block.js', () => ({
+  BlockManager: {
+    validateBlock: vi.fn(),
+  },
+}));
 
 describe('UTXOBlockMessageHandler', () => {
   let handler: UTXOBlockMessageHandler;
@@ -50,6 +58,12 @@ describe('UTXOBlockMessageHandler', () => {
 
     handler = new UTXOBlockMessageHandler(mockCryptoService);
 
+    // Setup BlockManager.validateBlock mock to return valid by default
+    vi.mocked(BlockManager.validateBlock).mockReturnValue({
+      isValid: true,
+      errors: [],
+    });
+
     mockContext = {
       blockchain: {
         getBlocks: vi.fn().mockReturnValue([]),
@@ -63,7 +77,6 @@ describe('UTXOBlockMessageHandler', () => {
           merkleRoot: '',
           difficulty: 1,
         }),
-        validateChain: vi.fn().mockResolvedValue(true),
         addBlock: vi.fn(),
       },
       utxoManager: {} as any,
@@ -543,7 +556,10 @@ describe('UTXOBlockMessageHandler', () => {
       const result = await handler.handle(responseMessage, mockContext);
 
       expect(result.success).toBe(true);
-      expect(mockContext.blockchain.validateChain).toHaveBeenCalled();
+      expect(BlockManager.validateBlock).toHaveBeenCalledWith(
+        mockBlock,
+        mockContext.blockchain.getLatestBlock()
+      );
       expect(mockContext.blockchain.addBlock).toHaveBeenCalledWith(mockBlock);
     });
 
@@ -609,8 +625,11 @@ describe('UTXOBlockMessageHandler', () => {
         announcementResult.responseMessage?.payload.data as BlockRequestPayload
       ).requestId;
 
-      // Mock validateChain to return false
-      mockContext.blockchain.validateChain = vi.fn().mockResolvedValue(false);
+      // Mock validateBlock to return invalid
+      vi.mocked(BlockManager.validateBlock).mockReturnValueOnce({
+        isValid: false,
+        errors: ['Invalid block hash', 'Invalid timestamp'],
+      });
 
       const responseMessage: BlockchainNetworkMessage = {
         type: BlockchainMessageType.BLOCK_RESPONSE,
@@ -635,6 +654,7 @@ describe('UTXOBlockMessageHandler', () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toContain('Invalid block');
+      expect(result.error).toContain('Invalid block hash');
       expect(mockContext.blockchain.addBlock).not.toHaveBeenCalled();
     });
   });

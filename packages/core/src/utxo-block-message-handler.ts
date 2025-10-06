@@ -18,6 +18,7 @@
 
 import { BaseBlockchainMessageHandler } from './base-blockchain-message-handler.js';
 import { BlockchainMessageType } from './blockchain-message-types.js';
+import { BlockManager } from './block.js';
 import type { CryptographicService } from './cryptographic.js';
 import type {
   BlockchainNetworkMessage,
@@ -56,13 +57,70 @@ export class UTXOBlockMessageHandler extends BaseBlockchainMessageHandler {
   private pendingBlockRequests: Map<string, number> = new Map();
 
   /**
+   * Pending block hashes tracking
+   * Prevents duplicate requests for the same block hash
+   */
+  private pendingBlockHashes: Set<string> = new Set();
+
+  /**
+   * Request timeout in milliseconds (default: 5 minutes)
+   */
+  private readonly requestTimeoutMs: number = 300000;
+
+  /**
+   * Maximum allowed height difference for block announcements
+   * Prevents accepting blocks that are unreasonably far ahead
+   */
+  private readonly maxHeightDifference: number = 1000;
+
+  /**
    * Create a new UTXO block message handler
    *
    * @param cryptoService - Cryptographic service for signature operations
    * @param priority - Handler priority (default: 20 for critical block propagation)
+   * @param requestTimeoutMs - Request timeout in milliseconds (default: 300000 = 5 minutes)
+   * @param maxHeightDifference - Maximum allowed height difference (default: 1000 blocks)
    */
-  constructor(cryptoService: CryptographicService, priority: number = 20) {
+  constructor(
+    cryptoService: CryptographicService,
+    priority: number = 20,
+    requestTimeoutMs: number = 300000,
+    maxHeightDifference: number = 1000
+  ) {
     super(priority, cryptoService);
+    this.requestTimeoutMs = requestTimeoutMs;
+    this.maxHeightDifference = maxHeightDifference;
+  }
+
+  /**
+   * Clean up expired pending block requests
+   *
+   * Removes requests that have been pending longer than the timeout period.
+   * This prevents memory leaks from requests that never receive responses.
+   *
+   * @private
+   */
+  private cleanupExpiredRequests(): void {
+    const now = Date.now();
+    let cleanedCount = 0;
+
+    for (const [requestId, timestamp] of this.pendingBlockRequests.entries()) {
+      if (now - timestamp > this.requestTimeoutMs) {
+        this.pendingBlockRequests.delete(requestId);
+        cleanedCount++;
+        this.logger.warn(`Block request timed out: ${requestId}`, {
+          requestId,
+          age: now - timestamp,
+          timeout: this.requestTimeoutMs,
+        });
+      }
+    }
+
+    if (cleanedCount > 0) {
+      this.logger.debug(
+        `Cleaned up ${cleanedCount} expired block request(s)`
+      );
+    }
   }
 
   /**
@@ -157,9 +215,47 @@ export class UTXOBlockMessageHandler extends BaseBlockchainMessageHandler {
         return this.createResponse(true);
       }
 
-      // Check if block is next in chain
+      // Validate block height
       const currentHeight = context.blockchain.getLatestBlock().index;
+
+      // Skip if block is behind current height
+      if (payload.blockHeight <= currentHeight) {
+        this.logger.debug(
+          `Block ${payload.blockHash} is behind current height ${currentHeight}, skipping`
+        );
+        return this.createResponse(true);
+      }
+
+      // Validate reasonable height difference (prevent malicious announcements)
+      if (payload.blockHeight > currentHeight + this.maxHeightDifference) {
+        this.logger.warn(
+          `Block height ${payload.blockHeight} is unreasonably ahead of current height ${currentHeight}`,
+          {
+            blockHeight: payload.blockHeight,
+            currentHeight,
+            maxAllowed: currentHeight + this.maxHeightDifference,
+          }
+        );
+        return this.createResponse(
+          false,
+          undefined,
+          `Block height ${payload.blockHeight} is too far ahead (max: ${currentHeight + this.maxHeightDifference})`
+        );
+      }
+
+      // Check if block is next in chain
       if (payload.blockHeight === currentHeight + 1) {
+        // Clean up expired requests before creating new ones
+        this.cleanupExpiredRequests();
+
+        // Check if this block is already requested
+        if (this.pendingBlockHashes.has(payload.blockHash)) {
+          this.logger.debug(
+            `Block ${payload.blockHash} already requested, skipping duplicate request`
+          );
+          return this.createResponse(true);
+        }
+
         // Request the block
         this.logger.info(
           `Requesting block ${payload.blockHash} at height ${payload.blockHeight}`
@@ -167,6 +263,7 @@ export class UTXOBlockMessageHandler extends BaseBlockchainMessageHandler {
 
         const requestId = `block_req_${Date.now()}`;
         this.pendingBlockRequests.set(requestId, Date.now());
+        this.pendingBlockHashes.add(payload.blockHash);
 
         const blockRequest: BlockchainNetworkMessage = {
           type: BlockchainMessageType.BLOCK_REQUEST,
@@ -317,17 +414,33 @@ export class UTXOBlockMessageHandler extends BaseBlockchainMessageHandler {
       // Remove from pending
       this.pendingBlockRequests.delete(payload.requestId);
 
-      // Validate block
-      const isValid = await context.blockchain.validateChain();
+      // Validate block against previous block
+      const previousBlock = context.blockchain.getLatestBlock();
+      const validation = BlockManager.validateBlock(
+        payload.block,
+        previousBlock
+      );
 
-      if (!isValid) {
-        this.logger.warn(`Invalid block received: ${payload.block.hash}`);
-        return this.createResponse(false, undefined, 'Invalid block');
+      if (!validation.isValid) {
+        this.logger.warn(
+          `Invalid block received: ${payload.block.hash}`,
+          {
+            errors: validation.errors,
+          }
+        );
+        return this.createResponse(
+          false,
+          undefined,
+          `Invalid block: ${validation.errors.join(', ')}`
+        );
       }
 
       // Add block to blockchain
       context.blockchain.addBlock(payload.block);
       this.logger.info(`Block ${payload.block.hash} added to blockchain`);
+
+      // Remove from pending block hashes
+      this.pendingBlockHashes.delete(payload.block.hash);
 
       // Forward to peers
       return this.createResponse(true, undefined, undefined);
