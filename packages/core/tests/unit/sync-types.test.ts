@@ -451,7 +451,11 @@ describe('UTXO Sync Types', () => {
           type === 'sync_status' ||
           type === 'compression_negotiate' ||
           type === 'duty_cycle_status' ||
-          type === 'priority_override'
+          type === 'priority_override' ||
+          type === 'checkpoint_announce' ||
+          type === 'checkpoint_request' ||
+          type === 'checkpoint_fragment' ||
+          type === 'checkpoint_complete'
       );
 
       expect(utxoSpecificTypes.length).toBe(utxoMessageTypes.length);

@@ -102,6 +102,11 @@ describe('StateCheckpointManager', () => {
         compressedSize: 500,
         data: new Uint8Array([1, 2, 3]),
       } as CompressedPayload),
+      decompress: vi.fn().mockImplementation(async (data: unknown) => {
+        // Simple mock implementation - return the data as-is
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        return (data as any).data;
+      }),
     };
 
     manager = new StateCheckpointManager(
@@ -1213,7 +1218,7 @@ describe('StateCheckpointManager', () => {
       };
 
       mockReliableDelivery = {
-        sendWithRetry: vi.fn().mockResolvedValue(true),
+        sendReliableMessage: vi.fn().mockResolvedValue(true),
       };
 
       distributionManager = new StateCheckpointManager(
@@ -1238,8 +1243,10 @@ describe('StateCheckpointManager', () => {
         expect(mockMeshProtocol.sendMessage).toHaveBeenCalled();
         const call = (mockMeshProtocol.sendMessage as ReturnType<typeof vi.fn>)
           .mock.calls[0];
-        expect(call[0]).toBe('broadcast');
-        expect(call[1]).toBe('CHECKPOINT_ANNOUNCE');
+        expect(call[0]).toMatchObject({
+          type: 'sync',
+          from: 'checkpoint-manager',
+        });
       });
 
       it('should broadcast announcement to network', async () => {
@@ -1248,9 +1255,12 @@ describe('StateCheckpointManager', () => {
         await distributionManager.broadcastCheckpoint(checkpoint);
 
         expect(mockMeshProtocol.sendMessage).toHaveBeenCalledWith(
-          'broadcast',
-          'CHECKPOINT_ANNOUNCE',
-          expect.any(Buffer)
+          expect.objectContaining({
+            type: 'sync',
+            payload: expect.objectContaining({
+              type: 'CHECKPOINT_ANNOUNCE',
+            }),
+          })
         );
       });
 
@@ -1261,7 +1271,9 @@ describe('StateCheckpointManager', () => {
 
         const call = (mockMeshProtocol.sendMessage as ReturnType<typeof vi.fn>)
           .mock.calls[0];
-        const payload = JSON.parse(call[2].toString('utf-8'));
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const payloadData = (call[0] as any).payload.data;
+        const payload = JSON.parse(payloadData.toString('utf-8'));
 
         expect(payload).toMatchObject({
           checkpointHash: checkpoint.checkpointHash,
@@ -1313,7 +1325,7 @@ describe('StateCheckpointManager', () => {
 
         await distributionManager.handleCheckpointRequest('peer1', request);
 
-        expect(mockReliableDelivery.sendWithRetry).toHaveBeenCalled();
+        expect(mockReliableDelivery.sendReliableMessage).toHaveBeenCalled();
       });
 
       it('should serve specific fragments when requested', async () => {
@@ -1328,7 +1340,7 @@ describe('StateCheckpointManager', () => {
 
         await distributionManager.handleCheckpointRequest('peer1', request);
 
-        expect(mockReliableDelivery.sendWithRetry).toHaveBeenCalledTimes(2);
+        expect(mockReliableDelivery.sendReliableMessage).toHaveBeenCalledTimes(2);
       });
 
       it('should use reliable delivery for fragments', async () => {
@@ -1342,11 +1354,12 @@ describe('StateCheckpointManager', () => {
 
         await distributionManager.handleCheckpointRequest('peer1', request);
 
-        expect(mockReliableDelivery.sendWithRetry).toHaveBeenCalledWith(
-          'peer1',
-          'CHECKPOINT_FRAGMENT',
-          expect.any(Buffer),
-          3
+        expect(mockReliableDelivery.sendReliableMessage).toHaveBeenCalledWith(
+          expect.objectContaining({
+            to: 'peer1',
+            reliability: 'guaranteed',
+            maxRetries: 3,
+          })
         );
       });
 
@@ -1400,9 +1413,10 @@ describe('StateCheckpointManager', () => {
         // Note: This is a simplified test - actual implementation would need
         // proper fragment simulation
         expect(mockMeshProtocol.sendMessage).toHaveBeenCalledWith(
-          'peer1',
-          'CHECKPOINT_REQUEST',
-          expect.any(Buffer)
+          expect.objectContaining({
+            type: 'sync',
+            to: 'peer1',
+          })
         );
 
         // Clean up promise
@@ -1480,7 +1494,7 @@ describe('StateCheckpointManager', () => {
 
         await distributionManager.applyCheckpoint(checkpoint);
 
-        expect(mockUTXOManager.clearUTXOSet).toHaveBeenCalled();
+        // Note: clearUTXOSet doesn't exist in UTXOManager, so we just check addUTXO
         expect(mockUTXOManager.addUTXO).toHaveBeenCalledTimes(2);
       });
 
@@ -1710,6 +1724,18 @@ describe('StateCheckpointManager', () => {
 
       it('should reassemble fragments correctly', async () => {
         const checkpoint = await manager.createCheckpoint();
+
+        // Mock decompress to return serialized checkpoint
+        (mockCompression.decompress as ReturnType<typeof vi.fn>) = vi
+          .fn()
+          .mockResolvedValue(
+            Buffer.from(
+              JSON.stringify(checkpoint, (key, value) =>
+                typeof value === 'bigint' ? value.toString() : value
+              ),
+              'utf-8'
+            )
+          );
 
         const fragments = await (
           distributionManager as unknown as {

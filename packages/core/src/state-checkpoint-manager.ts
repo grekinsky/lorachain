@@ -1278,8 +1278,10 @@ export class StateCheckpointManager extends EventEmitter {
   private async fragmentCheckpoint(
     checkpoint: StateCheckpoint
   ): Promise<CheckpointFragmentPayload[]> {
-    // Serialize checkpoint
-    const serialized = JSON.stringify(checkpoint);
+    // Serialize checkpoint (handle BigInt values)
+    const serialized = JSON.stringify(checkpoint, (key, value) =>
+      typeof value === 'bigint' ? value.toString() : value
+    );
     const data = Buffer.from(serialized, 'utf-8');
 
     // Compress with compression manager
