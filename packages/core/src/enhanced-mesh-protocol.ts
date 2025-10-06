@@ -50,6 +50,12 @@ import { UTXOReliableDeliveryManager } from './utxo-reliable-delivery-manager.js
 import { NodeDiscoveryProtocol } from './node-discovery-protocol.js';
 import { Logger } from '@lorachain/shared';
 import { EventEmitter } from 'events';
+import type { BlockchainMessageRouter } from './blockchain-message-router.js';
+import type { BlockchainMessageType } from './blockchain-message-types.js';
+import type {
+  BlockchainNetworkMessage,
+  BlockchainMessageContext,
+} from './blockchain-message-interfaces.js';
 
 /**
  * Enhanced MeshProtocol with UTXO-aware routing capabilities and duty cycle management
@@ -87,6 +93,9 @@ export class UTXOEnhancedMeshProtocol
   // BREAKING CHANGE: Added node discovery protocol
   private nodeDiscoveryProtocol: NodeDiscoveryProtocol;
   private discoveryConfig: DiscoveryConfig;
+
+  // BREAKING CHANGE: Added blockchain message router
+  private blockchainMessageRouter?: BlockchainMessageRouter;
 
   private cryptoService: CryptographicService;
   private logger: Logger;
@@ -1587,5 +1596,219 @@ export class UTXOEnhancedMeshProtocol
         await this.broadcastMessage(message);
       }
     );
+  }
+
+  // ==========================================
+  // BREAKING CHANGE: Blockchain Message Router Integration
+  // ==========================================
+
+  /**
+   * Set the blockchain message router for handling blockchain-specific messages
+   *
+   * @param router - Blockchain message router instance
+   */
+  setBlockchainMessageRouter(router: BlockchainMessageRouter): void {
+    this.blockchainMessageRouter = router;
+    this.logger.info('Blockchain message router registered');
+  }
+
+  /**
+   * Get the blockchain message router
+   *
+   * @returns Blockchain message router instance or undefined if not set
+   */
+  getBlockchainMessageRouter(): BlockchainMessageRouter | undefined {
+    return this.blockchainMessageRouter;
+  }
+
+  /**
+   * Route blockchain message to appropriate handler
+   *
+   * Performs the following steps:
+   * 1. Validates blockchain message router is available
+   * 2. Routes message through the blockchain message router
+   * 3. Signs response message if handler returns one
+   * 4. Sends response to source peer
+   * 5. Broadcasts to network if handler requests forwarding
+   *
+   * @param message - Blockchain network message to route
+   * @param context - Blockchain message context with dependencies
+   */
+  async routeBlockchainMessage(
+    message: BlockchainNetworkMessage,
+    context: BlockchainMessageContext
+  ): Promise<void> {
+    if (!this.blockchainMessageRouter) {
+      this.logger.warn('No blockchain message router available');
+      return;
+    }
+
+    try {
+      const response = await this.blockchainMessageRouter.routeMessage(
+        message,
+        context
+      );
+
+      if (response.success && response.responseMessage) {
+        // Sign the response message before sending
+        const signedMessage = await this.signBlockchainMessage(
+          response.responseMessage
+        );
+
+        // Send response to peer
+        await this.sendBlockchainMessage(
+          signedMessage,
+          message.metadata.source
+        );
+
+        // Forward to peers if needed
+        if (response.forwardToPeers) {
+          await this.broadcastBlockchainMessage(signedMessage, [
+            message.metadata.source,
+          ]);
+        }
+      }
+    } catch (error) {
+      this.logger.error(
+        'Error routing blockchain message:',
+        error as Record<string, any>
+      );
+    }
+  }
+
+  /**
+   * Sign a blockchain message with our private key
+   *
+   * @param message - Blockchain message to sign
+   * @returns Signed blockchain message
+   * @throws Error if local key pair not available
+   */
+  private async signBlockchainMessage(
+    message: BlockchainNetworkMessage
+  ): Promise<BlockchainNetworkMessage> {
+    // Create message data for signing
+    const messageData = JSON.stringify({
+      type: message.type,
+      payload: message.payload,
+      source: message.metadata.source,
+      nonce: message.metadata.nonce,
+    });
+
+    // Convert to Uint8Array for signing
+    const messageBytes = new TextEncoder().encode(messageData);
+
+    // Sign the message
+    const signatureObj = CryptographicService.sign(
+      messageBytes,
+      this.nodeKeyPair.privateKey,
+      this.nodeKeyPair.algorithm || 'secp256k1'
+    );
+
+    // Convert signature to hex string
+    const signatureHex = Array.from(signatureObj.signature)
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+
+    // Return message with signature
+    return {
+      ...message,
+      metadata: {
+        ...message.metadata,
+        signature: signatureHex,
+      },
+    };
+  }
+
+  /**
+   * Broadcast blockchain message to all peers except excluded ones
+   *
+   * @param message - Blockchain message to broadcast
+   * @param excludePeers - List of peer IDs to exclude from broadcast
+   */
+  private async broadcastBlockchainMessage(
+    message: BlockchainNetworkMessage,
+    excludePeers: string[] = []
+  ): Promise<void> {
+    const peers = Array.from(this.neighbors.keys());
+
+    for (const peerId of peers) {
+      if (!excludePeers.includes(peerId)) {
+        try {
+          const peer = this.neighbors.get(peerId);
+          if (peer) {
+            await this.sendBlockchainMessage(message, peerId);
+          }
+        } catch (error) {
+          this.logger.warn(
+            `Failed to broadcast to peer ${peerId}:`,
+            error as Record<string, any>
+          );
+        }
+      }
+    }
+  }
+
+  /**
+   * Send blockchain message to specific peer
+   *
+   * Handles compression and fragmentation for LoRa constraints
+   *
+   * @param message - Blockchain message to send
+   * @param peerAddress - Destination peer address
+   */
+  private async sendBlockchainMessage(
+    message: BlockchainNetworkMessage,
+    peerAddress: string
+  ): Promise<void> {
+    // Map blockchain message type to mesh message type
+    let meshType: 'block' | 'transaction' | 'sync' | 'discovery' = 'sync';
+    if (message.type.includes('block')) {
+      meshType = 'block';
+    } else if (message.type.includes('transaction')) {
+      meshType = 'transaction';
+    } else if (
+      message.type.includes('handshake') ||
+      message.type.includes('version')
+    ) {
+      meshType = 'discovery';
+    }
+
+    // Convert to mesh message format for transmission
+    const meshMessage: MeshMessage = {
+      type: meshType,
+      payload: message.payload,
+      timestamp: message.payload.timestamp,
+      from: this.nodeId,
+      to: peerAddress,
+      signature: message.metadata.signature,
+    };
+
+    // Use existing sendMessage for actual transmission
+    // (handles compression, fragmentation, duty cycle)
+    await this.sendMessage(meshMessage);
+  }
+
+  /**
+   * Check if incoming message is a blockchain message
+   *
+   * @param messageType - Message type to check
+   * @returns True if message is a blockchain message type
+   */
+  isBlockchainMessage(messageType: string): boolean {
+    const blockchainTypes = [
+      'block_announcement',
+      'block_request',
+      'block_response',
+      'utxo_transaction_broadcast',
+      'utxo_transaction_request',
+      'peer_handshake_init',
+      'peer_handshake_response',
+      'peer_handshake_ack',
+      'version_negotiation',
+      'heartbeat',
+      'error_response',
+    ];
+
+    return blockchainTypes.includes(messageType);
   }
 }
