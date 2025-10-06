@@ -174,6 +174,7 @@ export interface CompressedUTXOBatch {
   algorithm: CompressionAlgorithm;
   data: Uint8Array;
   checksum: string;
+  originalSize: number; // Size of uncompressed data for decompression verification
 }
 
 /**

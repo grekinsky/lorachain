@@ -70,10 +70,12 @@ describe('StateCheckpointManager', () => {
       getAll: vi.fn(),
     };
 
+    // Create consistent UTXO set for both checkpoint creation and decompression
+    const blockchainState = createMockBlockchainState(10);
+    const utxoSetSnapshot = blockchainState.utxoSet;
+
     const mockUTXOManager = {
-      getUTXOSetSnapshot: vi
-        .fn()
-        .mockReturnValue(createMockBlockchainState(10).utxoSet),
+      getUTXOSetSnapshot: vi.fn().mockReturnValue(utxoSetSnapshot),
     };
 
     mockBlockchain = {
