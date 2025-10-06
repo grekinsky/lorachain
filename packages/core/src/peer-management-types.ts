@@ -10,6 +10,7 @@
 
 import { NetworkNode } from './types.js';
 import { SyncPeer as _SyncPeer } from './sync-types.js';
+import type { ProtocolFeatureFlags } from './blockchain-message-payloads.js';
 
 // =============================================================================
 // Enhanced Peer Interface
@@ -75,6 +76,7 @@ export interface EnhancedNetworkNode extends NetworkNode {
   syncType?: 'internet' | 'mesh' | 'gateway';
   capabilities?: string[];
   protocolVersion?: string;
+  featureFlags?: ProtocolFeatureFlags; // Protocol feature flags from version negotiation
   syncHeight?: number;
 }
 

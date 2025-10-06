@@ -309,3 +309,50 @@ export type {
   GatewayCapabilities,
   GatewayRegistration,
 } from './gateway-manager.js';
+
+// Blockchain Message Handling System exports
+export * from './blockchain-message-types.js';
+export * from './blockchain-message-interfaces.js';
+export * from './blockchain-message-handler-interface.js';
+export * from './base-blockchain-message-handler.js';
+export * from './blockchain-message-router.js';
+export * from './blockchain-message-payloads.js';
+export * from './utxo-block-message-handler.js';
+export * from './utxo-transaction-message-handler.js';
+export * from './peer-handshake-message-handler.js';
+export * from './protocol-version-handler.js';
+
+export { BlockchainMessageType } from './blockchain-message-types.js';
+export { BaseBlockchainMessageHandler } from './base-blockchain-message-handler.js';
+export { BlockchainMessageRouter } from './blockchain-message-router.js';
+export { UTXOBlockMessageHandler } from './utxo-block-message-handler.js';
+export { UTXOTransactionMessageHandler } from './utxo-transaction-message-handler.js';
+export { PeerHandshakeMessageHandler } from './peer-handshake-message-handler.js';
+export { ProtocolVersionHandler } from './protocol-version-handler.js';
+
+// Blockchain message type exports
+export type {
+  UTXOMessagePayload,
+  BlockchainNetworkMessage,
+  BlockchainMessageContext,
+  MessageResponse,
+  ValidationResult as BlockchainValidationResult,
+} from './blockchain-message-interfaces.js';
+
+export type { BlockchainMessageHandler } from './blockchain-message-handler-interface.js';
+
+// Blockchain message payload exports
+export type {
+  BlockAnnouncementPayload,
+  BlockRequestPayload,
+  BlockResponsePayload,
+  UTXOTransactionBroadcastPayload,
+  UTXOTransactionRequestPayload,
+  VersionNegotiationPayload,
+  ProtocolFeatureFlags,
+  VersionNegotiationResult,
+  PeerNodeCapabilities,
+  PeerHandshakeInitPayload,
+  PeerHandshakeResponsePayload,
+  PeerHandshakeAckPayload,
+} from './blockchain-message-payloads.js';

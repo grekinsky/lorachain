@@ -10,6 +10,7 @@
  */
 
 import { Logger } from '@lorachain/shared';
+import { randomBytes } from 'crypto';
 import {
   Blockchain,
   UTXOTransaction,
@@ -27,7 +28,34 @@ import {
   MisbehaviorType,
   PeerManagerStatistics,
   DEFAULT_PEER_MANAGER_CONFIG,
+  BlockchainMessageRouter,
+  UTXOBlockMessageHandler,
+  UTXOTransactionMessageHandler,
+  PeerHandshakeMessageHandler,
+  ProtocolVersionHandler,
+  type BlockchainNetworkMessage,
+  type BlockchainMessageContext,
+  type ProtocolFeatureFlags,
+  type PeerNodeCapabilities,
+  UTXOEnhancedMeshProtocol,
+  UTXOPriorityQueue,
+  UTXOReliableDeliveryManager,
+  UTXOSyncManager,
+  type KeyPair,
+  type RoutingConfig,
+  type FragmentationConfig,
+  type DutyCycleConfig,
+  type ReliableDeliveryConfig,
+  type UTXOSyncConfig,
 } from '@lorachain/core';
+
+// Error interface for type-safe error handling
+export interface BlockchainMessageError {
+  message: string;
+  code?: string;
+  source?: string;
+  stack?: string;
+}
 
 // Enhanced node configuration that includes peer management
 export interface EnhancedNodeConfig {
@@ -66,11 +94,26 @@ export class EnhancedLorachainNode {
   private logger = Logger.getInstance();
   private isRunning = false;
 
+  // Blockchain message handling components
+  private blockchainMessageRouter?: BlockchainMessageRouter;
+  private meshProtocol?: UTXOEnhancedMeshProtocol;
+  private priorityQueue?: UTXOPriorityQueue;
+  private reliableDelivery?: UTXOReliableDeliveryManager;
+  private syncManager?: UTXOSyncManager;
+  private cryptoService: CryptographicService;
+  private utxoManager: UTXOManager;
+  private nodeKeyPair?: KeyPair;
+
   constructor(config: EnhancedNodeConfig) {
     this.config = config;
 
+    // Initialize cryptographic service
+    this.cryptoService = new CryptographicService();
+
     // Initialize blockchain with required parameters (NO BACKWARDS COMPATIBILITY)
-    this.blockchain = this.initializeBlockchain(config);
+    const blockchainInit = this.initializeBlockchain(config);
+    this.blockchain = blockchainInit.blockchain;
+    this.utxoManager = blockchainInit.utxoManager;
 
     // Initialize peer management if enabled
     if (config.enablePeerManagement) {
@@ -84,7 +127,10 @@ export class EnhancedLorachainNode {
     });
   }
 
-  private initializeBlockchain(config: EnhancedNodeConfig): Blockchain {
+  private initializeBlockchain(config: EnhancedNodeConfig): {
+    blockchain: Blockchain;
+    utxoManager: UTXOManager;
+  } {
     // Default persistence configuration for nodes
     const defaultPersistenceConfig: UTXOPersistenceConfig = {
       enabled: true,
@@ -104,11 +150,10 @@ export class EnhancedLorachainNode {
 
     // Create required blockchain components
     const database = DatabaseFactory.create(persistenceConfig);
-    const cryptoService = new CryptographicService();
     const persistence = new UTXOPersistenceManager(
       database,
       persistenceConfig,
-      cryptoService
+      this.cryptoService
     );
     const utxoManager = new UTXOManager();
 
@@ -124,12 +169,14 @@ export class EnhancedLorachainNode {
       maxDifficulty: 1000,
     };
 
-    return new Blockchain(
+    const blockchain = new Blockchain(
       persistence,
       utxoManager,
       difficultyConfig,
       genesisConfig
     );
+
+    return { blockchain, utxoManager };
   }
 
   private initializePeerManager(): void {
@@ -206,6 +253,230 @@ export class EnhancedLorachainNode {
     );
   }
 
+  private async initializeBlockchainMessageHandlers(): Promise<void> {
+    try {
+      // Generate node key pair
+      this.nodeKeyPair = await this.cryptoService.generateKeyPair('secp256k1');
+
+      // Initialize priority queue
+      this.priorityQueue = new UTXOPriorityQueue({
+        maxTotalMessages: 1000,
+        capacityByPriority: {
+          0: 250, // CRITICAL
+          1: 300, // HIGH
+          2: 300, // NORMAL
+          3: 150, // LOW
+        },
+        emergencyCapacityReserve: 50,
+        memoryLimitBytes: 10 * 1024 * 1024, // 10 MB
+        evictionStrategy: 'priority',
+      });
+
+      // Initialize reliable delivery manager
+      const reliableDeliveryConfig: ReliableDeliveryConfig = {
+        defaultRetryPolicy: {
+          initialDelayMs: 1000,
+          maxDelayMs: 30000,
+          backoffMultiplier: 1.5,
+          jitterMaxMs: 500,
+          maxAttempts: 3,
+        },
+        maxPendingMessages: 1000,
+        ackTimeoutMs: 5000,
+        enablePersistence: false,
+        deadLetterThreshold: 10,
+        enableCompression: true,
+        enableDutyCycleIntegration: true,
+        enablePriorityCalculation: true,
+      };
+
+      this.reliableDelivery = new UTXOReliableDeliveryManager(
+        this.config.id,
+        this.nodeKeyPair,
+        reliableDeliveryConfig,
+        undefined,
+        this.cryptoService
+      );
+
+      // Create blockchain message router
+      this.blockchainMessageRouter = new BlockchainMessageRouter(
+        this.cryptoService,
+        this.priorityQueue,
+        this.reliableDelivery
+      );
+
+      // Define local feature flags
+      const localFeatures: ProtocolFeatureFlags = {
+        supportsUTXOOnly: true, // Required
+        supportsCompression: true,
+        supportsFragmentation: true,
+        supportsCryptographicSigning: true, // Required
+        supportsMeshRouting: true,
+        supportsHybridNetworking: this.config.type === 'full',
+      };
+
+      // Get node capabilities from helper method
+      const nodeCapabilities = this.getNodeCapabilities();
+
+      // Register message handlers
+      const blockHandler = new UTXOBlockMessageHandler(this.cryptoService, 20);
+      const txHandler = new UTXOTransactionMessageHandler(
+        this.cryptoService,
+        15
+      );
+      const handshakeHandler = new PeerHandshakeMessageHandler(
+        this.cryptoService,
+        nodeCapabilities,
+        25
+      );
+      const versionHandler = new ProtocolVersionHandler(
+        this.cryptoService,
+        localFeatures,
+        30
+      );
+
+      this.blockchainMessageRouter.registerHandler(blockHandler);
+      this.blockchainMessageRouter.registerHandler(txHandler);
+      this.blockchainMessageRouter.registerHandler(handshakeHandler);
+      this.blockchainMessageRouter.registerHandler(versionHandler);
+
+      this.logger.info('Blockchain message handlers registered', {
+        handlers: ['block', 'transaction', 'handshake', 'version'],
+      });
+
+      // Initialize mesh protocol if not already created
+      if (!this.meshProtocol && this.nodeKeyPair) {
+        const routingConfig: RoutingConfig = {
+          routeDiscoveryTimeout: 30000,
+          maxRouteDiscoveryRetries: 3,
+          routeRequestTTL: 10,
+          routeExpiryTime: 300000,
+          routeCleanupInterval: 60000,
+          maxRoutesPerDestination: 3,
+          floodCacheSize: 500,
+          floodCacheExpiryTime: 60000,
+          maxFloodTTL: 15,
+          acknowledgmentTimeout: 5000,
+          maxForwardRetries: 3,
+          fragmentSize: 200,
+          maxSequenceNumberAge: 600000,
+          holdDownTime: 60000,
+          maxPathLength: 15,
+          maxRoutingTableSize: 1000,
+          maxPendingForwards: 100,
+          memoryCleanupInterval: 300000,
+        };
+
+        const fragmentationConfig: FragmentationConfig = {
+          maxFragmentSize: 256, // LoRa constraint
+          sessionTimeout: 60000, // 1 minute
+          maxConcurrentSessions: 100,
+          retryAttempts: 3,
+          ackRequired: true,
+        };
+
+        const dutyCycleConfig: DutyCycleConfig = {
+          region: 'US',
+          regulatoryBody: 'FCC',
+          frequencyBands: [
+            {
+              name: 'US915',
+              centerFrequencyMHz: 915,
+              bandwidthMHz: 26,
+              minFrequencyMHz: 902,
+              maxFrequencyMHz: 928,
+              channels: [
+                {
+                  number: 0,
+                  frequencyMHz: 903.9,
+                  dataRate: 'SF10BW125',
+                  enabled: true,
+                },
+              ],
+            },
+          ],
+          activeFrequencyBand: 'US915',
+          trackingWindowHours: 1,
+          maxTransmissionTimeMs: 400,
+          dwellTimeMs: 400,
+          maxEIRP_dBm: 30,
+          adaptivePowerControl: true,
+          emergencyOverrideEnabled: false,
+          strictComplianceMode: true,
+          autoRegionDetection: false,
+          persistenceEnabled: false,
+          networkType: 'mainnet',
+        };
+
+        this.meshProtocol = new UTXOEnhancedMeshProtocol(
+          this.config.id,
+          this.config.type === 'full' ? 'full' : 'light',
+          this.nodeKeyPair,
+          routingConfig,
+          fragmentationConfig,
+          dutyCycleConfig
+        );
+
+        this.meshProtocol.setBlockchainMessageRouter(
+          this.blockchainMessageRouter
+        );
+
+        this.logger.info('Mesh protocol initialized and router registered');
+      }
+
+      // Initialize sync manager if not already created
+      if (!this.syncManager && this.meshProtocol) {
+        const { UTXOCompressionManager } = await import('@lorachain/core');
+
+        const compressionConfig = {
+          defaultAlgorithm: 'gzip' as const,
+          compressionLevel: 'balanced' as const,
+          enableDictionary: true,
+          maxCompressionMemory: 524288, // 512KB
+          enableAdaptive: true,
+          compressionThreshold: 100,
+          dutyCycleIntegration: true,
+          utxoOptimization: true,
+          regionalCompliance: 'US',
+        };
+
+        const compressionManager = new UTXOCompressionManager(
+          compressionConfig
+        );
+
+        const syncConfig: UTXOSyncConfig = {
+          maxPeers: 5,
+          maxParallelDownloads: 3,
+          headerBatchSize: 100,
+          blockBatchSize: 10,
+          utxoBatchSize: 50,
+          fragmentSize: 256,
+          syncTimeout: 60000,
+          retryAttempts: 3,
+          minStakeForAuth: 0,
+          compressionThreshold: 100,
+        };
+
+        this.syncManager = new UTXOSyncManager(
+          this.blockchain,
+          this.utxoManager,
+          this.meshProtocol,
+          compressionManager,
+          this.cryptoService,
+          syncConfig
+        );
+
+        this.logger.info('Sync manager initialized');
+      }
+    } catch (error) {
+      this.logger.error(
+        'Failed to initialize blockchain message handlers:',
+        error as BlockchainMessageError
+      );
+      throw error;
+    }
+  }
+
   async start(): Promise<void> {
     if (this.isRunning) {
       throw new Error('Node is already running');
@@ -221,6 +492,9 @@ export class EnhancedLorachainNode {
       type: this.config.type,
       peerManagement: !!this.peerManager,
     });
+
+    // Initialize blockchain message handlers
+    await this.initializeBlockchainMessageHandlers();
 
     // Start peer management if enabled
     if (this.peerManager) {
@@ -430,6 +704,122 @@ export class EnhancedLorachainNode {
     }
 
     this.peerManager.recordMisbehavior(peerId, type, evidence);
+  }
+
+  // Message handling methods
+
+  /**
+   * Handle incoming message (both routing and blockchain)
+   *
+   * @param message - Incoming message
+   * @param source - Source peer ID
+   */
+  async handleIncomingMessage(message: any, _source: string): Promise<void> {
+    try {
+      // Check if routing message (existing handler would go here)
+      if (this.isRoutingMessage(message.type)) {
+        // await this.routingMessageHandler?.handle(message, source);
+        this.logger.debug('Routing message received', { type: message.type });
+        return;
+      }
+
+      // Check if blockchain message
+      if (this.meshProtocol?.isBlockchainMessage(message.type)) {
+        const blockchainMessage = message as BlockchainNetworkMessage;
+
+        if (!this.peerManager || !this.syncManager) {
+          this.logger.warn('Peer manager or sync manager not initialized');
+          return;
+        }
+
+        const context: BlockchainMessageContext = {
+          blockchain: this.blockchain,
+          utxoManager: this.utxoManager,
+          peers: this.peerManager,
+          protocol: this.meshProtocol,
+          syncManager: this.syncManager,
+        };
+
+        await this.meshProtocol.routeBlockchainMessage(
+          blockchainMessage,
+          context
+        );
+        return;
+      }
+
+      this.logger.warn(`Unknown message type: ${message.type}`);
+    } catch (error) {
+      this.logger.error(
+        'Error handling incoming message:',
+        error as BlockchainMessageError
+      );
+    }
+  }
+
+  private isRoutingMessage(messageType: string): boolean {
+    return ['route_request', 'route_reply', 'route_error', 'hello'].includes(
+      messageType
+    );
+  }
+
+  /**
+   * Initiate handshake with peer
+   *
+   * @param peerId - Peer ID to initiate handshake with
+   * @returns True if handshake was initiated successfully
+   */
+  async initiateHandshake(peerId: string): Promise<boolean> {
+    try {
+      if (!this.nodeKeyPair || !this.peerManager) {
+        this.logger.warn('Node key pair or peer manager not initialized');
+        return false;
+      }
+
+      // Create handshake init message
+      const _challenge = this.generateChallenge();
+
+      // TODO: Sign and send handshake message via mesh protocol
+      // This would create a BlockchainNetworkMessage with:
+      // - type: 'peer_handshake_init'
+      // - payload containing nodeId, publicKey, capabilities, protocolVersion, challenge
+      // - signed metadata with source, nonce, signature
+      // Note: Requires actual mesh protocol integration
+      this.logger.info('Handshake initiated', { peerId });
+      return true;
+    } catch (error) {
+      this.logger.error(
+        'Error initiating handshake:',
+        error as BlockchainMessageError
+      );
+      return false;
+    }
+  }
+
+  /**
+   * Get node capabilities based on configuration
+   *
+   * @returns Node capabilities for handshake and version negotiation
+   */
+  private getNodeCapabilities(): PeerNodeCapabilities {
+    return {
+      isFullNode: this.config.type === 'full',
+      isMiningNode: this.config.enableMining,
+      supportsCompression: true,
+      compressionAlgorithms: ['gzip', 'zlib'],
+      maxMessageSize: 256,
+      networkType: 'hybrid',
+      listeningPort: this.config.port,
+    };
+  }
+
+  /**
+   * Generate cryptographically secure random challenge for handshake
+   *
+   * @returns Hex-encoded random challenge string
+   */
+  private generateChallenge(): string {
+    const buffer = randomBytes(32);
+    return buffer.toString('hex');
   }
 
   // Getters for node information
