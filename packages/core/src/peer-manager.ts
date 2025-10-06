@@ -1617,6 +1617,61 @@ export class PeerManager extends EventEmitter implements IPeerManager {
     }
   }
 
+  /**
+   * Update peer version information after successful version negotiation
+   *
+   * @param peerId - ID of the peer to update
+   * @param versionInfo - Version and feature information
+   */
+  async updatePeerVersion(
+    peerId: string,
+    versionInfo: { version: string; features: any }
+  ): Promise<void> {
+    const peer = this.peers.get(peerId);
+    if (peer) {
+      peer.protocolVersion = versionInfo.version;
+      if (!peer.capabilities) {
+        peer.capabilities = [];
+      }
+      // Store features as capabilities
+      peer.capabilities.push(`version:${versionInfo.version}`);
+      
+      this.logger.info(
+        `Updated peer ${peerId} version to ${versionInfo.version}`
+      );
+    }
+  }
+
+  /**
+   * Reject a peer connection due to incompatibility
+   *
+   * @param peerId - ID of the peer to reject
+   * @param reason - Reason for rejection
+   */
+  async rejectPeer(peerId: string, reason: string): Promise<void> {
+    const peer = this.peers.get(peerId);
+    if (peer) {
+      this.logger.warn(`Rejecting peer ${peerId}: ${reason}`);
+      
+      // Mark peer as banned temporarily
+      this.banPeer(peerId, reason);
+      
+      // Disconnect from peer
+      await this.disconnectFromPeer(peerId);
+    }
+  }
+
+  /**
+   * Get the local node ID
+   *
+   * @returns Local node identifier
+   */
+  getLocalNodeId(): string {
+    // Generate or retrieve local node ID
+    // For now, return a placeholder
+    return 'local_node';
+  }
+
   private createEnhancedPeer(
     peerData: Partial<EnhancedNetworkNode>
   ): EnhancedNetworkNode {
