@@ -10,6 +10,7 @@
  */
 
 import { Logger } from '@lorachain/shared';
+import { randomBytes } from 'crypto';
 import {
   Blockchain,
   UTXOTransaction,
@@ -48,6 +49,14 @@ import {
   type DiscoveryConfig,
   type UTXOSyncConfig,
 } from '@lorachain/core';
+
+// Error interface for type-safe error handling
+export interface BlockchainMessageError {
+  message: string;
+  code?: string;
+  source?: string;
+  stack?: string;
+}
 
 // Enhanced node configuration that includes peer management
 export interface EnhancedNodeConfig {
@@ -307,16 +316,8 @@ export class EnhancedLorachainNode {
         supportsHybridNetworking: this.config.type === 'full',
       };
 
-      // Define node capabilities
-      const nodeCapabilities: PeerNodeCapabilities = {
-        isFullNode: this.config.type === 'full',
-        isMiningNode: this.config.enableMining,
-        supportsCompression: true,
-        compressionAlgorithms: ['gzip', 'zlib'],
-        maxMessageSize: 256,
-        networkType: 'hybrid',
-        listeningPort: this.config.port,
-      };
+      // Get node capabilities from helper method
+      const nodeCapabilities = this.getNodeCapabilities();
 
       // Register message handlers
       const blockHandler = new UTXOBlockMessageHandler(this.cryptoService, 20);
@@ -344,12 +345,134 @@ export class EnhancedLorachainNode {
         handlers: ['block', 'transaction', 'handshake', 'version'],
       });
 
-      // Note: Mesh protocol initialization would go here when needed
-      // For now, we've set up the router that can be integrated with the mesh protocol
+      // Initialize mesh protocol if not already created
+      if (!this.meshProtocol && this.nodeKeyPair) {
+        const routingConfig: RoutingConfig = {
+          routeDiscoveryTimeout: 30000,
+          maxRouteDiscoveryRetries: 3,
+          routeRequestTTL: 10,
+          routeExpiryTime: 300000,
+          routeCleanupInterval: 60000,
+          maxRoutesPerDestination: 3,
+          floodCacheSize: 500,
+          floodCacheExpiryTime: 60000,
+          maxFloodTTL: 15,
+          acknowledgmentTimeout: 5000,
+          maxForwardRetries: 3,
+          fragmentSize: 200,
+          maxSequenceNumberAge: 600000,
+          holdDownTime: 60000,
+          maxPathLength: 15,
+          maxRoutingTableSize: 1000,
+          maxPendingForwards: 100,
+          memoryCleanupInterval: 300000,
+        };
+
+        const fragmentationConfig: FragmentationConfig = {
+          maxFragmentSize: 256, // LoRa constraint
+          sessionTimeout: 60000, // 1 minute
+          maxConcurrentSessions: 100,
+          retryAttempts: 3,
+          ackRequired: true,
+        };
+
+        const dutyCycleConfig: DutyCycleConfig = {
+          region: 'US',
+          regulatoryBody: 'FCC',
+          frequencyBands: [
+            {
+              name: 'US915',
+              centerFrequencyMHz: 915,
+              bandwidthMHz: 26,
+              minFrequencyMHz: 902,
+              maxFrequencyMHz: 928,
+              channels: [
+                {
+                  number: 0,
+                  frequencyMHz: 903.9,
+                  dataRate: 'SF10BW125',
+                  enabled: true,
+                },
+              ],
+            },
+          ],
+          activeFrequencyBand: 'US915',
+          trackingWindowHours: 1,
+          maxTransmissionTimeMs: 400,
+          dwellTimeMs: 400,
+          maxEIRP_dBm: 30,
+          adaptivePowerControl: true,
+          emergencyOverrideEnabled: false,
+          strictComplianceMode: true,
+          autoRegionDetection: false,
+          persistenceEnabled: false,
+          networkType: 'mainnet',
+        };
+
+        this.meshProtocol = new UTXOEnhancedMeshProtocol(
+          this.config.id,
+          this.config.type === 'full' ? 'full' : 'light',
+          this.nodeKeyPair,
+          routingConfig,
+          fragmentationConfig,
+          dutyCycleConfig
+        );
+
+        this.meshProtocol.setBlockchainMessageRouter(
+          this.blockchainMessageRouter
+        );
+
+        this.logger.info('Mesh protocol initialized and router registered');
+      }
+
+      // Initialize sync manager if not already created
+      if (!this.syncManager && this.meshProtocol) {
+        const { UTXOCompressionManager } = await import('@lorachain/core');
+
+        const compressionConfig = {
+          defaultAlgorithm: 'gzip' as const,
+          compressionLevel: 'balanced' as const,
+          enableDictionary: true,
+          maxCompressionMemory: 524288, // 512KB
+          enableAdaptive: true,
+          compressionThreshold: 100,
+          dutyCycleIntegration: true,
+          utxoOptimization: true,
+          regionalCompliance: 'US',
+        };
+
+        const compressionManager = new UTXOCompressionManager(
+          compressionConfig
+        );
+
+        const syncConfig: UTXOSyncConfig = {
+          maxPeers: 5,
+          maxParallelDownloads: 3,
+          headerBatchSize: 100,
+          blockBatchSize: 10,
+          utxoBatchSize: 50,
+          fragmentSize: 256,
+          syncTimeout: 60000,
+          retryAttempts: 3,
+          minStakeForAuth: 0,
+          compressionThreshold: 100,
+        };
+
+        this.syncManager = new UTXOSyncManager(
+          this.blockchain,
+          this.utxoManager,
+          this.meshProtocol,
+          compressionManager,
+          this.cryptoService,
+          syncConfig
+        );
+
+        this.logger.info('Sync manager initialized');
+      }
     } catch (error) {
       this.logger.error(
         'Failed to initialize blockchain message handlers:',
-        error as Record<string, any>
+        error as BlockchainMessageError
       );
       throw error;
     }
@@ -629,7 +752,7 @@ export class EnhancedLorachainNode {
     } catch (error) {
       this.logger.error(
         'Error handling incoming message:',
-        error as Record<string, any>
+        error as BlockchainMessageError
       );
     }
   }
@@ -662,15 +785,7 @@ export class EnhancedLorachainNode {
           data: {
             nodeId: this.config.id,
             publicKey: this.nodeKeyPair.publicKey,
-            capabilities: {
-              isFullNode: this.config.type === 'full',
-              isMiningNode: this.config.enableMining,
-              supportsCompression: true,
-              compressionAlgorithms: ['gzip', 'zlib'],
-              maxMessageSize: 256,
-              networkType: 'hybrid',
-              listeningPort: this.config.port,
-            },
+            capabilities: this.getNodeCapabilities(),
             protocolVersion: '1.0.0',
             challenge,
             timestamp: Date.now(),
@@ -694,26 +809,37 @@ export class EnhancedLorachainNode {
     } catch (error) {
       this.logger.error(
         'Error initiating handshake:',
-        error as Record<string, any>
+        error as BlockchainMessageError
       );
       return false;
     }
   }
 
+  /**
+   * Get node capabilities based on configuration
+   *
+   * @returns Node capabilities for handshake and version negotiation
+   */
+  private getNodeCapabilities(): PeerNodeCapabilities {
+    return {
+      isFullNode: this.config.type === 'full',
+      isMiningNode: this.config.enableMining,
+      supportsCompression: true,
+      compressionAlgorithms: ['gzip', 'zlib'],
+      maxMessageSize: 256,
+      networkType: 'hybrid',
+      listeningPort: this.config.port,
+    };
+  }
+
+  /**
+   * Generate cryptographically secure random challenge for handshake
+   *
+   * @returns Hex-encoded random challenge string
+   */
   private generateChallenge(): string {
-    const buffer = new Uint8Array(32);
-    // In Node.js environment, use crypto module
-    if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
-      crypto.getRandomValues(buffer);
-    } else {
-      // Fallback for environments without crypto.getRandomValues
-      for (let i = 0; i < buffer.length; i++) {
-        buffer[i] = Math.floor(Math.random() * 256);
-      }
-    }
-    return Array.from(buffer)
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join('');
+    const buffer = randomBytes(32);
+    return buffer.toString('hex');
   }
 
   // Getters for node information
