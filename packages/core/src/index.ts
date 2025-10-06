@@ -196,6 +196,7 @@ export * from './sync-types.js';
 export * from './sync-manager.js';
 export * from './sync-strategies.js';
 export * from './state-checkpoint-manager.js';
+export * from './incremental-state-manager.js';
 
 export { UTXOSyncManager } from './sync-manager.js';
 export {
@@ -208,6 +209,11 @@ export {
   CheckpointCreationError,
   CheckpointNotFoundError,
 } from './state-checkpoint-manager.js';
+export {
+  IncrementalStateManager,
+  StateUpdateError,
+  InvalidSequenceError,
+} from './incremental-state-manager.js';
 
 // Sync protocol type exports
 export type {
@@ -236,6 +242,13 @@ export type {
   CheckpointCreationOptions,
   ValidatorSignature,
 } from './state-checkpoint-manager.js';
+
+export type {
+  StateUpdate,
+  StateChange,
+  CompressedUTXO,
+  UTXOSpentProof as IncrementalUTXOSpentProof,
+} from './incremental-state-manager.js';
 
 // Peer Management System exports
 export * from './peer-management-types.js';
