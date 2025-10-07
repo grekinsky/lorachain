@@ -5,9 +5,7 @@ import { UTXOManager } from '../../src/utxo.js';
 import { UTXOPersistenceManager } from '../../src/persistence.js';
 import { MemoryDatabase } from '../../src/database.js';
 import { CryptographicService } from '../../src/cryptographic.js';
-import { BlockManager } from '../../src/block.js';
 import { createTestnetGenesisConfig } from '../shared/fixtures/mock-genesis-config.js';
-import type { Block, UTXOTransaction } from '../../src/types.js';
 
 describe('Atomic Sync Operations - Integration', () => {
   let blockchain: Blockchain;
@@ -15,7 +13,6 @@ describe('Atomic Sync Operations - Integration', () => {
   let atomicManager: AtomicSyncManager;
   let db: MemoryDatabase;
   let cryptoService: CryptographicService;
-  let blockManager: BlockManager;
 
   beforeEach(async () => {
     // Create in-memory database
@@ -53,9 +50,6 @@ describe('Atomic Sync Operations - Integration', () => {
 
     // Wait for blockchain initialization
     await blockchain.waitForInitialization();
-
-    // Create block manager
-    blockManager = new BlockManager(blockchain);
 
     // Create atomic sync manager
     atomicManager = new AtomicSyncManager(blockchain, persistence);
@@ -117,7 +111,6 @@ describe('Atomic Sync Operations - Integration', () => {
 
   describe('Rollback on Sync Failure', () => {
     it('should rollback on sync failure', async () => {
-      const initialHeight = blockchain.getBlocks().length - 1;
       const initialBlocks = blockchain.getBlocks().length;
 
       // Begin transaction
@@ -132,9 +125,6 @@ describe('Atomic Sync Operations - Integration', () => {
 
       // Rollback transaction
       await atomicManager.rollbackTransaction(txId);
-
-      // Verify state was restored (note: in-memory without persistence won't fully rollback blocks)
-      const finalHeight = blockchain.getBlocks().length - 1;
 
       // Transaction should be marked as rolled back
       const history = atomicManager.getTransactionHistory();
@@ -216,7 +206,7 @@ describe('Atomic Sync Operations - Integration', () => {
     });
 
     it('should detect and report validation errors', async () => {
-      const txId = await atomicManager.beginTransaction();
+      await atomicManager.beginTransaction();
 
       // Mine blocks
       const keyPair = CryptographicService.generateKeyPair('secp256k1');
@@ -265,8 +255,6 @@ describe('Atomic Sync Operations - Integration', () => {
       await blockchain.minePendingUTXOTransactions(keyPair.publicKey);
       await atomicManager.commitTransaction(txId1);
 
-      const heightAfterCommit = blockchain.getBlocks().length - 1;
-
       // Second transaction - rollback
       const txId2 = await atomicManager.beginTransaction();
       await blockchain.minePendingUTXOTransactions(keyPair.publicKey);
@@ -282,7 +270,7 @@ describe('Atomic Sync Operations - Integration', () => {
 
   describe('Snapshot Accuracy', () => {
     it('should create snapshot with accurate blockchain state', async () => {
-      const txId = await atomicManager.beginTransaction();
+      await atomicManager.beginTransaction();
       const transaction = atomicManager.getActiveTransaction();
 
       expect(transaction).toBeDefined();
@@ -296,7 +284,7 @@ describe('Atomic Sync Operations - Integration', () => {
     });
 
     it('should capture UTXO state in snapshot', async () => {
-      const txId = await atomicManager.beginTransaction();
+      await atomicManager.beginTransaction();
       const transaction = atomicManager.getActiveTransaction();
 
       const utxoManager = blockchain.getUTXOManager();
@@ -314,7 +302,7 @@ describe('Atomic Sync Operations - Integration', () => {
       const keyPair = CryptographicService.generateKeyPair('secp256k1');
       await blockchain.minePendingUTXOTransactions(keyPair.publicKey);
 
-      const txId2 = await atomicManager.beginTransaction();
+      await atomicManager.beginTransaction();
       const snapshot2 = atomicManager.getActiveTransaction()!.snapshot;
 
       // UTXO set hashes should be different after mining
@@ -331,7 +319,7 @@ describe('Atomic Sync Operations - Integration', () => {
     });
 
     it('should rollback automatically on commit validation failure', async () => {
-      const txId = await atomicManager.beginTransaction();
+      const _txId = await atomicManager.beginTransaction();
 
       // Mine blocks
       const keyPair = CryptographicService.generateKeyPair('secp256k1');
@@ -339,14 +327,14 @@ describe('Atomic Sync Operations - Integration', () => {
 
       // Commit should validate and succeed with normal operations
       await expect(
-        atomicManager.commitTransaction(txId)
+        atomicManager.commitTransaction(_txId)
       ).resolves.not.toThrow();
     });
   });
 
   describe('Transaction Operation Recording', () => {
     it('should record all operations during transaction', async () => {
-      const txId = await atomicManager.beginTransaction();
+      await atomicManager.beginTransaction();
 
       // Record multiple operations
       await atomicManager.recordOperation({
@@ -378,7 +366,7 @@ describe('Atomic Sync Operations - Integration', () => {
     });
 
     it('should preserve operation order', async () => {
-      const txId = await atomicManager.beginTransaction();
+      await atomicManager.beginTransaction();
 
       const timestamps: number[] = [];
       for (let i = 0; i < 5; i++) {

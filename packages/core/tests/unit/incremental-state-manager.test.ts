@@ -1376,7 +1376,7 @@ describe('IncrementalStateManager', () => {
           difficulty: 1,
         };
 
-        const update1 = await managerWithMesh.createStateUpdate(
+        await managerWithMesh.createStateUpdate(
           testBlock,
           privateKey,
           'secp256k1'
@@ -1526,12 +1526,12 @@ describe('IncrementalStateManager', () => {
           difficulty: 1,
         };
 
-        const update1 = await smallBufferManager.createStateUpdate(
+        await smallBufferManager.createStateUpdate(
           block,
           privateKey,
           'secp256k1'
         );
-        const update2 = await smallBufferManager.createStateUpdate(
+        await smallBufferManager.createStateUpdate(
           { ...block, index: 2, hash: 'block2_hash' },
           privateKey,
           'secp256k1'

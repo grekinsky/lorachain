@@ -209,7 +209,7 @@ export class SyncResumeManager extends EventEmitter {
       let latestSessionId: string;
       try {
         latestSessionId = await syncResumeSublevel.get('latest_session');
-      } catch (error) {
+      } catch {
         // No saved progress
         this.logger.debug('No saved sync progress found', {});
         return null;

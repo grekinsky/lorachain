@@ -19,7 +19,6 @@ import type {
   UTXOSpentProof,
   MissingUpdateRequestPayload,
   MissingUpdateResponsePayload,
-  UTXOSyncMessageType,
 } from './sync-types.js';
 
 /**

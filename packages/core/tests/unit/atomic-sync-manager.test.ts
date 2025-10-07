@@ -165,16 +165,16 @@ describe('AtomicSyncManager', () => {
     });
 
     it('should throw error for already committed transaction', async () => {
-      const txId = await atomicManager.beginTransaction();
-      await atomicManager.commitTransaction(txId);
+      const _txId = await atomicManager.beginTransaction();
+      await atomicManager.commitTransaction(_txId);
 
-      await expect(atomicManager.commitTransaction(txId)).rejects.toThrow(
+      await expect(atomicManager.commitTransaction(_txId)).rejects.toThrow(
         TransactionError
       );
     });
 
     it('should rollback on validation failure', async () => {
-      const txId = await atomicManager.beginTransaction();
+      const _txId = await atomicManager.beginTransaction();
 
       // Mock validation to fail
       const validateStateSpy = vi.spyOn(atomicManager, 'validateState');
@@ -184,12 +184,12 @@ describe('AtomicSyncManager', () => {
         warnings: [],
       });
 
-      await expect(atomicManager.commitTransaction(txId)).rejects.toThrow(
+      await expect(atomicManager.commitTransaction(_txId)).rejects.toThrow(
         StateValidationError
       );
 
       const history = atomicManager.getTransactionHistory();
-      const transaction = history.find(tx => tx.id === txId);
+      const transaction = history.find(tx => tx.id === _txId);
       expect(transaction!.status).toBe('rolled_back');
     });
   });
@@ -262,7 +262,7 @@ describe('AtomicSyncManager', () => {
 
   describe('recordOperation', () => {
     it('should record operation in active transaction', async () => {
-      const txId = await atomicManager.beginTransaction();
+      await atomicManager.beginTransaction();
 
       await atomicManager.recordOperation({
         type: 'add_block',
@@ -289,7 +289,7 @@ describe('AtomicSyncManager', () => {
     });
 
     it('should record multiple operations', async () => {
-      const txId = await atomicManager.beginTransaction();
+      await atomicManager.beginTransaction();
 
       await atomicManager.recordOperation({
         type: 'add_block',
@@ -358,7 +358,7 @@ describe('AtomicSyncManager', () => {
 
   describe('snapshot and restore', () => {
     it('should create accurate snapshot', async () => {
-      const txId = await atomicManager.beginTransaction();
+      await atomicManager.beginTransaction();
       const transaction = atomicManager.getActiveTransaction();
 
       expect(transaction).toBeDefined();
@@ -370,14 +370,14 @@ describe('AtomicSyncManager', () => {
     });
 
     it('should capture merkle root in snapshot', async () => {
-      const txId = await atomicManager.beginTransaction();
+      await atomicManager.beginTransaction();
       const transaction = atomicManager.getActiveTransaction();
 
       expect(transaction!.snapshot.merkleRoot).toBeDefined();
     });
 
     it('should capture UTXO set hash in snapshot', async () => {
-      const txId = await atomicManager.beginTransaction();
+      await atomicManager.beginTransaction();
       const transaction = atomicManager.getActiveTransaction();
 
       expect(transaction!.snapshot.utxoSetHash).toBeDefined();
@@ -401,11 +401,10 @@ describe('AtomicSyncManager', () => {
     });
 
     it('should validate state after restore', async () => {
-      const txId = await atomicManager.beginTransaction();
-      const transaction = atomicManager.getActiveTransaction();
+      const _txId = await atomicManager.beginTransaction();
 
       // Rollback should validate restored state
-      await atomicManager.rollbackTransaction(txId);
+      await atomicManager.rollbackTransaction(_txId);
 
       const validation = await atomicManager.validateState();
       expect(validation.isValid).toBe(true);
@@ -477,7 +476,7 @@ describe('AtomicSyncManager', () => {
     });
 
     it('should throw StateValidationError on validation failure', async () => {
-      const txId = await atomicManager.beginTransaction();
+      const _txId = await atomicManager.beginTransaction();
 
       // Mock validation to fail
       vi.spyOn(atomicManager, 'validateState').mockResolvedValueOnce({
@@ -486,7 +485,7 @@ describe('AtomicSyncManager', () => {
         warnings: [],
       });
 
-      await expect(atomicManager.commitTransaction(txId)).rejects.toThrow(
+      await expect(atomicManager.commitTransaction(_txId)).rejects.toThrow(
         StateValidationError
       );
     });

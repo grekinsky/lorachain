@@ -30,7 +30,6 @@ import {
   LightClientSyncConfig,
   LightClientSyncResult,
   SyncHeaderResponse,
-  SyncBlockResponse,
   SyncMerkleProofResponse,
   SyncBloomFilterCheckResponse,
   SyncStatusResponse,

@@ -9,7 +9,7 @@ import type {
   LightClientSyncConfig,
   UTXOBlockHeader,
 } from '../../src/sync-types.js';
-import type { UTXO, Block, UTXOTransaction } from '../../src/types.js';
+import type { Block, UTXOTransaction } from '../../src/types.js';
 
 // Mock dependencies
 const createMockMeshProtocol = () => ({
