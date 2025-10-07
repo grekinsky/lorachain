@@ -75,6 +75,21 @@ export enum UTXOSyncMessageType {
   COMPRESSION_NEGOTIATE = 'compression_negotiate',
   DUTY_CYCLE_STATUS = 'duty_cycle_status',
   PRIORITY_OVERRIDE = 'priority_override',
+
+  // Checkpoint Distribution (Task 3)
+  CHECKPOINT_ANNOUNCE = 'checkpoint_announce',
+  CHECKPOINT_REQUEST = 'checkpoint_request',
+  CHECKPOINT_FRAGMENT = 'checkpoint_fragment',
+  CHECKPOINT_COMPLETE = 'checkpoint_complete',
+
+  // State Update Subscription (Task 5)
+  STATE_UPDATE_SUBSCRIBE = 'state_update_subscribe',
+  STATE_UPDATE_UNSUBSCRIBE = 'state_update_unsubscribe',
+  STATE_UPDATE_BATCH = 'state_update_batch',
+
+  // Missing Update Recovery (Task 6)
+  MISSING_UPDATE_REQUEST = 'missing_update_request',
+  MISSING_UPDATE_RESPONSE = 'missing_update_response',
 }
 
 /**
@@ -174,6 +189,7 @@ export interface CompressedUTXOBatch {
   algorithm: CompressionAlgorithm;
   data: Uint8Array;
   checksum: string;
+  originalSize: number; // Size of uncompressed data for decompression verification
 }
 
 /**
@@ -197,21 +213,23 @@ export interface UTXOSetDelta {
 }
 
 /**
- * Compressed UTXO
+ * Compressed UTXO (for incremental state updates)
  */
 export interface CompressedUTXO {
-  id: string;
-  data: Uint8Array;
+  txId: string;
+  outputIndex: number;
+  value: number;
+  address: string;
 }
 
 /**
- * UTXO spent proof
+ * UTXO spent proof (for incremental state updates)
  */
 export interface UTXOSpentProof {
-  utxoId: string;
+  txId: string;
+  outputIndex: number;
   spentInBlock: number;
-  spentByTx: string;
-  signature: string; // Proof of spend
+  spentInTxId: string;
 }
 
 /**
@@ -337,4 +355,167 @@ export interface UTXOSyncConfig {
   retryAttempts: number;
   minStakeForAuth: number;
   compressionThreshold: number;
+}
+
+/**
+ * Checkpoint announcement payload
+ */
+export interface CheckpointAnnouncePayload {
+  checkpointHash: string;
+  height: number;
+  utxoCount: number;
+  totalSize: number;
+  fragmentCount: number;
+  merkleRoot: string;
+  validatorSignatures: number; // Count of signatures
+}
+
+/**
+ * Checkpoint request payload
+ */
+export interface CheckpointRequestPayload {
+  checkpointHash: string;
+  requestedFragments?: number[]; // Specific fragments, or all if omitted
+}
+
+/**
+ * Checkpoint fragment payload
+ */
+export interface CheckpointFragmentPayload {
+  checkpointHash: string;
+  fragmentIndex: number;
+  totalFragments: number;
+  fragmentData: Buffer;
+  checksum: string;
+  compressionAlgorithm: CompressionAlgorithm; // Algorithm used for checkpoint compression
+}
+
+/**
+ * Checkpoint statistics
+ */
+export interface CheckpointStats {
+  totalCheckpoints: number;
+  oldestHeight: number;
+  newestHeight: number;
+  totalSize: number;
+  averageSize: number;
+}
+
+/**
+ * State update subscription payload
+ */
+export interface StateUpdateSubscribePayload {
+  peerId: string;
+  subscriptionType: 'all' | 'address_specific';
+  addresses?: string[]; // For address-specific subscriptions
+  startSequence?: number; // Resume from specific sequence
+  expiresAt?: number; // Optional expiration timestamp
+}
+
+/**
+ * State update batch payload
+ */
+export interface StateUpdateBatchPayload {
+  updates: StateUpdate[];
+  batchSequence: number;
+  timestamp: number;
+  compressed: boolean;
+}
+
+/**
+ * State update for incremental sync
+ */
+export interface StateUpdate {
+  sequenceNumber: number;
+  blockHeight: number;
+  blockHash: string;
+  timestamp: number;
+  previousUpdateHash: string;
+  utxosCreated: CompressedUTXO[];
+  utxosSpent: UTXOSpentProof[];
+  merkleRootBefore: string;
+  merkleRootAfter: string;
+  merkleProof: string[];
+  signature: string;
+  publicKey: string;
+  algorithm: 'secp256k1' | 'ed25519';
+}
+
+/**
+ * Missing update request payload (Task 6)
+ */
+export interface MissingUpdateRequestPayload {
+  requestId: string;
+  sequenceNumbers: number[]; // List of missing sequences
+  requestedBy: string; // Peer ID making request
+  timestamp: number;
+}
+
+/**
+ * Missing update response payload (Task 6)
+ */
+export interface MissingUpdateResponsePayload {
+  requestId: string;
+  updates: StateUpdate[];
+  missingSequences: number[]; // Sequences not found
+}
+
+/**
+ * Light client sync configuration (Task 9)
+ */
+export interface LightClientSyncConfig {
+  addresses: string[]; // Wallet addresses to track
+  headerOnly: boolean; // Download headers only
+  bloomFilterSize: number; // Bloom filter size (bytes)
+  falsePositiveRate: number; // Acceptable FP rate (0.01 = 1%)
+  maxBlockDownload: number; // Max full blocks to download
+  backgroundSync: boolean; // Enable background sync
+}
+
+/**
+ * Light client sync result (Task 9)
+ */
+export interface LightClientSyncResult {
+  syncedHeaders: number;
+  relevantBlocks: number;
+  relevantUTXOs: number;
+  dataDownloaded: number; // Bytes
+  duration: number; // Milliseconds
+  spvProofsVerified: number;
+}
+
+/**
+ * Light client sync response types (Task 9 - Response interfaces)
+ */
+export interface SyncHeaderResponse {
+  headers?: UTXOBlockHeader[];
+}
+
+export interface SyncBlockResponse {
+  block?: import('./types.js').Block;
+}
+
+export interface SyncMerkleProofResponse {
+  proof?: {
+    merkleProof: string[];
+  };
+}
+
+export interface SyncBloomFilterCheckResponse {
+  relevantHeights?: number[];
+}
+
+export interface SyncStatusResponse {
+  height?: number;
+}
+
+/**
+ * SPV Manager interface for type-safe verification
+ */
+export interface SPVManagerVerifiable {
+  verifyTransaction(
+    tx: import('./types.js').UTXOTransaction,
+    proof: string[],
+    merkleRoot: string
+  ): boolean;
 }

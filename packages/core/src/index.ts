@@ -195,13 +195,41 @@ export type {
 export * from './sync-types.js';
 export * from './sync-manager.js';
 export * from './sync-strategies.js';
+export * from './state-checkpoint-manager.js';
+export * from './incremental-state-manager.js';
+export * from './sync-resume-manager.js';
+export * from './atomic-sync-manager.js';
 
 export { UTXOSyncManager } from './sync-manager.js';
 export {
   InternetSyncStrategy,
   MeshSyncStrategy,
   HybridSyncStrategy,
+  LightClientSyncStrategy,
 } from './sync-strategies.js';
+export { BloomFilter } from './bloom-filter.js';
+export {
+  StateCheckpointManager,
+  CheckpointCreationError,
+  CheckpointNotFoundError,
+} from './state-checkpoint-manager.js';
+export {
+  IncrementalStateManager,
+  StateUpdateError,
+  InvalidSequenceError,
+} from './incremental-state-manager.js';
+export {
+  SyncResumeManager,
+  SyncResumeError,
+  ProgressValidationError,
+  SYNC_RESUME_VERSION,
+} from './sync-resume-manager.js';
+export {
+  AtomicSyncManager,
+  TransactionError,
+  RollbackError,
+  StateValidationError,
+} from './atomic-sync-manager.js';
 
 // Sync protocol type exports
 export type {
@@ -223,7 +251,35 @@ export type {
   UTXOMerkleProof,
   UTXOSpentProof,
   SyncCapability,
+  LightClientSyncConfig,
+  LightClientSyncResult,
 } from './sync-types.js';
+
+export type {
+  StateCheckpoint,
+  CheckpointCreationOptions,
+  ValidatorSignature,
+} from './state-checkpoint-manager.js';
+
+export type {
+  StateUpdate,
+  CompressedUTXO,
+  UTXOSpentProof as IncrementalUTXOSpentProof,
+} from './sync-types.js';
+
+export type { StateChange } from './incremental-state-manager.js';
+
+export type {
+  SyncResumeState,
+  SyncResumeOptions,
+} from './sync-resume-manager.js';
+
+export type {
+  SyncTransaction,
+  SyncOperation,
+  BlockchainSnapshot,
+  StateValidationResult,
+} from './atomic-sync-manager.js';
 
 // Peer Management System exports
 export * from './peer-management-types.js';
