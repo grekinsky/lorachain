@@ -10,7 +10,7 @@ import { UTXOPersistenceManager } from '../../../src/persistence.js';
 import { MemoryDatabase } from '../../../src/database.js';
 import { CryptographicService } from '../../../src/cryptographic.js';
 import { createTestnetGenesisConfig } from '../fixtures/mock-genesis-config.js';
-import type { Block, UTXOTransaction } from '../../../src/types.js';
+import type { UTXOTransaction } from '../../../src/types.js';
 
 /**
  * Sync performance metrics

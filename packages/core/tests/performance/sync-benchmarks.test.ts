@@ -54,7 +54,13 @@ describe('Sync Performance Benchmarks', () => {
     );
 
     // Create compression manager
-    compression = new UTXOCompressionManager();
+    compression = new UTXOCompressionManager({
+      defaultAlgorithm: 'gzip' as const,
+      compressionLevel: 'balanced' as const,
+      enableDictionary: false,
+      maxCompressionMemory: 512 * 1024,
+      enableAdaptive: true,
+    });
 
     // Create UTXO manager
     const utxoManager = new UTXOManager();

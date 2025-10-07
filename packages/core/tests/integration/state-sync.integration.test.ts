@@ -8,13 +8,11 @@ import { UTXOManager } from '../../src/utxo.js';
 import { UTXOPersistenceManager } from '../../src/persistence.js';
 import { MemoryDatabase } from '../../src/database.js';
 import { CryptographicService } from '../../src/cryptographic.js';
-import { BlockManager } from '../../src/block.js';
 import { UTXOCompressionManager } from '../../src/utxo-compression-manager.js';
 import { UTXOSyncManager } from '../../src/sync-manager.js';
 import { MerkleTree } from '../../src/merkle/index.js';
 import { createTestnetGenesisConfig } from '../shared/fixtures/mock-genesis-config.js';
-import { createTestBlockchain } from '../shared/helpers/test-utils.js';
-import type { Block, UTXOTransaction, UTXO } from '../../src/types.js';
+import type { UTXOTransaction } from '../../src/types.js';
 import type { StateCheckpoint } from '../../src/state-checkpoint-manager.js';
 import type { StateUpdate } from '../../src/sync-types.js';
 
@@ -59,7 +57,13 @@ describe('State Synchronization Integration', () => {
     );
 
     // Create compression manager
-    compression = new UTXOCompressionManager();
+    compression = new UTXOCompressionManager({
+      defaultAlgorithm: 'gzip' as const,
+      compressionLevel: 'balanced' as const,
+      enableDictionary: false,
+      maxCompressionMemory: 512 * 1024,
+      enableAdaptive: true,
+    });
 
     // Create UTXO manager
     const utxoManager = new UTXOManager();
@@ -264,7 +268,7 @@ describe('State Synchronization Integration', () => {
       }
 
       // Cleanup old checkpoints
-      const deletedCount = await checkpointManager.cleanupOldCheckpoints();
+      const _deletedCount = await checkpointManager.cleanupOldCheckpoints();
 
       // Should have deleted some checkpoints
       const remainingCheckpoints =
@@ -398,7 +402,7 @@ describe('State Synchronization Integration', () => {
       // Create second and third updates
       await blockchain.minePendingUTXOTransactions(keyPair.publicKey);
       blocks = blockchain.getBlocks();
-      const update2 = await stateManager.createStateUpdate(
+      const _update2 = await stateManager.createStateUpdate(
         blocks[blocks.length - 1],
         Buffer.from(keyPair.privateKey).toString('hex'),
         'secp256k1'
@@ -574,7 +578,7 @@ describe('State Synchronization Integration', () => {
         'hex'
       );
 
-      const lightClientStrategy = new LightClientSyncStrategy(
+      const _lightClientStrategy = new LightClientSyncStrategy(
         compression,
         cryptoService,
         undefined, // mesh protocol
