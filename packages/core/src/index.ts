@@ -197,6 +197,7 @@ export * from './sync-manager.js';
 export * from './sync-strategies.js';
 export * from './state-checkpoint-manager.js';
 export * from './incremental-state-manager.js';
+export * from './sync-resume-manager.js';
 
 export { UTXOSyncManager } from './sync-manager.js';
 export {
@@ -214,6 +215,12 @@ export {
   StateUpdateError,
   InvalidSequenceError,
 } from './incremental-state-manager.js';
+export {
+  SyncResumeManager,
+  SyncResumeError,
+  ProgressValidationError,
+  SYNC_RESUME_VERSION,
+} from './sync-resume-manager.js';
 
 // Sync protocol type exports
 export type {
@@ -250,6 +257,11 @@ export type {
 } from './sync-types.js';
 
 export type { StateChange } from './incremental-state-manager.js';
+
+export type {
+  SyncResumeState,
+  SyncResumeOptions,
+} from './sync-resume-manager.js';
 
 // Peer Management System exports
 export * from './peer-management-types.js';
