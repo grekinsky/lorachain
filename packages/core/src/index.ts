@@ -198,13 +198,16 @@ export * from './sync-strategies.js';
 export * from './state-checkpoint-manager.js';
 export * from './incremental-state-manager.js';
 export * from './sync-resume-manager.js';
+export * from './atomic-sync-manager.js';
 
 export { UTXOSyncManager } from './sync-manager.js';
 export {
   InternetSyncStrategy,
   MeshSyncStrategy,
   HybridSyncStrategy,
+  LightClientSyncStrategy,
 } from './sync-strategies.js';
+export { BloomFilter } from './bloom-filter.js';
 export {
   StateCheckpointManager,
   CheckpointCreationError,
@@ -221,6 +224,12 @@ export {
   ProgressValidationError,
   SYNC_RESUME_VERSION,
 } from './sync-resume-manager.js';
+export {
+  AtomicSyncManager,
+  TransactionError,
+  RollbackError,
+  StateValidationError,
+} from './atomic-sync-manager.js';
 
 // Sync protocol type exports
 export type {
@@ -242,6 +251,8 @@ export type {
   UTXOMerkleProof,
   UTXOSpentProof,
   SyncCapability,
+  LightClientSyncConfig,
+  LightClientSyncResult,
 } from './sync-types.js';
 
 export type {
@@ -262,6 +273,13 @@ export type {
   SyncResumeState,
   SyncResumeOptions,
 } from './sync-resume-manager.js';
+
+export type {
+  SyncTransaction,
+  SyncOperation,
+  BlockchainSnapshot,
+  StateValidationResult,
+} from './atomic-sync-manager.js';
 
 // Peer Management System exports
 export * from './peer-management-types.js';

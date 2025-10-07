@@ -16,7 +16,7 @@ import { UTXOReliableDeliveryManager } from './utxo-reliable-delivery-manager.js
 import { CryptographicService } from './cryptographic.js';
 import { Logger } from '@lorachain/shared';
 
-import type { Block, UTXO } from './types.js';
+import type { Block, UTXO, UTXOTransaction } from './types.js';
 import type { MessagePriority } from './types.js';
 import type { CompressionAlgorithm } from './compression-types.js';
 import {
@@ -26,7 +26,12 @@ import {
   SyncPeer,
   FragmentInfo,
   CompressedPayload,
+  UTXOBlockHeader,
+  LightClientSyncConfig,
+  LightClientSyncResult,
 } from './sync-types.js';
+import { BloomFilter } from './bloom-filter.js';
+import { SPVManager } from './merkle/SPVManager.js';
 
 /**
  * Connection pool for parallel downloads
@@ -798,5 +803,695 @@ export class HybridSyncStrategy extends EventEmitter {
     // Check if mesh protocol is connected and has active neighbors
     const neighbors = await this.meshStrategy['nodeDiscovery'].getNeighbors();
     return neighbors.length > 0;
+  }
+}
+
+/**
+ * Light Client Sync Strategy (Task 9)
+ *
+ * Optimized synchronization for mobile wallets and resource-constrained devices.
+ * Features:
+ * - Address-specific UTXO synchronization
+ * - Header-only mode with SPV verification
+ * - Bloom filter for efficient block filtering
+ * - Selective block downloading
+ * - Minimal bandwidth and storage usage
+ */
+export class LightClientSyncStrategy extends EventEmitter {
+  private config: LightClientSyncConfig;
+  private bloomFilter: BloomFilter;
+  private meshProtocol: UTXOEnhancedMeshProtocol;
+  private spvManager: SPVManager;
+  private logger: Logger;
+  private reliableDelivery: UTXOReliableDeliveryManager;
+  private compressionManager: UTXOCompressionManager;
+  private cryptoService: CryptographicService;
+  private addressSet: Set<string>;
+  private bestPeer: SyncPeer | null = null;
+
+  constructor(
+    config: LightClientSyncConfig,
+    meshProtocol: UTXOEnhancedMeshProtocol,
+    spvManager: SPVManager,
+    reliableDelivery: UTXOReliableDeliveryManager,
+    compressionManager: UTXOCompressionManager,
+    cryptoService: CryptographicService
+  ) {
+    super();
+
+    this.config = config;
+    this.meshProtocol = meshProtocol;
+    this.spvManager = spvManager;
+    this.reliableDelivery = reliableDelivery;
+    this.compressionManager = compressionManager;
+    this.cryptoService = cryptoService;
+    this.logger = Logger.getInstance();
+    this.addressSet = new Set(config.addresses);
+
+    // Create bloom filter for address filtering
+    this.bloomFilter = this.createBloomFilter();
+
+    this.logger.info('LightClientSyncStrategy initialized', {
+      addresses: config.addresses.length,
+      headerOnly: config.headerOnly,
+      bloomFilterSize: config.bloomFilterSize,
+    });
+  }
+
+  /**
+   * Sync headers only (light client mode)
+   */
+  async syncHeaders(
+    startHeight: number,
+    endHeight: number
+  ): Promise<UTXOBlockHeader[]> {
+    this.logger.info(`Syncing headers from ${startHeight} to ${endHeight}`);
+
+    const headers: UTXOBlockHeader[] = [];
+    const batchSize = 100; // Headers are small, can batch many
+
+    for (let height = startHeight; height <= endHeight; height += batchSize) {
+      const batchEnd = Math.min(height + batchSize - 1, endHeight);
+
+      // Request header batch
+      const request = await this.createHeaderRequest(height, batchEnd);
+      const reliableMessage = {
+        id: this.generateRequestId(),
+        type: 'sync' as const,
+        payload: request.payload,
+        timestamp: request.timestamp,
+        signature: request.signature,
+        reliability: 'confirmed' as const,
+        maxRetries: 3,
+        timeoutMs: 30000,
+        from: 'light-client-sync',
+        priority: request.priority,
+      };
+
+      const response = (await this.reliableDelivery.sendReliableMessage(
+        reliableMessage,
+        'medium'
+      )) as any;
+
+      if (response && response.headers) {
+        headers.push(...response.headers);
+
+        // Validate header chain continuity
+        if (headers.length > 1) {
+          await this.validateHeaderChain(headers);
+        }
+      }
+    }
+
+    this.logger.info(`Synced ${headers.length} headers`);
+    return headers;
+  }
+
+  /**
+   * Sync UTXOs for specific addresses
+   */
+  async syncUTXOsForAddresses(
+    addresses: string[],
+    startHeight: number = 0
+  ): Promise<UTXO[]> {
+    this.logger.info(`Syncing UTXOs for ${addresses.length} addresses`);
+
+    const startTime = Date.now();
+    let dataDownloaded = 0;
+    let spvProofsVerified = 0;
+
+    // Update address filter
+    addresses.forEach(addr => {
+      this.addressSet.add(addr);
+      this.bloomFilter.add(addr);
+    });
+
+    // 1. Get network height
+    const targetHeight = await this.getNetworkHeight();
+
+    // 2. Download headers
+    const headers = await this.syncHeaders(startHeight, targetHeight);
+
+    // 3. Identify relevant blocks using bloom filter
+    const relevantBlockHeights = await this.identifyRelevantBlocks(headers);
+
+    this.logger.info(
+      `Identified ${relevantBlockHeights.length} relevant blocks out of ${headers.length}`
+    );
+
+    // 4. Download only relevant blocks
+    const blocks = await this.downloadRelevantBlocks(relevantBlockHeights);
+
+    // 5. Extract UTXOs for tracked addresses
+    const utxos: UTXO[] = [];
+    for (const block of blocks) {
+      // Cast transactions to UTXO transactions (light client expects UTXO model)
+      const utxoTransactions =
+        block.transactions as unknown as UTXOTransaction[];
+
+      for (const tx of utxoTransactions) {
+        // Skip if not a UTXO transaction
+        if (!tx.outputs || !Array.isArray(tx.outputs)) {
+          continue;
+        }
+
+        // Check outputs for our addresses
+        for (let i = 0; i < tx.outputs.length; i++) {
+          const outputAddress = tx.outputs[i].lockingScript;
+
+          if (this.addressSet.has(outputAddress)) {
+            // Verify transaction with SPV proof
+            const header = headers.find(h => h.index === block.index);
+            if (header) {
+              const merkleProof = await this.requestMerkleProof(
+                tx.id,
+                header.hash
+              );
+              const isValid = await this.verifyTransactionSPV(
+                tx,
+                merkleProof,
+                header
+              );
+
+              if (isValid) {
+                utxos.push({
+                  txId: tx.id,
+                  outputIndex: i,
+                  value: tx.outputs[i].value,
+                  lockingScript: outputAddress,
+                  blockHeight: block.index,
+                  isSpent: false,
+                });
+
+                spvProofsVerified++;
+              } else {
+                this.logger.warn(
+                  `SPV verification failed for tx ${tx.id} in block ${block.index}`
+                );
+              }
+            }
+          }
+        }
+      }
+
+      // Estimate data downloaded (simplified)
+      dataDownloaded += JSON.stringify(block).length;
+    }
+
+    const duration = Date.now() - startTime;
+
+    this.emit('sync-complete', {
+      syncedHeaders: headers.length,
+      relevantBlocks: blocks.length,
+      relevantUTXOs: utxos.length,
+      dataDownloaded,
+      duration,
+      spvProofsVerified,
+    } as LightClientSyncResult);
+
+    this.logger.info(
+      `Synced ${utxos.length} UTXOs in ${duration}ms (${(dataDownloaded / 1024 / 1024).toFixed(2)}MB downloaded)`
+    );
+
+    return utxos;
+  }
+
+  /**
+   * Request merkle proof for transaction
+   */
+  async requestMerkleProof(txId: string, blockHash: string): Promise<string[]> {
+    const request = await this.createMerkleProofRequest(txId, blockHash);
+    const reliableMessage = {
+      id: this.generateRequestId(),
+      type: 'sync' as const,
+      payload: request.payload,
+      timestamp: request.timestamp,
+      signature: request.signature,
+      reliability: 'confirmed' as const,
+      maxRetries: 3,
+      timeoutMs: 30000,
+      from: 'light-client-sync',
+      priority: request.priority,
+    };
+
+    const response = (await this.reliableDelivery.sendReliableMessage(
+      reliableMessage,
+      'high'
+    )) as any;
+
+    return response?.proof?.merkleProof || [];
+  }
+
+  /**
+   * Verify transaction with SPV proof
+   */
+  async verifyTransactionSPV(
+    tx: UTXOTransaction,
+    proof: string[],
+    blockHeader: UTXOBlockHeader
+  ): Promise<boolean> {
+    try {
+      const spvManagerInstance = this.spvManager as any;
+      return spvManagerInstance.verifyTransaction(
+        tx,
+        proof,
+        blockHeader.utxoMerkleRoot
+      );
+    } catch (error) {
+      this.logger.error('SPV verification error:', error as Error);
+      return false;
+    }
+  }
+
+  /**
+   * Identify relevant blocks using bloom filter
+   */
+  async identifyRelevantBlocks(headers: UTXOBlockHeader[]): Promise<number[]> {
+    const relevant: number[] = [];
+
+    // For light clients, we need to ask full nodes which blocks match our filter
+    // In batches to reduce round trips
+    const batchSize = 50;
+
+    for (let i = 0; i < headers.length; i += batchSize) {
+      const batch = headers.slice(i, i + batchSize);
+      const batchRelevant = await this.checkBatchRelevance(batch);
+      relevant.push(...batchRelevant);
+    }
+
+    return relevant;
+  }
+
+  /**
+   * Download only relevant blocks
+   */
+  async downloadRelevantBlocks(blockHeights: number[]): Promise<Block[]> {
+    this.logger.info(`Downloading ${blockHeights.length} relevant blocks`);
+
+    const blocks: Block[] = [];
+    const maxBlocks = Math.min(
+      blockHeights.length,
+      this.config.maxBlockDownload
+    );
+
+    for (let i = 0; i < maxBlocks; i++) {
+      const height = blockHeights[i];
+
+      try {
+        const block = await this.downloadBlock(height);
+        blocks.push(block);
+      } catch (error) {
+        this.logger.warn(
+          `Failed to download block at height ${height}:`,
+          error as Error
+        );
+      }
+    }
+
+    return blocks;
+  }
+
+  /**
+   * Add new address to track
+   */
+  addAddress(address: string): void {
+    this.addressSet.add(address);
+    this.bloomFilter.add(address);
+    this.logger.debug(`Added address to filter: ${address}`);
+  }
+
+  /**
+   * Remove address from tracking
+   */
+  removeAddress(address: string): void {
+    this.addressSet.delete(address);
+    // Note: Cannot remove from bloom filter, need to recreate
+    this.bloomFilter = this.createBloomFilter();
+    this.logger.debug(`Removed address from filter: ${address}`);
+  }
+
+  /**
+   * Get bloom filter data for transmission
+   */
+  getBloomFilterData(): Uint8Array {
+    return this.bloomFilter.toBytes();
+  }
+
+  /**
+   * Create bloom filter for addresses
+   */
+  private createBloomFilter(): BloomFilter {
+    const filter = new BloomFilter(
+      this.config.bloomFilterSize,
+      this.config.falsePositiveRate
+    );
+
+    // Add all wallet addresses to filter
+    for (const address of this.config.addresses) {
+      filter.add(address);
+    }
+
+    this.logger.debug(
+      `Created bloom filter with ${this.config.addresses.length} addresses, ` +
+        `FPR: ${this.config.falsePositiveRate}, ` +
+        `size: ${this.config.bloomFilterSize} bytes`
+    );
+
+    return filter;
+  }
+
+  /**
+   * Check if batch of blocks is relevant
+   */
+  private async checkBatchRelevance(
+    headers: UTXOBlockHeader[]
+  ): Promise<number[]> {
+    // Send bloom filter to full node and ask which blocks match
+    const request = await this.createBloomFilterCheckRequest(headers);
+    const reliableMessage = {
+      id: this.generateRequestId(),
+      type: 'sync' as const,
+      payload: request.payload,
+      timestamp: request.timestamp,
+      signature: request.signature,
+      reliability: 'confirmed' as const,
+      maxRetries: 3,
+      timeoutMs: 30000,
+      from: 'light-client-sync',
+      priority: request.priority,
+    };
+
+    const response = (await this.reliableDelivery.sendReliableMessage(
+      reliableMessage,
+      'medium'
+    )) as any;
+
+    return response?.relevantHeights || [];
+  }
+
+  /**
+   * Download a single block
+   */
+  private async downloadBlock(height: number): Promise<Block> {
+    const request = await this.createBlockRequest(height);
+    const reliableMessage = {
+      id: this.generateRequestId(),
+      type: 'sync' as const,
+      payload: request.payload,
+      timestamp: request.timestamp,
+      signature: request.signature,
+      reliability: 'confirmed' as const,
+      maxRetries: 3,
+      timeoutMs: 30000,
+      from: 'light-client-sync',
+      priority: request.priority,
+    };
+
+    const response = (await this.reliableDelivery.sendReliableMessage(
+      reliableMessage,
+      'high'
+    )) as any;
+
+    return response.block;
+  }
+
+  /**
+   * Get current network height from peers
+   */
+  private async getNetworkHeight(): Promise<number> {
+    // Request network status from best peer
+    const request = await this.createStatusRequest();
+    const reliableMessage = {
+      id: this.generateRequestId(),
+      type: 'sync' as const,
+      payload: request.payload,
+      timestamp: request.timestamp,
+      signature: request.signature,
+      reliability: 'confirmed' as const,
+      maxRetries: 3,
+      timeoutMs: 30000,
+      from: 'light-client-sync',
+      priority: request.priority,
+    };
+
+    const response = (await this.reliableDelivery.sendReliableMessage(
+      reliableMessage,
+      'high'
+    )) as any;
+
+    return response?.height || 0;
+  }
+
+  /**
+   * Validate header chain continuity
+   */
+  private async validateHeaderChain(headers: UTXOBlockHeader[]): Promise<void> {
+    for (let i = 1; i < headers.length; i++) {
+      const prev = headers[i - 1];
+      const curr = headers[i];
+
+      if (curr.previousHash !== prev.hash) {
+        throw new Error(
+          `Header chain discontinuity at index ${curr.index}: ` +
+            `expected previous hash ${prev.hash}, got ${curr.previousHash}`
+        );
+      }
+
+      if (curr.index !== prev.index + 1) {
+        throw new Error(
+          `Header index mismatch at ${curr.index}: expected ${prev.index + 1}`
+        );
+      }
+    }
+  }
+
+  /**
+   * Create header request message
+   */
+  private async createHeaderRequest(
+    startHeight: number,
+    endHeight: number
+  ): Promise<UTXOSyncMessage> {
+    const requestData = JSON.stringify({
+      startHeight,
+      endHeight,
+      requestId: this.generateRequestId(),
+    });
+    const requestBytes = new TextEncoder().encode(requestData);
+    const compressed = await this.compressionManager.compress(requestBytes);
+
+    const payload: CompressedPayload = {
+      algorithm: compressed.algorithm,
+      originalSize: requestBytes.length,
+      compressedSize: compressed.data.length,
+      data: compressed.data,
+    };
+
+    const keyPair = CryptographicService.generateKeyPair('secp256k1');
+    const messageData = new TextEncoder().encode(requestData);
+    const signature = CryptographicService.sign(
+      messageData,
+      keyPair.privateKey,
+      'secp256k1'
+    );
+
+    return {
+      version: '2.0.0',
+      type: UTXOSyncMessageType.UTXO_HEADER_REQUEST,
+      timestamp: Date.now(),
+      signature:
+        typeof signature === 'string'
+          ? signature
+          : new TextDecoder().decode(signature as unknown as Uint8Array),
+      publicKey:
+        typeof keyPair.publicKey === 'string'
+          ? keyPair.publicKey
+          : new TextDecoder().decode(keyPair.publicKey),
+      payload,
+      priority: 'medium' as unknown as MessagePriority,
+    };
+  }
+
+  /**
+   * Create merkle proof request message
+   */
+  private async createMerkleProofRequest(
+    txId: string,
+    blockHash: string
+  ): Promise<UTXOSyncMessage> {
+    const requestData = JSON.stringify({
+      txId,
+      blockHash,
+      requestId: this.generateRequestId(),
+    });
+    const requestBytes = new TextEncoder().encode(requestData);
+    const compressed = await this.compressionManager.compress(requestBytes);
+
+    const payload: CompressedPayload = {
+      algorithm: compressed.algorithm,
+      originalSize: requestBytes.length,
+      compressedSize: compressed.data.length,
+      data: compressed.data,
+    };
+
+    const keyPair = CryptographicService.generateKeyPair('secp256k1');
+    const messageData = new TextEncoder().encode(requestData);
+    const signature = CryptographicService.sign(
+      messageData,
+      keyPair.privateKey,
+      'secp256k1'
+    );
+
+    return {
+      version: '2.0.0',
+      type: UTXOSyncMessageType.UTXO_MERKLE_PROOF,
+      timestamp: Date.now(),
+      signature:
+        typeof signature === 'string'
+          ? signature
+          : new TextDecoder().decode(signature as unknown as Uint8Array),
+      publicKey:
+        typeof keyPair.publicKey === 'string'
+          ? keyPair.publicKey
+          : new TextDecoder().decode(keyPair.publicKey),
+      payload,
+      priority: 'high' as unknown as MessagePriority,
+    };
+  }
+
+  /**
+   * Create bloom filter check request
+   */
+  private async createBloomFilterCheckRequest(
+    headers: UTXOBlockHeader[]
+  ): Promise<UTXOSyncMessage> {
+    const requestData = JSON.stringify({
+      blockHashes: headers.map(h => h.hash),
+      bloomFilter: Array.from(this.bloomFilter.toBytes()),
+      numHashFunctions: this.bloomFilter.getNumHashFunctions(),
+      requestId: this.generateRequestId(),
+    });
+    const requestBytes = new TextEncoder().encode(requestData);
+    const compressed = await this.compressionManager.compress(requestBytes);
+
+    const payload: CompressedPayload = {
+      algorithm: compressed.algorithm,
+      originalSize: requestBytes.length,
+      compressedSize: compressed.data.length,
+      data: compressed.data,
+    };
+
+    const keyPair = CryptographicService.generateKeyPair('secp256k1');
+    const messageData = new TextEncoder().encode(requestData);
+    const signature = CryptographicService.sign(
+      messageData,
+      keyPair.privateKey,
+      'secp256k1'
+    );
+
+    return {
+      version: '2.0.0',
+      type: UTXOSyncMessageType.UTXO_BLOCK_REQUEST,
+      timestamp: Date.now(),
+      signature:
+        typeof signature === 'string'
+          ? signature
+          : new TextDecoder().decode(signature as unknown as Uint8Array),
+      publicKey:
+        typeof keyPair.publicKey === 'string'
+          ? keyPair.publicKey
+          : new TextDecoder().decode(keyPair.publicKey),
+      payload,
+      priority: 'medium' as unknown as MessagePriority,
+    };
+  }
+
+  /**
+   * Create block request message
+   */
+  private async createBlockRequest(height: number): Promise<UTXOSyncMessage> {
+    const requestData = JSON.stringify({
+      height,
+      requestId: this.generateRequestId(),
+    });
+    const requestBytes = new TextEncoder().encode(requestData);
+    const compressed = await this.compressionManager.compress(requestBytes);
+
+    const payload: CompressedPayload = {
+      algorithm: compressed.algorithm,
+      originalSize: requestBytes.length,
+      compressedSize: compressed.data.length,
+      data: compressed.data,
+    };
+
+    const keyPair = CryptographicService.generateKeyPair('secp256k1');
+    const messageData = new TextEncoder().encode(requestData);
+    const signature = CryptographicService.sign(
+      messageData,
+      keyPair.privateKey,
+      'secp256k1'
+    );
+
+    return {
+      version: '2.0.0',
+      type: UTXOSyncMessageType.UTXO_BLOCK_REQUEST,
+      timestamp: Date.now(),
+      signature:
+        typeof signature === 'string'
+          ? signature
+          : new TextDecoder().decode(signature as unknown as Uint8Array),
+      publicKey:
+        typeof keyPair.publicKey === 'string'
+          ? keyPair.publicKey
+          : new TextDecoder().decode(keyPair.publicKey),
+      payload,
+      priority: 'high' as unknown as MessagePriority,
+    };
+  }
+
+  /**
+   * Create status request message
+   */
+  private async createStatusRequest(): Promise<UTXOSyncMessage> {
+    const requestData = JSON.stringify({
+      requestId: this.generateRequestId(),
+    });
+    const requestBytes = new TextEncoder().encode(requestData);
+    const compressed = await this.compressionManager.compress(requestBytes);
+
+    const payload: CompressedPayload = {
+      algorithm: compressed.algorithm,
+      originalSize: requestBytes.length,
+      compressedSize: compressed.data.length,
+      data: compressed.data,
+    };
+
+    const keyPair = CryptographicService.generateKeyPair('secp256k1');
+    const messageData = new TextEncoder().encode(requestData);
+    const signature = CryptographicService.sign(
+      messageData,
+      keyPair.privateKey,
+      'secp256k1'
+    );
+
+    return {
+      version: '2.0.0',
+      type: UTXOSyncMessageType.SYNC_STATUS,
+      timestamp: Date.now(),
+      signature:
+        typeof signature === 'string'
+          ? signature
+          : new TextDecoder().decode(signature as unknown as Uint8Array),
+      publicKey:
+        typeof keyPair.publicKey === 'string'
+          ? keyPair.publicKey
+          : new TextDecoder().decode(keyPair.publicKey),
+      payload,
+      priority: 'high' as unknown as MessagePriority,
+    };
+  }
+
+  private generateRequestId(): string {
+    return `light_req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   }
 }

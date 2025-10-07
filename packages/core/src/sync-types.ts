@@ -459,3 +459,27 @@ export interface MissingUpdateResponsePayload {
   updates: StateUpdate[];
   missingSequences: number[]; // Sequences not found
 }
+
+/**
+ * Light client sync configuration (Task 9)
+ */
+export interface LightClientSyncConfig {
+  addresses: string[]; // Wallet addresses to track
+  headerOnly: boolean; // Download headers only
+  bloomFilterSize: number; // Bloom filter size (bytes)
+  falsePositiveRate: number; // Acceptable FP rate (0.01 = 1%)
+  maxBlockDownload: number; // Max full blocks to download
+  backgroundSync: boolean; // Enable background sync
+}
+
+/**
+ * Light client sync result (Task 9)
+ */
+export interface LightClientSyncResult {
+  syncedHeaders: number;
+  relevantBlocks: number;
+  relevantUTXOs: number;
+  dataDownloaded: number; // Bytes
+  duration: number; // Milliseconds
+  spvProofsVerified: number;
+}
