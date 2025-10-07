@@ -483,3 +483,39 @@ export interface LightClientSyncResult {
   duration: number; // Milliseconds
   spvProofsVerified: number;
 }
+
+/**
+ * Light client sync response types (Task 9 - Response interfaces)
+ */
+export interface SyncHeaderResponse {
+  headers?: UTXOBlockHeader[];
+}
+
+export interface SyncBlockResponse {
+  block?: import('./types.js').Block;
+}
+
+export interface SyncMerkleProofResponse {
+  proof?: {
+    merkleProof: string[];
+  };
+}
+
+export interface SyncBloomFilterCheckResponse {
+  relevantHeights?: number[];
+}
+
+export interface SyncStatusResponse {
+  height?: number;
+}
+
+/**
+ * SPV Manager interface for type-safe verification
+ */
+export interface SPVManagerVerifiable {
+  verifyTransaction(
+    tx: import('./types.js').UTXOTransaction,
+    proof: string[],
+    merkleRoot: string
+  ): boolean;
+}

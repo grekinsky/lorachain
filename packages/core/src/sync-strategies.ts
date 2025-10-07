@@ -29,6 +29,12 @@ import {
   UTXOBlockHeader,
   LightClientSyncConfig,
   LightClientSyncResult,
+  SyncHeaderResponse,
+  SyncBlockResponse,
+  SyncMerkleProofResponse,
+  SyncBloomFilterCheckResponse,
+  SyncStatusResponse,
+  SPVManagerVerifiable,
 } from './sync-types.js';
 import { BloomFilter } from './bloom-filter.js';
 import { SPVManager } from './merkle/SPVManager.js';
@@ -891,7 +897,7 @@ export class LightClientSyncStrategy extends EventEmitter {
       const response = (await this.reliableDelivery.sendReliableMessage(
         reliableMessage,
         'medium'
-      )) as any;
+      )) as SyncHeaderResponse;
 
       if (response && response.headers) {
         headers.push(...response.headers);
@@ -945,13 +951,17 @@ export class LightClientSyncStrategy extends EventEmitter {
     // 5. Extract UTXOs for tracked addresses
     const utxos: UTXO[] = [];
     for (const block of blocks) {
-      // Cast transactions to UTXO transactions (light client expects UTXO model)
+      // Validate and cast UTXO transactions (light client expects UTXO model)
       const utxoTransactions =
         block.transactions as unknown as UTXOTransaction[];
 
       for (const tx of utxoTransactions) {
-        // Skip if not a UTXO transaction
-        if (!tx.outputs || !Array.isArray(tx.outputs)) {
+        // Skip if not a valid UTXO transaction
+        if (
+          !tx.outputs ||
+          !Array.isArray(tx.outputs) ||
+          tx.outputs.length === 0
+        ) {
           continue;
         }
 
@@ -1037,7 +1047,7 @@ export class LightClientSyncStrategy extends EventEmitter {
     const response = (await this.reliableDelivery.sendReliableMessage(
       reliableMessage,
       'high'
-    )) as any;
+    )) as SyncMerkleProofResponse;
 
     return response?.proof?.merkleProof || [];
   }
@@ -1051,7 +1061,13 @@ export class LightClientSyncStrategy extends EventEmitter {
     blockHeader: UTXOBlockHeader
   ): Promise<boolean> {
     try {
-      const spvManagerInstance = this.spvManager as any;
+      // Validate that SPV manager has the verifyTransaction method
+      if (!('verifyTransaction' in this.spvManager)) {
+        throw new Error('SPVManager does not support verifyTransaction method');
+      }
+
+      const spvManagerInstance = this
+        .spvManager as unknown as SPVManagerVerifiable;
       return spvManagerInstance.verifyTransaction(
         tx,
         proof,
@@ -1075,8 +1091,18 @@ export class LightClientSyncStrategy extends EventEmitter {
 
     for (let i = 0; i < headers.length; i += batchSize) {
       const batch = headers.slice(i, i + batchSize);
-      const batchRelevant = await this.checkBatchRelevance(batch);
-      relevant.push(...batchRelevant);
+
+      try {
+        const batchRelevant = await this.checkBatchRelevance(batch);
+        relevant.push(...batchRelevant);
+      } catch (error) {
+        this.logger.warn(
+          `Failed to check batch relevance for headers ${i}-${i + batchSize}:`,
+          error as Error
+        );
+        // Fallback: assume all blocks in batch are relevant to avoid missing transactions
+        relevant.push(...batch.map(h => h.index));
+      }
     }
 
     return relevant;
@@ -1184,7 +1210,7 @@ export class LightClientSyncStrategy extends EventEmitter {
     const response = (await this.reliableDelivery.sendReliableMessage(
       reliableMessage,
       'medium'
-    )) as any;
+    )) as SyncBloomFilterCheckResponse;
 
     return response?.relevantHeights || [];
   }
@@ -1210,7 +1236,13 @@ export class LightClientSyncStrategy extends EventEmitter {
     const response = (await this.reliableDelivery.sendReliableMessage(
       reliableMessage,
       'high'
-    )) as any;
+    )) as { block?: Block };
+
+    if (!response || !response.block) {
+      throw new Error(
+        `Failed to download block at height ${height}: No block in response`
+      );
+    }
 
     return response.block;
   }
@@ -1237,7 +1269,7 @@ export class LightClientSyncStrategy extends EventEmitter {
     const response = (await this.reliableDelivery.sendReliableMessage(
       reliableMessage,
       'high'
-    )) as any;
+    )) as SyncStatusResponse;
 
     return response?.height || 0;
   }
@@ -1289,7 +1321,7 @@ export class LightClientSyncStrategy extends EventEmitter {
 
     const keyPair = CryptographicService.generateKeyPair('secp256k1');
     const messageData = new TextEncoder().encode(requestData);
-    const signature = CryptographicService.sign(
+    const signatureResult = CryptographicService.sign(
       messageData,
       keyPair.privateKey,
       'secp256k1'
@@ -1299,14 +1331,8 @@ export class LightClientSyncStrategy extends EventEmitter {
       version: '2.0.0',
       type: UTXOSyncMessageType.UTXO_HEADER_REQUEST,
       timestamp: Date.now(),
-      signature:
-        typeof signature === 'string'
-          ? signature
-          : new TextDecoder().decode(signature as unknown as Uint8Array),
-      publicKey:
-        typeof keyPair.publicKey === 'string'
-          ? keyPair.publicKey
-          : new TextDecoder().decode(keyPair.publicKey),
+      signature: Buffer.from(signatureResult.signature).toString('hex'),
+      publicKey: Buffer.from(keyPair.publicKey).toString('hex'),
       payload,
       priority: 'medium' as unknown as MessagePriority,
     };
@@ -1336,7 +1362,7 @@ export class LightClientSyncStrategy extends EventEmitter {
 
     const keyPair = CryptographicService.generateKeyPair('secp256k1');
     const messageData = new TextEncoder().encode(requestData);
-    const signature = CryptographicService.sign(
+    const signatureResult = CryptographicService.sign(
       messageData,
       keyPair.privateKey,
       'secp256k1'
@@ -1346,14 +1372,8 @@ export class LightClientSyncStrategy extends EventEmitter {
       version: '2.0.0',
       type: UTXOSyncMessageType.UTXO_MERKLE_PROOF,
       timestamp: Date.now(),
-      signature:
-        typeof signature === 'string'
-          ? signature
-          : new TextDecoder().decode(signature as unknown as Uint8Array),
-      publicKey:
-        typeof keyPair.publicKey === 'string'
-          ? keyPair.publicKey
-          : new TextDecoder().decode(keyPair.publicKey),
+      signature: Buffer.from(signatureResult.signature).toString('hex'),
+      publicKey: Buffer.from(keyPair.publicKey).toString('hex'),
       payload,
       priority: 'high' as unknown as MessagePriority,
     };
@@ -1383,7 +1403,7 @@ export class LightClientSyncStrategy extends EventEmitter {
 
     const keyPair = CryptographicService.generateKeyPair('secp256k1');
     const messageData = new TextEncoder().encode(requestData);
-    const signature = CryptographicService.sign(
+    const signatureResult = CryptographicService.sign(
       messageData,
       keyPair.privateKey,
       'secp256k1'
@@ -1393,14 +1413,8 @@ export class LightClientSyncStrategy extends EventEmitter {
       version: '2.0.0',
       type: UTXOSyncMessageType.UTXO_BLOCK_REQUEST,
       timestamp: Date.now(),
-      signature:
-        typeof signature === 'string'
-          ? signature
-          : new TextDecoder().decode(signature as unknown as Uint8Array),
-      publicKey:
-        typeof keyPair.publicKey === 'string'
-          ? keyPair.publicKey
-          : new TextDecoder().decode(keyPair.publicKey),
+      signature: Buffer.from(signatureResult.signature).toString('hex'),
+      publicKey: Buffer.from(keyPair.publicKey).toString('hex'),
       payload,
       priority: 'medium' as unknown as MessagePriority,
     };
@@ -1426,7 +1440,7 @@ export class LightClientSyncStrategy extends EventEmitter {
 
     const keyPair = CryptographicService.generateKeyPair('secp256k1');
     const messageData = new TextEncoder().encode(requestData);
-    const signature = CryptographicService.sign(
+    const signatureResult = CryptographicService.sign(
       messageData,
       keyPair.privateKey,
       'secp256k1'
@@ -1436,14 +1450,8 @@ export class LightClientSyncStrategy extends EventEmitter {
       version: '2.0.0',
       type: UTXOSyncMessageType.UTXO_BLOCK_REQUEST,
       timestamp: Date.now(),
-      signature:
-        typeof signature === 'string'
-          ? signature
-          : new TextDecoder().decode(signature as unknown as Uint8Array),
-      publicKey:
-        typeof keyPair.publicKey === 'string'
-          ? keyPair.publicKey
-          : new TextDecoder().decode(keyPair.publicKey),
+      signature: Buffer.from(signatureResult.signature).toString('hex'),
+      publicKey: Buffer.from(keyPair.publicKey).toString('hex'),
       payload,
       priority: 'high' as unknown as MessagePriority,
     };
@@ -1468,7 +1476,7 @@ export class LightClientSyncStrategy extends EventEmitter {
 
     const keyPair = CryptographicService.generateKeyPair('secp256k1');
     const messageData = new TextEncoder().encode(requestData);
-    const signature = CryptographicService.sign(
+    const signatureResult = CryptographicService.sign(
       messageData,
       keyPair.privateKey,
       'secp256k1'
@@ -1478,14 +1486,8 @@ export class LightClientSyncStrategy extends EventEmitter {
       version: '2.0.0',
       type: UTXOSyncMessageType.SYNC_STATUS,
       timestamp: Date.now(),
-      signature:
-        typeof signature === 'string'
-          ? signature
-          : new TextDecoder().decode(signature as unknown as Uint8Array),
-      publicKey:
-        typeof keyPair.publicKey === 'string'
-          ? keyPair.publicKey
-          : new TextDecoder().decode(keyPair.publicKey),
+      signature: Buffer.from(signatureResult.signature).toString('hex'),
+      publicKey: Buffer.from(keyPair.publicKey).toString('hex'),
       payload,
       priority: 'high' as unknown as MessagePriority,
     };
